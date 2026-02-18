@@ -13,6 +13,8 @@ export interface ITopUpRequest extends Document {
   legalId: string;
   bank: string;
   amountBs: number;
+  paymentDate: string;      // YYYY-MM-DD as entered by user
+  receiptUrl?: string;      // uploaded screenshot URL
   status: TopUpStatus;
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
@@ -31,6 +33,8 @@ const TopUpRequestSchema = new Schema<ITopUpRequest>(
     legalId: { type: String, required: true, trim: true },
     bank: { type: String, required: true, trim: true },
     amountBs: { type: Number, required: true, min: 0 },
+    paymentDate: { type: String, required: true, trim: true },
+    receiptUrl: { type: String, trim: true },
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],

@@ -11,7 +11,7 @@ import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import TopUpRequest from '@/models/TopUpRequest';
 import User from '@/models/User';
-import { GOLD_RATE } from '@/models/User';
+import { GOLD_RATE } from '@/lib/constants';
 import { Types } from 'mongoose';
 
 export async function POST(req: NextRequest) {
@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado.' }, { status: 404 });
 
     const body = await req.json();
-    const { referenceNumber, phone, legalId, bank, amountBs, amountUsd } = body;
+    const { referenceNumber, phone, legalId, bank, amountBs, amountUsd, paymentDate, receiptUrl } = body;
 
-    if (!referenceNumber || !phone || !legalId || !bank || !amountBs || !amountUsd) {
+    if (!referenceNumber || !phone || !legalId || !bank || !amountBs || !amountUsd || !paymentDate) {
       return NextResponse.json({ error: 'Todos los campos son requeridos.' }, { status: 400 });
     }
 
@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
       legalId: legalId.trim(),
       bank: bank.trim(),
       amountBs,
+      paymentDate: paymentDate.trim(),
+      receiptUrl: receiptUrl?.trim() || undefined,
       status: 'pending',
     });
 

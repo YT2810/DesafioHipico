@@ -18,16 +18,27 @@ export const FREE_RACES_PER_MEETING = 2;
 export const GOLD_COST_PER_RACE = 1;
 
 export const VENEZUELAN_BANKS = [
-  'Banco de Venezuela',
-  'Banesco',
-  'Mercantil',
-  'BBVA Provincial',
-  'Banco del Tesoro',
-  'BNC',
-  'Banplus',
-  'Bancamiga',
-  'Bicentenario',
+  'Banco de Venezuela (0102)',
+  'Banesco (0134)',
+  'Mercantil (0105)',
+  'BBVA Provincial (0108)',
+  'Banco del Tesoro (0163)',
+  'BNC (0191)',
+  'Banplus (0174)',
+  'Bancamiga (0172)',
+  'Bicentenario (0175)',
+  'Activo (0171)',
+  'Mi Banco (0169)',
   'Otro',
 ] as const;
 
 export type VenezuelanBank = typeof VENEZUELAN_BANKS[number];
+
+/** Datos de la cuenta destino para Pago Móvil */
+export const PAYMENT_DESTINATION = {
+  bank: 'Banco de Venezuela (0102)',
+  bankCode: '0102',
+  legalId: 'V-16108291',
+  phone: '04122220545',
+  name: 'Desafío Hípico',
+} as const;
