@@ -79,63 +79,144 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
 
 function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: ForecastItem; isFollowed: boolean; onFollow: () => void }) {
   const { handicapper, marks, isVip, _locked } = forecast;
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+
+  const sortedMarks = [...marks].sort((a, b) => a.preferenceOrder - b.preferenceOrder);
+
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-3">
-        <button onClick={() => setOpen(o => !o)}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-          style={{ backgroundColor: 'rgba(212,175,55,0.15)', color: GOLD, border: '1.5px solid rgba(212,175,55,0.3)' }}>
+    <div className="px-4 py-0">
+      {/* ── Collapsed row — always visible ── */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 py-3 text-left hover:bg-gray-800/30 active:bg-gray-800/50 transition-colors rounded-lg -mx-1 px-1"
+      >
+        {/* Avatar */}
+        <span
+          className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold"
+          style={{ backgroundColor: 'rgba(212,175,55,0.15)', color: GOLD, border: '1.5px solid rgba(212,175,55,0.25)' }}
+        >
           {handicapper.pseudonym[0].toUpperCase()}
-        </button>
+        </span>
+
+        {/* Name + stats */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => setOpen(o => !o)} className="text-sm font-bold text-white hover:text-yellow-300 transition-colors">{handicapper.pseudonym}</button>
-            {isVip && <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: GOLD, backgroundColor: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)' }}>VIP</span>}
-            <span className="text-gray-700 text-xs">{open ? '▲' : '▼'}</span>
+            <span className="text-sm font-bold text-white">{handicapper.pseudonym}</span>
+            {isVip && (
+              <span className="text-xs font-bold px-1.5 py-0.5 rounded"
+                style={{ color: GOLD, backgroundColor: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)' }}>
+                VIP
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          <div className="flex items-center gap-1.5 mt-0.5">
             <StatPill label="1ra" value={`${handicapper.pct1st}%`} />
             <StatPill label="2da" value={`${handicapper.pct2nd}%`} />
             <StatPill label="Gral" value={`${handicapper.pctGeneral}%`} accent />
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+
+        {/* Compact dorsal chips preview (collapsed) */}
+        {!open && !_locked && sortedMarks.length > 0 && (
+          <div className="flex items-center gap-1 shrink-0">
+            {sortedMarks.slice(0, 3).map(m => {
+              const cfg = LABEL_CFG[m.label];
+              return (
+                <span
+                  key={m.preferenceOrder}
+                  className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold border ${cfg.border}`}
+                  style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'white' }}
+                  title={m.horseName}
+                >
+                  {m.dorsalNumber ?? '?'}
+                </span>
+              );
+            })}
+            {sortedMarks.length > 3 && (
+              <span className="text-xs text-gray-600">+{sortedMarks.length - 3}</span>
+            )}
+          </div>
+        )}
+        {!open && _locked && (
+          <span className="text-xs text-yellow-600 shrink-0">VIP 🔒</span>
+        )}
+
+        {/* Follow + chevron */}
+        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
           {handicapper.contactNumber && (
-            <a href={`https://wa.me/${handicapper.contactNumber.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
-              className="w-8 h-8 rounded-full bg-green-900/40 border border-green-800/40 flex items-center justify-center text-sm">📱</a>
+            <a
+              href={`https://wa.me/${handicapper.contactNumber.replace(/\D/g, '')}`}
+              target="_blank" rel="noopener noreferrer"
+              className="w-7 h-7 rounded-full bg-green-900/40 border border-green-800/40 flex items-center justify-center text-xs transition-colors hover:bg-green-800/50"
+              title="WhatsApp"
+            >
+              📱
+            </a>
           )}
-          <button onClick={onFollow}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isFollowed ? 'bg-yellow-900/40 border-yellow-700/50 text-yellow-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-yellow-700/40 hover:text-yellow-300'}`}>
-            {isFollowed ? '✓ Siguiendo' : '+ Seguir'}
+          <button
+            onClick={onFollow}
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-all ${
+              isFollowed
+                ? 'bg-yellow-900/40 border-yellow-700/50 text-yellow-300'
+                : 'bg-gray-800 border-gray-700 text-gray-500 hover:border-yellow-700/40 hover:text-yellow-300'
+            }`}
+          >
+            {isFollowed ? '✓' : '+ Seguir'}
           </button>
         </div>
-      </div>
+        <span className="text-gray-700 text-xs shrink-0 ml-1">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {/* ── Expanded marks ── */}
       {open && (
-        <div className="mt-3">
+        <div className="pb-3 pt-1">
           {_locked ? (
             <div className="rounded-xl border border-yellow-800/30 bg-yellow-950/20 px-3 py-2.5 flex items-center gap-2">
-              <span className="text-lg">🔒</span>
-              <div><p className="text-xs font-semibold text-yellow-300">Pronóstico VIP</p><p className="text-xs text-gray-600">Desbloquea esta carrera para ver las marcas</p></div>
+              <span className="text-base">🔒</span>
+              <div>
+                <p className="text-xs font-semibold text-yellow-300">Pronóstico VIP</p>
+                <p className="text-xs text-gray-600">Desbloquea esta carrera para ver las marcas</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-1.5">
-              {[...marks].sort((a,b) => a.preferenceOrder - b.preferenceOrder).map(mark => {
+              {sortedMarks.map(mark => {
                 const cfg = LABEL_CFG[mark.label];
                 const isFijo = mark.preferenceOrder === 1 && mark.label === 'Casi Fijo';
                 return (
-                  <div key={mark.preferenceOrder} className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 ${cfg.bg} ${cfg.border}`}>
-                    <span className="shrink-0 w-5 h-5 rounded-full bg-gray-800/80 flex items-center justify-center text-xs font-bold text-gray-400">{mark.preferenceOrder}</span>
-                    {mark.dorsalNumber != null && <span className="shrink-0 w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-xs font-bold text-white">{mark.dorsalNumber}</span>}
-                    <span className={`flex-1 text-sm font-semibold truncate ${cfg.color}`}>{mark.horseName}</span>
-                    {isFijo && <span className="shrink-0 text-xs font-bold text-blue-300 bg-blue-900/50 border border-blue-700/40 px-1.5 py-0.5 rounded-full">8pts</span>}
-                    <span className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.color}`}>{cfg.emoji} {mark.label}</span>
+                  <div
+                    key={mark.preferenceOrder}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${cfg.bg} ${cfg.border}`}
+                  >
+                    {/* Preference order */}
+                    <span className="shrink-0 w-4 text-xs font-bold text-gray-500 text-center">
+                      {mark.preferenceOrder}
+                    </span>
+                    {/* Dorsal */}
+                    <span className="shrink-0 w-7 h-7 rounded-lg bg-gray-800 flex items-center justify-center text-sm font-extrabold text-white">
+                      {mark.dorsalNumber ?? '—'}
+                    </span>
+                    {/* Label badge */}
+                    <span className={`shrink-0 text-xs font-semibold ${cfg.color}`}>
+                      {cfg.emoji} {mark.label}
+                    </span>
+                    {isFijo && (
+                      <span className="shrink-0 text-xs font-bold text-blue-300 bg-blue-900/50 border border-blue-700/40 px-1.5 py-0.5 rounded-full">
+                        8pts
+                      </span>
+                    )}
+                    {/* Horse name — subtle, secondary info */}
+                    <span className="flex-1 text-xs text-gray-500 truncate text-right">
+                      {mark.horseName}
+                    </span>
+                    {mark.note && (
+                      <span className="shrink-0 text-xs text-gray-700 italic truncate max-w-[80px]" title={mark.note}>
+                        {mark.note}
+                      </span>
+                    )}
                   </div>
                 );
               })}
-              {marks.filter(m => m.note).map(m => (
-                <p key={m.preferenceOrder} className="text-xs text-gray-600 italic px-1">· {m.horseName}: {m.note}</p>
-              ))}
             </div>
           )}
         </div>
