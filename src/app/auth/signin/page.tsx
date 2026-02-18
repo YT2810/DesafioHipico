@@ -11,7 +11,8 @@ export default function SignInPage() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') ?? '/';
 
-  const [mode, setMode] = useState<'signin' | 'register'>('signin');
+  const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'signin';
+  const [mode, setMode] = useState<'signin' | 'register'>(initialMode);
   const [wantsHandicapper, setWantsHandicapper] = useState(false);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING } from '@/lib/constants';
 
@@ -340,14 +341,59 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
 }
 
 export default function PronosticosPage() {
+  const { data: session, status } = useSession();
   const [selectedMeetingId, setSelectedMeetingId] = useState(MOCK_MEETINGS[0].meetingId);
   const [selectedRaceNumber, setSelectedRaceNumber] = useState<number | null>(null);
-  const userRole = 'customer' as const;
-  const [goldBalance, setGoldBalance] = useState(5);
   const [unlockedRaceIds, setUnlockedRaceIds] = useState<Set<string>>(new Set());
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
-  const isPrivileged = userRole !== 'customer';
+
+  const user = session?.user as any;
+  const roles: string[] = user?.roles ?? [];
+  const goldBalance = user?.balance?.golds ?? 0;
+  const isPrivileged = roles.some(r => ['admin', 'staff', 'handicapper'].includes(r));
   const meeting = MOCK_MEETINGS.find(m => m.meetingId === selectedMeetingId) ?? MOCK_MEETINGS[0];
+
+  // ── Auth gate ──────────────────────────────────────────────────────────────
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-yellow-600 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+        <header className="border-b border-gray-800 px-4 py-3">
+          <div className="mx-auto max-w-lg flex items-center gap-3">
+            <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none">←</Link>
+            <span className="text-sm font-bold text-white">🏇 Pronósticos</span>
+          </div>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center gap-6">
+          <div>
+            <div className="text-5xl mb-4">🔐</div>
+            <h2 className="text-xl font-bold text-white mb-2">Inicia sesión para ver los pronósticos</h2>
+            <p className="text-sm text-gray-500 max-w-xs">
+              Las 2 primeras carreras de cada reunión son gratis. El resto se desbloquea con Golds.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <Link href="/auth/signin"
+              className="w-full py-3.5 rounded-2xl text-base font-bold text-black text-center"
+              style={{ backgroundColor: '#D4AF37' }}>
+              Entrar
+            </Link>
+            <Link href="/auth/signin?mode=register"
+              className="w-full py-3.5 rounded-2xl text-sm font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors text-center">
+              Crear cuenta gratis
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   function isRaceUnlocked(raceId: string, idx: number) {
     if (isPrivileged) return true;
@@ -358,7 +404,6 @@ export default function PronosticosPage() {
 
   function handleUnlock(raceId: string) {
     if (goldBalance < 1) return;
-    setGoldBalance(b => b - 1);
     setUnlockedRaceIds(prev => new Set([...prev, raceId]));
   }
   function toggleFollow(id: string) {
