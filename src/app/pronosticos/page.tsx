@@ -39,6 +39,59 @@ const LABEL_CFG: Record<ForecastLabel, { color: string; bg: string; border: stri
 };
 const GOLD = '#D4AF37';
 
+// Per-race mock horses: each entry is [horseName, dorsalNumber]
+const RACE_HORSES: [string, number][][] = [
+  // C1
+  [['QUALITY PRINCESS',1],['MISS BUENA VISTA',4],['ABUSIVA',7],['LA REINA DEL SUR',3],['ESTRELLA POLAR',9]],
+  // C2
+  [['EL CAMPEÓN',2],['VIENTO NORTE',5],['RAYO VELOZ',8],['LUNA LLENA',1],['TORMENTA',6]],
+  // C3
+  [['DORADO REY',3],['FLECHA ROJA',6],['CIELO AZUL',9],['PAMPERO',2],['GRAN SEÑOR',5]],
+  // C4
+  [['NOBLE ESPADA',4],['BRISA MARINA',7],['SOL NACIENTE',1],['TRUENO',10],['CASCADA',3]],
+  // C5
+  [['FUEGO ETERNO',5],['VIVA VENEZUELA',8],['PASO FIRME',2],['NOCHE OSCURA',11],['DIAMANTE',4]],
+  // C6–C11 empty in mock
+  [],[],[],[],[],[],
+];
+
+const H1 = { id:'h1', pseudonym:'El Maestro',   pct1st:42, pct2nd:55, pctGeneral:68, contactNumber:'+584120000000' };
+const H2 = { id:'h2', pseudonym:'TurfMaster VE', pct1st:38, pct2nd:49, pctGeneral:61 };
+const H3 = { id:'h3', pseudonym:'Don Caballos',  pct1st:51, pct2nd:62, pctGeneral:74, contactNumber:'+584141111111' };
+
+function makeMockForecasts(raceIdx: number): ForecastItem[] {
+  const horses = RACE_HORSES[raceIdx];
+  if (!horses || horses.length === 0) return [];
+  const [h0, h1, h2, h3, h4] = horses;
+  return [
+    {
+      handicapper: H1, isVip: raceIdx >= 3,
+      marks: [
+        { preferenceOrder:1, horseName:h0[0], dorsalNumber:h0[1], label:'Casi Fijo' },
+        { preferenceOrder:2, horseName:h1[0], dorsalNumber:h1[1], label:'Línea' },
+        { preferenceOrder:3, horseName:h2[0], dorsalNumber:h2[1], label:'Buen Dividendo' },
+      ],
+    },
+    {
+      handicapper: H2, isVip: false,
+      marks: [
+        { preferenceOrder:1, horseName:h2[0], dorsalNumber:h2[1], label:'Batacazo', note:'Viene de buena forma' },
+        { preferenceOrder:2, horseName:h0[0], dorsalNumber:h0[1], label:'Línea' },
+        { preferenceOrder:3, horseName:h3 ? h3[0] : h1[0], dorsalNumber:h3 ? h3[1] : h1[1], label:'Buen Dividendo' },
+      ],
+    },
+    {
+      handicapper: H3, isVip: false,
+      marks: [
+        { preferenceOrder:1, horseName:h0[0], dorsalNumber:h0[1], label:'Casi Fijo' },
+        { preferenceOrder:2, horseName:h3 ? h3[0] : h1[0], dorsalNumber:h3 ? h3[1] : h1[1], label:'Casi Fijo' },
+        { preferenceOrder:3, horseName:h2[0], dorsalNumber:h2[1], label:'Línea' },
+        { preferenceOrder:4, horseName:h4 ? h4[0] : h1[0], dorsalNumber:h4 ? h4[1] : h1[1], label:'Buen Dividendo' },
+      ],
+    },
+  ];
+}
+
 const MOCK_MEETINGS: MeetingItem[] = [
   {
     meetingId: 'meeting-9', meetingNumber: 9, date: '22/02/2026', trackName: 'La Rinconada',
@@ -48,14 +101,7 @@ const MOCK_MEETINGS: MeetingItem[] = [
       scheduledTime: `${String(13+Math.floor(i*0.45)).padStart(2,'0')}:${String((i*27)%60).padStart(2,'0')} p.m.`,
       conditions: 'HANDICAP LIBRE',
       prizePool: [3600,2800,3600,3600,3800,2400,2200,2000,2000,3600,1600][i],
-      forecasts: i < 5 ? [
-        { handicapper: { id:'h1', pseudonym:'El Maestro', pct1st:42, pct2nd:55, pctGeneral:68, contactNumber:'+584120000000' }, isVip: i>=3,
-          marks: [{ preferenceOrder:1, horseName:'QUALITY PRINCESS', dorsalNumber:1, label:'Casi Fijo' },{ preferenceOrder:2, horseName:'MISS BUENA VISTA', dorsalNumber:4, label:'Línea' },{ preferenceOrder:3, horseName:'ABUSIVA', dorsalNumber:7, label:'Buen Dividendo' }] },
-        { handicapper: { id:'h2', pseudonym:'TurfMaster VE', pct1st:38, pct2nd:49, pctGeneral:61 }, isVip: false,
-          marks: [{ preferenceOrder:1, horseName:'ABUSIVA', dorsalNumber:7, label:'Batacazo', note:'Viene de buena forma' },{ preferenceOrder:2, horseName:'QUALITY PRINCESS', dorsalNumber:1, label:'Línea' },{ preferenceOrder:3, horseName:'LA REINA DEL SUR', dorsalNumber:3, label:'Buen Dividendo' }] },
-        { handicapper: { id:'h3', pseudonym:'Don Caballos', pct1st:51, pct2nd:62, pctGeneral:74, contactNumber:'+584141111111' }, isVip: false,
-          marks: [{ preferenceOrder:1, horseName:'QUALITY PRINCESS', dorsalNumber:1, label:'Casi Fijo' },{ preferenceOrder:2, horseName:'LA REINA DEL SUR', dorsalNumber:3, label:'Casi Fijo' },{ preferenceOrder:3, horseName:'ABUSIVA', dorsalNumber:7, label:'Línea' },{ preferenceOrder:4, horseName:'MISS BUENA VISTA', dorsalNumber:4, label:'Buen Dividendo' }] },
-      ] : [],
+      forecasts: makeMockForecasts(i),
     })),
   },
   {
@@ -64,7 +110,9 @@ const MOCK_MEETINGS: MeetingItem[] = [
       raceId: `r10-${i+1}`, raceNumber: i+1,
       distance: [1200,1400,1200,1400,1200,1100,1400,1200,1100,1200,1400][i],
       scheduledTime: `${String(13+Math.floor(i*0.45)).padStart(2,'0')}:${String((i*27)%60).padStart(2,'0')} p.m.`,
-      conditions: 'HANDICAP LIBRE', prizePool: [2800,3600,2400,3600,3800,2000,2200,2000,2000,3600,1600][i], forecasts: [],
+      conditions: 'HANDICAP LIBRE',
+      prizePool: [2800,3600,2400,3600,3800,2000,2200,2000,2000,3600,1600][i],
+      forecasts: [],
     })),
   },
 ];
