@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-import Resend from 'next-auth/providers/resend';
+import Nodemailer from 'next-auth/providers/nodemailer';
 import Credentials from 'next-auth/providers/credentials';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
@@ -25,9 +25,17 @@ export const authConfig: NextAuthConfig = {
       allowDangerousEmailAccountLinking: true,
     }),
 
-    // ── 2. Magic Link via Resend ───────────────────────────────────────────
-    Resend({
-      apiKey: process.env.AUTH_RESEND_KEY ?? '',
+    // ── 2. Magic Link via Resend SMTP relay ─────────────────────────────────
+    Nodemailer({
+      server: {
+        host: 'smtp.resend.com',
+        port: 465,
+        secure: true,
+        auth: {
+          user: 'resend',
+          pass: process.env.AUTH_RESEND_KEY ?? '',
+        },
+      },
       from: 'Desafío Hípico <noreply@desafiohipico.com>',
     }),
 
@@ -74,7 +82,7 @@ export const authConfig: NextAuthConfig = {
 
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === 'google' || account?.provider === 'resend') {
+      if (account?.provider === 'google' || account?.provider === 'nodemailer') {
         await dbConnect();
         const email = (user.email ?? '').toLowerCase();
 
