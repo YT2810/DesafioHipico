@@ -13,6 +13,7 @@ import TopUpRequest from '@/models/TopUpRequest';
 import User from '@/models/User';
 import { GOLD_RATE } from '@/lib/constants';
 import { Types } from 'mongoose';
+import { notifyTopUpPending } from '@/services/notificationService';
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
     if (Object.keys(updates).length > 0) {
       await User.findByIdAndUpdate(session.user.id, { $set: updates });
     }
+
+    // Notify admins/staff of new pending top-up (fire-and-forget)
+    notifyTopUpPending(session.user.id, goldAmount, referenceNumber.trim()).catch(() => {});
 
     return NextResponse.json({
       success: true,

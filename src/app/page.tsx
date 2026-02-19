@@ -4,6 +4,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import TopUpModal from '@/components/TopUpModal';
+import NotificationBell from '@/components/NotificationBell';
 
 const GOLD = '#D4AF37';
 
@@ -49,6 +50,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             {isLoggedIn ? (
               <>
+                <NotificationBell />
                 <button onClick={() => setShowTopUp(true)}
                   className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-gray-700"
                   style={{ color: GOLD }}>
@@ -73,16 +75,10 @@ export default function HomePage() {
                         className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
                         👤 Mi perfil
                       </Link>
-                      {isHandicapper && (
+                      {(isHandicapper || isPrivileged) && (
                         <Link href="/handicapper/forecast" onClick={() => setMenuOpen(false)}
                           className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
                           🎯 Subir pronóstico
-                        </Link>
-                      )}
-                      {isPrivileged && (
-                        <Link href="/admin/topup" onClick={() => setMenuOpen(false)}
-                          className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
-                          ⚙️ Admin
                         </Link>
                       )}
                       <button onClick={() => { setMenuOpen(false); signOut(); }}

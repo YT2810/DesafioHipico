@@ -12,6 +12,7 @@ import TopUpRequest from '@/models/TopUpRequest';
 import User from '@/models/User';
 import GoldTransaction from '@/models/GoldTransaction';
 import { Types } from 'mongoose';
+import { notifyTopUpApproved, notifyTopUpRejected } from '@/services/notificationService';
 
 export async function POST(
   req: NextRequest,
@@ -50,10 +51,27 @@ export async function POST(
       const currentGolds = user?.balance?.golds ?? 0;
       const balanceAfter = currentGolds + request.goldAmount;
 
-      // Credit golds to user
-      await User.findByIdAndUpdate(request.userId, {
-        $inc: { 'balance.golds': request.goldAmount },
-      });
+      // Credit golds to user — use $set to initialize balance object first
+      // (handles legacy docs where balance=0 as a number instead of {golds:0})
+      await User.findByIdAndUpdate(request.userId, [
+        {
+          $set: {
+            balance: {
+              $cond: {
+                if: { $eq: [{ $type: '$balance' }, 'object'] },
+                then: {
+                  golds: { $add: [{ $ifNull: ['$balance.golds', 0] }, request.goldAmount] },
+                  diamonds: { $ifNull: ['$balance.diamonds', 0] },
+                },
+                else: {
+                  golds: request.goldAmount,
+                  diamonds: 0,
+                },
+              },
+            },
+          },
+        },
+      ]);
 
       // Log transaction
       await GoldTransaction.create({
@@ -74,6 +92,13 @@ export async function POST(
     request.reviewedBy = new Types.ObjectId(session.user.id);
     request.reviewedAt = new Date();
     await request.save();
+
+    // Notify the user of the result (fire-and-forget)
+    if (action === 'approve') {
+      notifyTopUpApproved(request.userId.toString(), request.goldAmount).catch(() => {});
+    } else {
+      notifyTopUpRejected(request.userId.toString(), rejectionReason?.trim() || 'Pago no verificado').catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

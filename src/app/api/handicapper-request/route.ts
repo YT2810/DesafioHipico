@@ -8,6 +8,7 @@ import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import HandicapperRequest from '@/models/HandicapperRequest';
 import { Types } from 'mongoose';
+import { notifyHandicapperRequestPending } from '@/services/notificationService';
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,10 +37,12 @@ export async function POST(req: NextRequest) {
       existing.reviewedBy = undefined;
       existing.reviewedAt = undefined;
       await existing.save();
+      notifyHandicapperRequestPending(session.user.id, pseudonym.trim()).catch(() => {});
       return NextResponse.json({ success: true, status: 'pending' });
     }
 
     await HandicapperRequest.create({ userId, pseudonym: pseudonym.trim(), bio: bio?.trim() ?? '' });
+    notifyHandicapperRequestPending(session.user.id, pseudonym.trim()).catch(() => {});
     return NextResponse.json({ success: true, status: 'pending' });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error interno' }, { status: 500 });
