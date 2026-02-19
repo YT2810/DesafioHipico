@@ -39,12 +39,19 @@ export default function SignInPage() {
     saveIntent();
     setLoading('email');
     setError('');
-    const res = await signIn('nodemailer', { email, callbackUrl, redirect: false });
-    setLoading(null);
-    if (res?.error) {
-      setError('No se pudo enviar el enlace. Verifica tu correo.');
-    } else {
+    try {
+      const res = await fetch('/api/auth/magic/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), callbackUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error al enviar el enlace.');
       setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo enviar el enlace.');
+    } finally {
+      setLoading(null);
     }
   }
 

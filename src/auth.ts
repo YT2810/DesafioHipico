@@ -1,9 +1,9 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-import Nodemailer from 'next-auth/providers/nodemailer';
 import Credentials from 'next-auth/providers/credentials';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
+import MagicToken from '@/models/MagicToken';
 import type { NextAuthConfig } from 'next-auth';
 
 const ADMIN_EMAILS = ['yolfry@gmail.com'];
@@ -25,18 +25,27 @@ export const authConfig: NextAuthConfig = {
       allowDangerousEmailAccountLinking: true,
     }),
 
-    // ── 2. Magic Link via Resend SMTP relay ─────────────────────────────────
-    Nodemailer({
-      server: {
-        host: 'smtp.resend.com',
-        port: 465,
-        secure: true,
-        auth: {
-          user: 'resend',
-          pass: process.env.AUTH_RESEND_KEY ?? '',
-        },
+    // ── 2. Magic Link — verified token (token already validated by /api/auth/magic/verify) ──
+    Credentials({
+      id: 'magic-verified',
+      name: 'Magic Link',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
       },
-      from: 'Desafío Hípico <noreply@desafiohipico.com>',
+      async authorize(credentials) {
+        if (!credentials?.email) return null;
+        const email = (credentials.email as string).toLowerCase().trim();
+        await dbConnect();
+        const user = await User.findOne({ email }).lean() as any;
+        if (!user) return null;
+        return {
+          id: user._id.toString(),
+          email: user.email,
+          name: user.alias,
+          roles: user.roles,
+          balance: user.balance,
+        };
+      },
     }),
 
     // ── 3. Telegram Mini App (initData verification) ───────────────────────
@@ -82,7 +91,7 @@ export const authConfig: NextAuthConfig = {
 
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === 'google' || account?.provider === 'nodemailer') {
+      if (account?.provider === 'google' || account?.provider === 'magic-verified') {
         await dbConnect();
         const email = (user.email ?? '').toLowerCase();
 
