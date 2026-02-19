@@ -203,13 +203,60 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               <Field label="Nombre completo *" value={billing.fullName} onChange={e => setBill('fullName', e.target.value)}
                 placeholder="Ej: Juan Carlos Pérez" required />
 
-              <Field label="Cédula o Pasaporte *" value={billing.identityDocument} onChange={e => setBill('identityDocument', e.target.value)}
-                placeholder="Ej: V-16108291 o P-AB123456" required
-                hint="Incluye el prefijo V-, E-, J- o P-" />
+              {/* Cédula — prefijo selector + número sin guión */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cédula o Pasaporte *</label>
+                <div className="flex gap-2">
+                  <select
+                    value={billing.identityDocument.match(/^[VEJPG]/)?.[0] ?? 'V'}
+                    onChange={e => {
+                      const num = billing.identityDocument.replace(/^[VEJPG]/i, '');
+                      setBill('identityDocument', e.target.value + num.toUpperCase());
+                    }}
+                    className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-yellow-600 w-20 shrink-0">
+                    <option value="V">V</option>
+                    <option value="E">E</option>
+                    <option value="J">J</option>
+                    <option value="P">P</option>
+                    <option value="G">G</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={billing.identityDocument.replace(/^[VEJPG]/i, '')}
+                    onChange={e => {
+                      const prefix = billing.identityDocument.match(/^[VEJPG]/i)?.[0] ?? 'V';
+                      setBill('identityDocument', prefix + e.target.value.replace(/\D/g, ''));
+                    }}
+                    placeholder="16108291"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-gray-600">Solo el número, sin guiones ni espacios</p>
+              </div>
 
-              <Field label="Teléfono de Pago Móvil *" value={billing.phoneNumber} onChange={e => setBill('phoneNumber', e.target.value)}
-                placeholder="Ej: 04121234567" required
-                hint="El número desde el que realizarás el Pago Móvil" />
+              {/* Teléfono Pago Móvil — manejo automático prefijo Venezuela */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Teléfono de Pago Móvil *</label>
+                <div className="flex gap-2">
+                  <div className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-sm text-gray-400 shrink-0 flex items-center">🇻🇪 +58</div>
+                  <input
+                    type="tel"
+                    value={billing.phoneNumber}
+                    onChange={e => {
+                      // Strip leading +58 or 58 if user types it, keep only local number
+                      let val = e.target.value.replace(/\D/g, '');
+                      if (val.startsWith('58')) val = val.slice(2);
+                      // Keep leading 0 (04XX format) or without it
+                      setBill('phoneNumber', val.slice(0, 11));
+                    }}
+                    placeholder="04121234567"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-yellow-700/80">⚠️ Ingresa el número que usas en tu cuenta de Pago Móvil. Debe coincidir exactamente con el número registrado en tu banco.</p>
+              </div>
 
               {billingError && (
                 <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2">⚠️ {billingError}</p>

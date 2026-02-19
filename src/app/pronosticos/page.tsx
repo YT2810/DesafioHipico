@@ -425,12 +425,19 @@ export default function PronosticosPage() {
               <p className="text-xs text-gray-500 truncate">{meeting.trackName} · Reunión {meeting.meetingNumber} · {meeting.date}</p>
             </div>
           </div>
-          {!isPrivileged && (
-            <div className="flex items-center gap-1.5 bg-gray-800 rounded-lg px-2.5 py-1.5 shrink-0">
-              <span className="text-sm">🪙</span>
-              <span className="text-sm font-bold" style={{ color: GOLD }}>{goldBalance}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {!isPrivileged && (
+              <div className="flex items-center gap-1.5 bg-gray-800 rounded-lg px-2.5 py-1.5">
+                <span className="text-sm">🪙</span>
+                <span className="text-sm font-bold" style={{ color: GOLD }}>{goldBalance}</span>
+              </div>
+            )}
+            <Link href="/perfil"
+              className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 hover:border-yellow-600 flex items-center justify-center transition-colors"
+              title="Mi perfil">
+              <span className="text-sm">👤</span>
+            </Link>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">

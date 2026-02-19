@@ -16,6 +16,25 @@ interface HReq {
   createdAt?: string;
 }
 
+interface TxItem {
+  _id: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  createdAt: string;
+}
+
+interface TopUpItem {
+  _id: string;
+  goldAmount: number;
+  amountUsd: number;
+  referenceNumber: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  createdAt: string;
+}
+
 export default function PerfilPage() {
   const { data: session, status } = useSession();
   const [hReq, setHReq] = useState<HReq | null>(null);
@@ -30,6 +49,11 @@ export default function PerfilPage() {
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
 
+  // Transaction history
+  const [topUps, setTopUps] = useState<TopUpItem[]>([]);
+  const [txs, setTxs] = useState<TxItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
   const golds: number = user?.balance?.golds ?? 0;
@@ -43,6 +67,17 @@ export default function PerfilPage() {
       .then(d => setHReq(d.request ? { ...d.request, status: d.request.status } : { status: 'none' }))
       .catch(() => setHReq({ status: 'none' }))
       .finally(() => setLoadingReq(false));
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    Promise.all([
+      fetch('/api/topup').then(r => r.json()),
+      fetch('/api/user/transactions').then(r => r.json()),
+    ]).then(([topUpData, txData]) => {
+      setTopUps(topUpData.requests ?? []);
+      setTxs(txData.transactions ?? []);
+    }).catch(() => {}).finally(() => setLoadingHistory(false));
   }, [status]);
 
   // Pre-fill pseudonym from localStorage intent
@@ -162,10 +197,21 @@ export default function PerfilPage() {
               <span className="text-sm text-white">🎯 Solicitudes Handicapper</span>
               <span className="text-gray-500 text-sm">›</span>
             </Link>
+            <Link href="/admin/users"
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
+              <span className="text-sm text-white">👥 Gestión de usuarios</span>
+              <span className="text-gray-500 text-sm">›</span>
+            </Link>
             <Link href="/admin/ingest"
               className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
               <span className="text-sm text-white">📄 Ingestar PDF INH</span>
               <span className="text-gray-500 text-sm">›</span>
+            </Link>
+            <Link href="/handicapper/forecast"
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl text-black font-bold text-sm"
+              style={{ backgroundColor: GOLD }}>
+              <span>🎯 Subir pronóstico</span>
+              <span>›</span>
             </Link>
           </div>
         )}
@@ -257,6 +303,61 @@ export default function PerfilPage() {
             )}
           </div>
         )}
+
+        {/* Transaction history */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Historial</p>
+
+          {loadingHistory ? (
+            <div className="space-y-2">
+              {[1,2,3].map(i => <div key={i} className="h-12 rounded-xl bg-gray-800 animate-pulse" />)}
+            </div>
+          ) : (topUps.length === 0 && txs.length === 0) ? (
+            <p className="text-xs text-gray-700 text-center py-4">Sin movimientos aún</p>
+          ) : (
+            <div className="space-y-2">
+              {/* Pending top-ups first */}
+              {topUps.filter(t => t.status === 'pending').map(t => (
+                <div key={t._id} className="flex items-center gap-3 bg-yellow-950/20 border border-yellow-800/30 rounded-xl px-3 py-2.5">
+                  <span className="text-lg shrink-0">⏳</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-yellow-300">Recarga pendiente · {t.goldAmount} Golds</p>
+                    <p className="text-xs text-gray-600">Ref: {t.referenceNumber} · ${t.amountUsd} USD</p>
+                  </div>
+                  <span className="text-xs text-yellow-600 shrink-0">{new Date(t.createdAt).toLocaleDateString('es-VE')}</span>
+                </div>
+              ))}
+              {/* Rejected top-ups */}
+              {topUps.filter(t => t.status === 'rejected').map(t => (
+                <div key={t._id} className="flex items-center gap-3 bg-red-950/20 border border-red-800/30 rounded-xl px-3 py-2.5">
+                  <span className="text-lg shrink-0">❌</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-red-400">Recarga rechazada · {t.goldAmount} Golds</p>
+                    {t.rejectionReason && <p className="text-xs text-gray-600 truncate">Motivo: {t.rejectionReason}</p>}
+                  </div>
+                  <span className="text-xs text-gray-600 shrink-0">{new Date(t.createdAt).toLocaleDateString('es-VE')}</span>
+                </div>
+              ))}
+              {/* Gold transactions */}
+              {txs.map(tx => {
+                const isCredit = tx.amount > 0;
+                const icon = tx.type === 'purchase' ? '🪙' : tx.type === 'race_unlock' ? '🏇' : tx.type === 'refund' ? '↩️' : tx.type === 'bonus' ? '🎁' : '💸';
+                return (
+                  <div key={tx._id} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2.5">
+                    <span className="text-lg shrink-0">{icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">{tx.description}</p>
+                      <p className="text-xs text-gray-600">Saldo: {tx.balanceAfter} Golds</p>
+                    </div>
+                    <span className={`text-sm font-bold shrink-0 ${isCredit ? 'text-green-400' : 'text-red-400'}`}>
+                      {isCredit ? '+' : ''}{tx.amount}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Quick links */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">

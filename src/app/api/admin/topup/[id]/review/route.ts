@@ -41,9 +41,13 @@ export async function POST(
     }
 
     if (action === 'approve') {
+      if (!request.goldAmount || request.goldAmount <= 0) {
+        return NextResponse.json({ error: `La solicitud tiene goldAmount inválido (${request.goldAmount}). No se puede aprobar.` }, { status: 400 });
+      }
+
       // Fetch current balance to compute balanceAfter
-      const user = await User.findById(request.userId).select('balance').lean();
-      const currentGolds = (user as any)?.balance?.golds ?? 0;
+      const user = await User.findById(request.userId).select('balance').lean() as any;
+      const currentGolds = user?.balance?.golds ?? 0;
       const balanceAfter = currentGolds + request.goldAmount;
 
       // Credit golds to user
