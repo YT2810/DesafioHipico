@@ -6,11 +6,13 @@ import { VENEZUELAN_BANKS, GOLD_RATE, PAYMENT_DESTINATION } from '@/lib/constant
 
 const GOLD = '#D4AF37';
 
+// Base rate: 40 Golds = $10 USD (4 Golds/$1)
+// Discounts: volume bonuses make higher tiers more attractive
 const USD_PACKAGES = [
-  { usd: 10,  golds: 40,  label: 'Starter' },
-  { usd: 25,  golds: 100, label: 'Popular', highlight: true },
-  { usd: 50,  golds: 200, label: 'Pro' },
-  { usd: 100, golds: 400, label: 'Elite' },
+  { usd: 10,  golds: 40,  label: 'Inicio',    badge: null,          saving: null },
+  { usd: 25,  golds: 110, label: 'Popular',   badge: 'MÁS POPULAR', saving: '+10 Golds gratis' },
+  { usd: 50,  golds: 240, label: 'Pro',       badge: null,          saving: '+40 Golds gratis' },
+  { usd: 100, golds: 520, label: 'Elite',     badge: 'MEJOR VALOR', saving: '+120 Golds gratis' },
 ];
 
 interface TopUpModalProps { onClose: () => void; }
@@ -31,10 +33,17 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   // Exchange rate
   const [rateVes, setRateVes] = useState<number | null>(null);
   const [rateStale, setRateStale] = useState(false);
+  const [rateUpdatedAt, setRateUpdatedAt] = useState<string | null>(null);
   useEffect(() => {
     fetch('/api/exchange-rate')
       .then(r => r.json())
-      .then(d => { if (d.rateVes) { setRateVes(d.rateVes); setRateStale(d.stale ?? false); } })
+      .then(d => {
+        if (d.rateVes) {
+          setRateVes(d.rateVes);
+          setRateStale(d.stale ?? false);
+          if (d.updatedAt) setRateUpdatedAt(d.updatedAt);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -57,7 +66,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState('');
 
-  const goldAmount = Math.floor((selectedUsd / GOLD_RATE.usd) * GOLD_RATE.golds);
+  const goldAmount = USD_PACKAGES.find(p => p.usd === selectedUsd)?.golds ?? Math.floor((selectedUsd / GOLD_RATE.usd) * GOLD_RATE.golds);
   function set(field: string, value: string) { setForm(p => ({ ...p, [field]: value })); }
   function setBill(field: string, value: string) { setBilling(p => ({ ...p, [field]: value })); }
 
@@ -182,21 +191,38 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                 {USD_PACKAGES.map(pkg => (
                   <button key={pkg.usd} onClick={() => setSelectedUsd(pkg.usd)}
                     className={`relative flex flex-col items-center gap-1 p-4 rounded-2xl border-2 transition-all ${selectedUsd === pkg.usd ? 'border-yellow-600 bg-yellow-950/30' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
-                    {pkg.highlight && <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs font-bold px-2 py-0.5 rounded-full text-black" style={{ backgroundColor: GOLD }}>Popular</span>}
+                    {pkg.badge && (
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-extrabold px-2 py-0.5 rounded-full text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>
+                        {pkg.badge}
+                      </span>
+                    )}
                     <span className="text-xl font-extrabold text-white">{pkg.golds}</span>
                     <span className="text-xs font-medium" style={{ color: GOLD }}>Golds</span>
-                    <span className="text-xs text-gray-500">${pkg.usd} USD</span>
+                    <span className="text-xs text-gray-400 font-semibold">${pkg.usd} USD</span>
                     {rateVes && (
                       <span className="text-xs text-gray-600">
                         Bs {(pkg.usd * rateVes).toLocaleString('es-VE', { maximumFractionDigits: 0 })}
                       </span>
                     )}
+                    {pkg.saving && (
+                      <span className="text-[10px] font-bold text-green-400 bg-green-950/50 border border-green-800/40 rounded-full px-1.5 py-0.5 mt-0.5">
+                        {pkg.saving}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
+              {rateVes && (
+                <p className="text-xs text-gray-600 text-center">
+                  Tasa BCV: <span className="text-gray-400 font-semibold">Bs {rateVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> / USD
+                  {rateUpdatedAt && (
+                    <> · actualizada {new Date(rateUpdatedAt).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}</>
+                  )}
+                </p>
+              )}
               {rateStale && (
                 <p className="text-xs text-orange-400 bg-orange-950/30 border border-orange-800/40 rounded-xl px-3 py-2">
-                  ⚠️ La tasa de cambio puede estar desactualizada. Consulta el monto exacto en Bs con el equipo.
+                  ⚠️ La tasa puede estar desactualizada. Consulta el monto exacto en Bs con el equipo.
                 </p>
               )}
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400 space-y-1">

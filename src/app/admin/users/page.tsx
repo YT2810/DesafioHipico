@@ -61,7 +61,7 @@ export default function AdminUsersPage() {
 
   function openUser(u: UserItem) {
     setSelected(u);
-    setEditRoles([...u.roles]);
+    setEditRoles([...(u.roles ?? [])]);
     setSaveMsg('');
     setSaveErr('');
   }
@@ -155,7 +155,7 @@ export default function AdminUsersPage() {
                           {u.email && <span className="text-xs text-gray-600 truncate">{u.email}</span>}
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {u.roles.map(r => (
+                          {(u.roles ?? []).map(r => (
                             <span key={r} className={`text-xs px-1.5 py-0.5 rounded-full border font-semibold ${ROLE_CFG[r].color} ${ROLE_CFG[r].bg} ${ROLE_CFG[r].border}`}>
                               {r}
                             </span>

@@ -9,14 +9,27 @@
 
 ## 1. Qué es el producto
 
-**Desafío Hípico** es un marketplace de pronósticos hípicos para Venezuela, enfocado en las carreras del Hipódromo La Rinconada (Caracas). El modelo es freemium:
+**Desafío Hípico** es un marketplace de pronósticos deportivos, comenzando por las carreras del Hipódromo La Rinconada (Caracas, Venezuela). El modelo es freemium:
 
-- **Handicappers** (expertos en carreras) publican sus pronósticos en la plataforma
+- **Handicappers** (expertos) publican sus pronósticos en la plataforma
 - **Usuarios** consumen esos pronósticos pagando con Golds (créditos internos)
 - **La plataforma** cobra 30% de cada transacción (revenue share configurable)
-- **Pago real** se hace exclusivamente por Pago Móvil venezolano (BDV), aprobado manualmente por staff
+- **Pago** vía múltiples métodos (ver sección de pagos)
 
 El producto es mobile-first, pensado para usuarios venezolanos con acceso a Telegram y WhatsApp.
+
+### Visión de escalabilidad (IMPORTANTE para LLMs)
+
+El proyecto **NO es solo Venezuela ni solo hípica**. La arquitectura debe soportar:
+
+| Dimensión | Alcance actual | Alcance futuro |
+|-----------|---------------|----------------|
+| **Mercado** | Venezuela (La Rinconada) | Múltiples países (Colombia, Panamá, USA, etc.) |
+| **Deporte** | Carreras de caballos | Béisbol, fútbol, loterías, otros nichos |
+| **Pago** | Pago Móvil BDV (Venezuela) | Zinli, Binance Pay, transferencia USD, tarjeta |
+| **Idioma** | Español | Multiidioma |
+
+**Regla para LLMs:** Nunca hardcodear lógica específica de Venezuela o de hípica en capas genéricas. Usar configuración por `sport`, `market`, `currency`. Los modelos `Meeting`, `Race`, `Forecast` son genéricos por diseño.
 
 ---
 
@@ -324,6 +337,24 @@ notifyGoldLow(userId, balance)
 ### `forecastAccessService.ts`
 - `requestRaceAccess(userId, meetingId, raceId)` — consume quota o Gold, idempotente
 - `getMeetingAccessMap(userId, meetingId, raceIds)` — solo lectura, para renderizar el dashboard
+
+### Algoritmo de rating de pronósticos (PENDIENTE — diseño propuesto)
+Actualmente las etiquetas (`Línea`, `Casi Fijo`, etc.) son solo descriptivas. El sistema de puntos en `constants.ts` es provisional.
+
+**Diseño propuesto para algoritmo propio:**
+```
+Rating de un pronóstico = f(acierto_histórico_handicapper, posición_preferencia, tipo_etiqueta, dividendo_real)
+
+Componentes:
+1. Hit rate del handicapper (pct1st, pct2nd, pct3rd) — peso 40%
+2. Posición de preferencia (1ra > 2da > 3ra) — peso 30%
+3. Confianza implícita de la etiqueta — peso 20%
+4. Valor de dividendo esperado (Batacazo = alto dividendo) — peso 10%
+
+Resultado: score 0-100 por pronóstico, visible al usuario como "Confianza: 87%"
+```
+
+Esto reemplaza las etiquetas actuales con un sistema cuantitativo. **No implementar hasta tener suficientes datos históricos de resultados.**
 
 ### `followService.ts`
 - `followHandicapper(userId, handicapperProfileId)` — toggle follow/unfollow
