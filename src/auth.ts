@@ -1,10 +1,12 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-import Nodemailer from 'next-auth/providers/nodemailer';
+import Resend from 'next-auth/providers/resend';
 import Credentials from 'next-auth/providers/credentials';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import type { NextAuthConfig } from 'next-auth';
+
+const ADMIN_EMAILS = ['yolfry@gmail.com'];
 
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET,
@@ -18,22 +20,15 @@ export const authConfig: NextAuthConfig = {
   providers: [
     // ── 1. Google OAuth ────────────────────────────────────────────────────
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+      clientId: process.env.AUTH_GOOGLE_ID ?? '',
+      clientSecret: process.env.AUTH_GOOGLE_SECRET ?? '',
       allowDangerousEmailAccountLinking: true,
     }),
 
-    // ── 2. Magic Link via Email ────────────────────────────────────────────
-    Nodemailer({
-      server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: Number(process.env.EMAIL_SERVER_PORT ?? 587),
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
-      },
-      from: process.env.EMAIL_FROM ?? 'noreply@desafiohipico.com',
+    // ── 2. Magic Link via Resend ───────────────────────────────────────────
+    Resend({
+      apiKey: process.env.AUTH_RESEND_KEY ?? '',
+      from: 'Desafío Hípico <noreply@desafiohipico.com>',
     }),
 
     // ── 3. Telegram Mini App (initData verification) ───────────────────────
@@ -78,10 +73,13 @@ export const authConfig: NextAuthConfig = {
   ],
 
   callbacks: {
-    async signIn({ user, account, profile }) {
-      if (account?.provider === 'google' || account?.provider === 'nodemailer') {
+    async signIn({ user, account }) {
+      if (account?.provider === 'google' || account?.provider === 'resend') {
         await dbConnect();
-        const email = user.email ?? '';
+        const email = (user.email ?? '').toLowerCase();
+
+        // Auto-assign admin role for known admin emails
+        const extraRoles = ADMIN_EMAILS.includes(email) ? ['admin', 'customer'] : ['customer'];
 
         await User.findOneAndUpdate(
           { $or: [{ email }, { googleId: account.providerAccountId }] },
@@ -92,7 +90,7 @@ export const authConfig: NextAuthConfig = {
               ...(account.provider === 'google' && { googleId: account.providerAccountId }),
             },
             $setOnInsert: {
-              roles: ['customer'],
+              roles: extraRoles,
               balance: { golds: 0, diamonds: 0 },
               meetingConsumptions: [],
               followedHandicappers: [],
@@ -100,45 +98,63 @@ export const authConfig: NextAuthConfig = {
           },
           { upsert: true, new: true }
         );
+
+        // Ensure admin emails always have admin role (even if user pre-existed)
+        if (ADMIN_EMAILS.includes(email)) {
+          await User.updateOne({ email }, { $addToSet: { roles: 'admin' } });
+        }
       }
       return true;
     },
 
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        // First sign-in — enrich token from DB
         await dbConnect();
         const dbUser = await User.findOne({
           $or: [
-            { email: user.email ?? '' },
-            { telegramId: (user as any).telegramId ?? '' },
+            ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
+            ...((user as any).telegramId ? [{ telegramId: (user as any).telegramId }] : []),
           ],
-        }).lean();
+        }).lean() as any;
 
         if (dbUser) {
-          token.userId = dbUser._id.toString();
-          token.roles = dbUser.roles;
-          token.balance = dbUser.balance;
-          token.alias = dbUser.alias;
-          token.phone = dbUser.phone;
-          token.legalId = dbUser.legalId;
+          token.userId    = dbUser._id.toString();
+          token.roles     = dbUser.roles;
+          token.balance   = dbUser.balance;
+          token.alias     = dbUser.alias;
+          token.phone     = dbUser.phone;
+          token.legalId   = dbUser.legalId;
+          token.fullName  = dbUser.fullName;
+          token.identityDocument = dbUser.identityDocument;
+          token.phoneNumber      = dbUser.phoneNumber;
+          token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument && dbUser.phoneNumber);
         }
       }
 
-      if (trigger === 'update' && session?.balance) {
-        token.balance = session.balance;
+      if (trigger === 'update') {
+        if (session?.balance)  token.balance  = session.balance;
+        if (session?.billing)  {
+          token.fullName         = session.billing.fullName;
+          token.identityDocument = session.billing.identityDocument;
+          token.phoneNumber      = session.billing.phoneNumber;
+          token.billingComplete  = !!(session.billing.fullName && session.billing.identityDocument && session.billing.phoneNumber);
+        }
       }
 
       return token;
     },
 
     async session({ session, token }) {
-      session.user.id = token.userId as string;
-      session.user.roles = token.roles as string[];
-      session.user.balance = token.balance as { golds: number; diamonds: number };
-      session.user.alias = token.alias as string;
-      session.user.phone = token.phone as string | undefined;
-      session.user.legalId = token.legalId as string | undefined;
+      session.user.id               = token.userId as string;
+      session.user.roles            = token.roles as string[];
+      session.user.balance          = token.balance as { golds: number; diamonds: number };
+      session.user.alias            = token.alias as string;
+      session.user.phone            = token.phone as string | undefined;
+      session.user.legalId          = token.legalId as string | undefined;
+      session.user.fullName         = token.fullName as string | undefined;
+      session.user.identityDocument = token.identityDocument as string | undefined;
+      session.user.phoneNumber      = token.phoneNumber as string | undefined;
+      session.user.billingComplete  = token.billingComplete as boolean | undefined;
       return session;
     },
   },

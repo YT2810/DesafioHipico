@@ -13,6 +13,10 @@ declare module 'next-auth' {
       balance: { golds: number; diamonds: number };
       phone?: string;
       legalId?: string;
+      fullName?: string;
+      identityDocument?: string;
+      phoneNumber?: string;
+      billingComplete?: boolean;
     };
   }
 
@@ -24,6 +28,10 @@ declare module 'next-auth' {
     alias?: string;
     phone?: string;
     legalId?: string;
+    fullName?: string;
+    identityDocument?: string;
+    phoneNumber?: string;
+    billingComplete?: boolean;
   }
 }
 
@@ -35,5 +43,9 @@ declare module 'next-auth/jwt' {
     alias?: string;
     phone?: string;
     legalId?: string;
+    fullName?: string;
+    identityDocument?: string;
+    phoneNumber?: string;
+    billingComplete?: boolean;
   }
 }

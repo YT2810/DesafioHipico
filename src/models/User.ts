@@ -21,6 +21,10 @@ export interface IUser extends Document {
   legalId?: string;
   googleId?: string;
   telegramId?: string;
+  // Billing profile — required before first top-up
+  fullName?: string;
+  identityDocument?: string;
+  phoneNumber?: string;
   roles: ('customer' | 'handicapper' | 'admin' | 'staff')[];
   balance: {
     golds: number;
@@ -48,8 +52,11 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, trim: true, lowercase: true, sparse: true },
     phone: { type: String, trim: true },
     legalId: { type: String, trim: true },
-    googleId: { type: String, trim: true, sparse: true },
-    telegramId: { type: String, trim: true, sparse: true },
+    googleId:          { type: String, trim: true, sparse: true },
+    telegramId:        { type: String, trim: true, sparse: true },
+    fullName:          { type: String, trim: true },
+    identityDocument:  { type: String, trim: true },
+    phoneNumber:       { type: String, trim: true },
     roles: [{ type: String, enum: ['customer', 'handicapper', 'admin', 'staff'] }],
     balance: {
       golds: { type: Number, default: 0, min: 0 },

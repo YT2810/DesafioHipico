@@ -39,7 +39,7 @@ export default function SignInPage() {
     saveIntent();
     setLoading('email');
     setError('');
-    const res = await signIn('nodemailer', { email, callbackUrl, redirect: false });
+    const res = await signIn('resend', { email, callbackUrl, redirect: false });
     setLoading(null);
     if (res?.error) {
       setError('No se pudo enviar el enlace. Verifica tu correo.');

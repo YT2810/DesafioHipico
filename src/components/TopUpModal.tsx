@@ -20,7 +20,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const user = session?.user as any;
 
   const today = new Date().toISOString().slice(0, 10);
-  const [step, setStep] = useState<'package' | 'destination' | 'form' | 'success'>('package');
+  const [step, setStep] = useState<'package' | 'billing' | 'destination' | 'form' | 'success'>('package');
   const [selectedUsd, setSelectedUsd] = useState(10);
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
@@ -39,8 +39,63 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
     receiptName: '',
   });
 
+  const [billing, setBilling] = useState({
+    fullName:         user?.fullName ?? '',
+    identityDocument: user?.identityDocument ?? '',
+    phoneNumber:      user?.phoneNumber ?? '',
+  });
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState('');
+
   const goldAmount = Math.floor((selectedUsd / GOLD_RATE.usd) * GOLD_RATE.golds);
   function set(field: string, value: string) { setForm(p => ({ ...p, [field]: value })); }
+  function setBill(field: string, value: string) { setBilling(p => ({ ...p, [field]: value })); }
+
+  async function handleContinueFromPackage() {
+    // If billing already complete in session, skip billing step
+    if (user?.billingComplete) { setStep('destination'); return; }
+    // Otherwise check DB
+    setBillingLoading(true);
+    try {
+      const res = await fetch('/api/user/billing');
+      const data = await res.json();
+      if (data.complete) {
+        setBilling({ fullName: data.fullName, identityDocument: data.identityDocument, phoneNumber: data.phoneNumber });
+        setStep('destination');
+      } else {
+        setBilling({ fullName: data.fullName ?? '', identityDocument: data.identityDocument ?? '', phoneNumber: data.phoneNumber ?? '' });
+        setStep('billing');
+      }
+    } catch {
+      setStep('billing');
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  async function handleSaveBilling(e: React.FormEvent) {
+    e.preventDefault();
+    setBillingError('');
+    if (!billing.fullName.trim() || !billing.identityDocument.trim() || !billing.phoneNumber.trim()) {
+      setBillingError('Todos los campos son requeridos.');
+      return;
+    }
+    setBillingLoading(true);
+    try {
+      const res = await fetch('/api/user/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(billing),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error');
+      setStep('destination');
+    } catch (err) {
+      setBillingError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setBillingLoading(false);
+    }
+  }
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -96,14 +151,14 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
         {step !== 'success' && (
           <div className="flex items-center gap-1.5 px-5 pt-3 pb-1 shrink-0">
-            {(['package','destination','form'] as const).map((s, i) => (
+            {(['package','billing','destination','form'] as const).map((s, i) => (
               <div key={s} className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full transition-colors ${step === s ? 'bg-yellow-500' : (['package','destination','form'].indexOf(step) > i) ? 'bg-yellow-800' : 'bg-gray-700'}`} />
-                {i < 2 && <div className="w-5 h-px bg-gray-700" />}
+                <div className={`w-2 h-2 rounded-full transition-colors ${step === s ? 'bg-yellow-500' : (['package','billing','destination','form'].indexOf(step) > i) ? 'bg-yellow-800' : 'bg-gray-700'}`} />
+                {i < 3 && <div className="w-4 h-px bg-gray-700" />}
               </div>
             ))}
             <span className="ml-2 text-xs text-gray-600">
-              {step === 'package' ? 'Elige paquete' : step === 'destination' ? 'Realiza el pago' : 'Confirma el pago'}
+              {step === 'package' ? 'Elige paquete' : step === 'billing' ? 'Perfil de facturación' : step === 'destination' ? 'Realiza el pago' : 'Confirma el pago'}
             </span>
           </div>
         )}
@@ -130,10 +185,45 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                 <p>📋 Luego completa el formulario con los datos del pago.</p>
                 <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles.</p>
               </div>
-              <button onClick={() => setStep('destination')} className="w-full py-3.5 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>
-                Continuar con {goldAmount} Golds →
+              <button onClick={handleContinueFromPackage} disabled={billingLoading}
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ backgroundColor: GOLD }}>
+                {billingLoading ? 'Verificando...' : `Continuar con ${goldAmount} Golds →`}
               </button>
             </div>
+          )}
+
+          {/* ── Step 1b: Billing profile ── */}
+          {step === 'billing' && (
+            <form onSubmit={handleSaveBilling} className="space-y-4">
+              <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3 text-xs text-blue-300 space-y-1">
+                <p className="font-semibold text-blue-200">📋 Perfil de Facturación</p>
+                <p>Necesitamos estos datos para verificar tu pago. Solo se piden una vez.</p>
+              </div>
+
+              <Field label="Nombre completo *" value={billing.fullName} onChange={e => setBill('fullName', e.target.value)}
+                placeholder="Ej: Juan Carlos Pérez" required />
+
+              <Field label="Cédula o Pasaporte *" value={billing.identityDocument} onChange={e => setBill('identityDocument', e.target.value)}
+                placeholder="Ej: V-16108291 o P-AB123456" required
+                hint="Incluye el prefijo V-, E-, J- o P-" />
+
+              <Field label="Teléfono de Pago Móvil *" value={billing.phoneNumber} onChange={e => setBill('phoneNumber', e.target.value)}
+                placeholder="Ej: 04121234567" required
+                hint="El número desde el que realizarás el Pago Móvil" />
+
+              {billingError && (
+                <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2">⚠️ {billingError}</p>
+              )}
+
+              <div className="flex gap-3 pb-2">
+                <button type="button" onClick={() => setStep('package')}
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
+                <button type="submit" disabled={billingLoading}
+                  className="flex-1 py-3.5 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ backgroundColor: GOLD }}>
+                  {billingLoading ? 'Guardando...' : 'Guardar y continuar →'}
+                </button>
+              </div>
+            </form>
           )}
 
           {/* ── Step 2: Payment destination ── */}
