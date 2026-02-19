@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
-import Track from '@/models/Track';
+import '@/models/Track';
 import Race from '@/models/Race';
 
 export async function GET(req: NextRequest) {
