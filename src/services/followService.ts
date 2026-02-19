@@ -66,17 +66,17 @@ export async function notifyFollowers(
 
   if (followers.length === 0) return 0;
 
-  const type = isUpdate ? 'forecast_updated' : 'new_forecast';
   const title = isUpdate
-    ? `${profile.pseudonym} actualizó su pronóstico`
-    : `${profile.pseudonym} publicó un pronóstico`;
+    ? `🔄 ${(profile as any).pseudonym} actualizó su pronóstico`
+    : `🏇 ${(profile as any).pseudonym} publicó un pronóstico`;
   const body = `Reunión ${meetingNumber} · Carrera ${raceNumber}`;
 
   const notifications = followers.map(f => ({
     userId: f._id,
-    type,
+    type: 'followed_forecast',
     title,
     body,
+    link: '/pronosticos',
     data: {
       handicapperProfileId,
       meetingNumber: String(meetingNumber),

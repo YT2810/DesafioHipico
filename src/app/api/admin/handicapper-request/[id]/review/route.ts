@@ -11,6 +11,7 @@ import HandicapperRequest from '@/models/HandicapperRequest';
 import HandicapperProfile from '@/models/HandicapperProfile';
 import User from '@/models/User';
 import { Types } from 'mongoose';
+import { notifyHandicapperRequestApproved, notifyHandicapperRequestRejected } from '@/services/notificationService';
 
 export async function POST(
   req: NextRequest,
@@ -65,6 +66,13 @@ export async function POST(
     request.reviewedBy = new Types.ObjectId(session.user.id);
     request.reviewedAt = new Date();
     await request.save();
+
+    // Notify the requester (fire-and-forget)
+    if (action === 'approve') {
+      notifyHandicapperRequestApproved(request.userId.toString(), request.pseudonym).catch(() => {});
+    } else {
+      notifyHandicapperRequestRejected(request.userId.toString(), rejectionReason?.trim() || 'No cumple los requisitos').catch(() => {});
+    }
 
     return NextResponse.json({ success: true, status: request.status });
   } catch (err) {
