@@ -202,6 +202,11 @@ export default function PerfilPage() {
               <span className="text-sm text-white">👥 Gestión de usuarios</span>
               <span className="text-gray-500 text-sm">›</span>
             </Link>
+            <Link href="/admin/exchange-rate"
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
+              <span className="text-sm text-white">💱 Tasa de cambio BCV</span>
+              <span className="text-gray-500 text-sm">›</span>
+            </Link>
             <Link href="/admin/ingest"
               className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
               <span className="text-sm text-white">📄 Ingestar PDF INH</span>

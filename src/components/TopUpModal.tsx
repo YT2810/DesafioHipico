@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { VENEZUELAN_BANKS, GOLD_RATE, PAYMENT_DESTINATION } from '@/lib/constants';
 
@@ -27,6 +27,16 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [error, setError] = useState('');
   const [successData, setSuccessData] = useState<{ goldAmount: number; requestId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Exchange rate
+  const [rateVes, setRateVes] = useState<number | null>(null);
+  const [rateStale, setRateStale] = useState(false);
+  useEffect(() => {
+    fetch('/api/exchange-rate')
+      .then(r => r.json())
+      .then(d => { if (d.rateVes) { setRateVes(d.rateVes); setRateStale(d.stale ?? false); } })
+      .catch(() => {});
+  }, []);
 
   const [form, setForm] = useState({
     referenceNumber: '',
@@ -176,10 +186,19 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                     <span className="text-xl font-extrabold text-white">{pkg.golds}</span>
                     <span className="text-xs font-medium" style={{ color: GOLD }}>Golds</span>
                     <span className="text-xs text-gray-500">${pkg.usd} USD</span>
-                    <span className="text-xs text-gray-600">{pkg.label}</span>
+                    {rateVes && (
+                      <span className="text-xs text-gray-600">
+                        Bs {(pkg.usd * rateVes).toLocaleString('es-VE', { maximumFractionDigits: 0 })}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
+              {rateStale && (
+                <p className="text-xs text-orange-400 bg-orange-950/30 border border-orange-800/40 rounded-xl px-3 py-2">
+                  ⚠️ La tasa de cambio puede estar desactualizada. Consulta el monto exacto en Bs con el equipo.
+                </p>
+              )}
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400 space-y-1">
                 <p>📌 Realiza un <strong className="text-white">Pago Móvil</strong> al número de la plataforma.</p>
                 <p>📋 Luego completa el formulario con los datos del pago.</p>
@@ -287,7 +306,12 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                   <DestRow label="Cédula"   value={PAYMENT_DESTINATION.legalId} copyable />
                   <DestRow label="Teléfono" value={PAYMENT_DESTINATION.phone}   copyable />
                   <DestRow label="Nombre"   value={PAYMENT_DESTINATION.name} />
-                  <DestRow label="Monto"    value={`$${selectedUsd} USD`} highlight />
+                  <DestRow label="Monto USD"  value={`$${selectedUsd} USD`} highlight />
+                  {rateVes && (
+                    <DestRow label="Monto Bs"
+                      value={`Bs ${(selectedUsd * rateVes).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      highlight />
+                  )}
                 </div>
               </div>
               <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3 text-xs text-blue-300 space-y-1">
