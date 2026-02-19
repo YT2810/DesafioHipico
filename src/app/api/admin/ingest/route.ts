@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processDocument } from '@/services/pdfProcessor';
 import { ingestDocument } from '@/services/ingestService';
+import { notifyNewMeeting } from '@/services/notificationService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -83,6 +84,13 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await ingestDocument(processed);
+
+    // Notify all users + handicappers of the new meeting (fire-and-forget)
+    const m = processed.meeting;
+    if (m?.meetingNumber && m?.track?.name && m?.date) {
+      const dateStr = new Date(m.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      notifyNewMeeting(m.meetingNumber, m.track.name, dateStr).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

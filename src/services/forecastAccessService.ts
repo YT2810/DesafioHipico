@@ -16,6 +16,9 @@ import dbConnect from '@/lib/mongodb';
 import User, { FREE_RACES_PER_MEETING, GOLD_COST_PER_RACE } from '@/models/User';
 import GoldTransaction from '@/models/GoldTransaction';
 import { Types } from 'mongoose';
+import { notifyGoldLow } from '@/services/notificationService';
+
+const GOLD_LOW_THRESHOLD = 3;
 
 export type AccessResult =
   | { granted: true; free: true; freeRemaining: number }
@@ -91,6 +94,11 @@ export async function requestRaceAccess(
     description: `Desbloqueo pronósticos — Reunión ${meetingId} · Carrera ${raceId}`,
     raceId: new Types.ObjectId(raceId),
   });
+
+  // Warn user if balance is now low (fire-and-forget)
+  if (balanceAfter < GOLD_LOW_THRESHOLD) {
+    notifyGoldLow(userId, balanceAfter).catch(() => {});
+  }
 
   return { granted: true, free: false, goldSpent: GOLD_COST_PER_RACE, balanceAfter };
 }
