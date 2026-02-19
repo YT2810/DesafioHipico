@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING } from '@/lib/constants';
@@ -40,83 +40,8 @@ const LABEL_CFG: Record<ForecastLabel, { color: string; bg: string; border: stri
 };
 const GOLD = '#D4AF37';
 
-// Per-race mock horses: each entry is [horseName, dorsalNumber]
-const RACE_HORSES: [string, number][][] = [
-  // C1
-  [['QUALITY PRINCESS',1],['MISS BUENA VISTA',4],['ABUSIVA',7],['LA REINA DEL SUR',3],['ESTRELLA POLAR',9]],
-  // C2
-  [['EL CAMPEÓN',2],['VIENTO NORTE',5],['RAYO VELOZ',8],['LUNA LLENA',1],['TORMENTA',6]],
-  // C3
-  [['DORADO REY',3],['FLECHA ROJA',6],['CIELO AZUL',9],['PAMPERO',2],['GRAN SEÑOR',5]],
-  // C4
-  [['NOBLE ESPADA',4],['BRISA MARINA',7],['SOL NACIENTE',1],['TRUENO',10],['CASCADA',3]],
-  // C5
-  [['FUEGO ETERNO',5],['VIVA VENEZUELA',8],['PASO FIRME',2],['NOCHE OSCURA',11],['DIAMANTE',4]],
-  // C6–C11 empty in mock
-  [],[],[],[],[],[],
-];
-
-const H1 = { id:'h1', pseudonym:'El Maestro',   pct1st:42, pct2nd:55, pctGeneral:68, contactNumber:'+584120000000' };
-const H2 = { id:'h2', pseudonym:'TurfMaster VE', pct1st:38, pct2nd:49, pctGeneral:61 };
-const H3 = { id:'h3', pseudonym:'Don Caballos',  pct1st:51, pct2nd:62, pctGeneral:74, contactNumber:'+584141111111' };
-
-function makeMockForecasts(raceIdx: number): ForecastItem[] {
-  const horses = RACE_HORSES[raceIdx];
-  if (!horses || horses.length === 0) return [];
-  const [h0, h1, h2, h3, h4] = horses;
-  return [
-    {
-      handicapper: H1, isVip: raceIdx >= 3,
-      marks: [
-        { preferenceOrder:1, horseName:h0[0], dorsalNumber:h0[1], label:'Casi Fijo' },
-        { preferenceOrder:2, horseName:h1[0], dorsalNumber:h1[1], label:'Línea' },
-        { preferenceOrder:3, horseName:h2[0], dorsalNumber:h2[1], label:'Buen Dividendo' },
-      ],
-    },
-    {
-      handicapper: H2, isVip: false,
-      marks: [
-        { preferenceOrder:1, horseName:h2[0], dorsalNumber:h2[1], label:'Batacazo', note:'Viene de buena forma' },
-        { preferenceOrder:2, horseName:h0[0], dorsalNumber:h0[1], label:'Línea' },
-        { preferenceOrder:3, horseName:h3 ? h3[0] : h1[0], dorsalNumber:h3 ? h3[1] : h1[1], label:'Buen Dividendo' },
-      ],
-    },
-    {
-      handicapper: H3, isVip: false,
-      marks: [
-        { preferenceOrder:1, horseName:h0[0], dorsalNumber:h0[1], label:'Casi Fijo' },
-        { preferenceOrder:2, horseName:h3 ? h3[0] : h1[0], dorsalNumber:h3 ? h3[1] : h1[1], label:'Casi Fijo' },
-        { preferenceOrder:3, horseName:h2[0], dorsalNumber:h2[1], label:'Línea' },
-        { preferenceOrder:4, horseName:h4 ? h4[0] : h1[0], dorsalNumber:h4 ? h4[1] : h1[1], label:'Buen Dividendo' },
-      ],
-    },
-  ];
-}
-
-const MOCK_MEETINGS: MeetingItem[] = [
-  {
-    meetingId: 'meeting-9', meetingNumber: 9, date: '22/02/2026', trackName: 'La Rinconada',
-    races: Array.from({ length: 11 }, (_, i) => ({
-      raceId: `r9-${i+1}`, raceNumber: i+1,
-      distance: [1400,1200,1200,1400,1200,1200,1400,1100,1100,1100,1200][i],
-      scheduledTime: `${String(13+Math.floor(i*0.45)).padStart(2,'0')}:${String((i*27)%60).padStart(2,'0')} p.m.`,
-      conditions: 'HANDICAP LIBRE',
-      prizePool: [3600,2800,3600,3600,3800,2400,2200,2000,2000,3600,1600][i],
-      forecasts: makeMockForecasts(i),
-    })),
-  },
-  {
-    meetingId: 'meeting-10', meetingNumber: 10, date: '01/03/2026', trackName: 'La Rinconada',
-    races: Array.from({ length: 11 }, (_, i) => ({
-      raceId: `r10-${i+1}`, raceNumber: i+1,
-      distance: [1200,1400,1200,1400,1200,1100,1400,1200,1100,1200,1400][i],
-      scheduledTime: `${String(13+Math.floor(i*0.45)).padStart(2,'0')}:${String((i*27)%60).padStart(2,'0')} p.m.`,
-      conditions: 'HANDICAP LIBRE',
-      prizePool: [2800,3600,2400,3600,3800,2000,2200,2000,2000,3600,1600][i],
-      forecasts: [],
-    })),
-  },
-];
+// ── API meeting shape ──────────────────────────────────────────────────────
+interface ApiMeeting { id: string; meetingNumber: number; date: string; trackName: string; raceCount: number; }
 
 function StatPill({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
@@ -342,16 +267,99 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
 
 export default function PronosticosPage() {
   const { data: session, status } = useSession();
-  const [selectedMeetingId, setSelectedMeetingId] = useState(MOCK_MEETINGS[0].meetingId);
+  const [selectedMeetingId, setSelectedMeetingId] = useState('');
   const [selectedRaceNumber, setSelectedRaceNumber] = useState<number | null>(null);
-  const [unlockedRaceIds, setUnlockedRaceIds] = useState<Set<string>>(new Set());
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+
+  // Real data state
+  const [apiMeetings, setApiMeetings] = useState<ApiMeeting[]>([]);
+  const [meeting, setMeeting] = useState<MeetingItem | null>(null);
+  const [loadingMeetings, setLoadingMeetings] = useState(true);
+  const [loadingMeeting, setLoadingMeeting] = useState(false);
+  const [freeRemaining, setFreeRemaining] = useState(FREE_RACES_PER_MEETING);
 
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
   const goldBalance = user?.balance?.golds ?? 0;
   const isPrivileged = roles.some(r => ['admin', 'staff', 'handicapper'].includes(r));
-  const meeting = MOCK_MEETINGS.find(m => m.meetingId === selectedMeetingId) ?? MOCK_MEETINGS[0];
+
+  // Load meetings list
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetch('/api/meetings/upcoming?limit=10')
+      .then(r => r.json())
+      .then(d => {
+        const meetings: ApiMeeting[] = d.meetings ?? [];
+        setApiMeetings(meetings);
+        if (meetings.length > 0) setSelectedMeetingId(meetings[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMeetings(false));
+  }, [status]);
+
+  // Load races + forecasts when meeting changes
+  const loadMeeting = useCallback(async (meetingId: string) => {
+    if (!meetingId) return;
+    setLoadingMeeting(true);
+    setSelectedRaceNumber(null);
+    try {
+      const userId = (session?.user as any)?.id ?? '';
+      const [racesRes, forecastsRes] = await Promise.all([
+        fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()),
+        fetch(`/api/forecasts?meetingId=${meetingId}&userId=${userId}`).then(r => r.json()),
+      ]);
+
+      const races: any[] = racesRes.races ?? [];
+      const forecastsByRace: Record<string, { access: any; forecasts: any[] }> = forecastsRes.races ?? {};
+      setFreeRemaining(forecastsRes.freeRemaining ?? FREE_RACES_PER_MEETING);
+
+      const apiMeeting = apiMeetings.find(m => m.id === meetingId);
+      const meetingDate = apiMeeting ? new Date(apiMeeting.date).toLocaleDateString('es-VE') : '';
+
+      const raceItems: RaceItem[] = races.map(r => {
+        const raceData = forecastsByRace[r.id] ?? { access: { unlocked: true, free: true }, forecasts: [] };
+        const forecasts: ForecastItem[] = raceData.forecasts.map((f: any) => ({
+          handicapper: {
+            id: f.handicapperId?._id ?? f.handicapperId ?? '',
+            pseudonym: f.handicapperId?.pseudonym ?? 'Handicapper',
+            pct1st: f.handicapperId?.stats?.pct1st ?? 0,
+            pct2nd: f.handicapperId?.stats?.pct2nd ?? 0,
+            pctGeneral: f.handicapperId?.stats?.pctGeneral ?? 0,
+            contactNumber: f.handicapperId?.contactNumber,
+          },
+          marks: f.marks ?? [],
+          isVip: f.isVip ?? false,
+          _locked: f._locked ?? false,
+        }));
+        return {
+          raceId: r.id,
+          raceNumber: r.raceNumber,
+          distance: r.distance,
+          scheduledTime: r.scheduledTime,
+          conditions: r.conditions,
+          prizePool: r.prizePool,
+          forecasts,
+          _access: raceData.access,
+        } as RaceItem & { _access: any };
+      });
+
+      setMeeting({
+        meetingId,
+        meetingNumber: apiMeeting?.meetingNumber ?? 0,
+        date: meetingDate,
+        trackName: apiMeeting?.trackName ?? 'Hipódromo',
+        races: raceItems,
+      });
+    } catch {
+      setMeeting(null);
+    } finally {
+      setLoadingMeeting(false);
+    }
+  }, [apiMeetings, session]);
+
+  useEffect(() => {
+    if (selectedMeetingId) loadMeeting(selectedMeetingId);
+  }, [selectedMeetingId, loadMeeting]);
 
   // ── Auth gate ──────────────────────────────────────────────────────────────
   if (status === 'loading') {
@@ -398,20 +406,23 @@ export default function PronosticosPage() {
   function isRaceUnlocked(raceId: string, idx: number) {
     if (isPrivileged) return true;
     if (idx < FREE_RACES_PER_MEETING) return true;
-    return unlockedRaceIds.has(raceId);
+    // Access comes from server-side access map
+    const race = meeting?.races[idx];
+    return (race as any)?._access?.unlocked ?? false;
   }
-  const freeRemaining = Math.max(0, FREE_RACES_PER_MEETING - meeting.races.filter((_,i) => i < FREE_RACES_PER_MEETING).length);
 
-  function handleUnlock(raceId: string) {
-    if (goldBalance < 1) return;
-    setUnlockedRaceIds(prev => new Set([...prev, raceId]));
+  function handleUnlock(_raceId: string) {
+    // Gold unlock is handled server-side via forecastAccessService
+    // Reload the meeting data to reflect new access
+    if (selectedMeetingId) loadMeeting(selectedMeetingId);
   }
   function toggleFollow(id: string) {
     setFollowedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
-  const selectedRace = selectedRaceNumber != null ? meeting.races.find(r => r.raceNumber === selectedRaceNumber) ?? null : null;
-  const selectedRaceIdx = selectedRace ? meeting.races.findIndex(r => r.raceId === selectedRace.raceId) : -1;
+  const races = meeting?.races ?? [];
+  const selectedRace = selectedRaceNumber != null ? races.find(r => r.raceNumber === selectedRaceNumber) ?? null : null;
+  const selectedRaceIdx = selectedRace ? races.findIndex(r => r.raceId === selectedRace.raceId) : -1;
   const selectedUnlocked = selectedRace ? isRaceUnlocked(selectedRace.raceId, selectedRaceIdx) : false;
 
   return (
@@ -422,7 +433,7 @@ export default function PronosticosPage() {
             <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none shrink-0">←</Link>
             <div className="min-w-0">
               <h1 className="text-base font-bold text-white truncate">🏇 Pronósticos</h1>
-              <p className="text-xs text-gray-500 truncate">{meeting.trackName} · Reunión {meeting.meetingNumber} · {meeting.date}</p>
+              <p className="text-xs text-gray-500 truncate">{meeting?.trackName ?? '—'} · Reunión {meeting?.meetingNumber ?? '—'} · {meeting?.date ?? ''}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -443,13 +454,17 @@ export default function PronosticosPage() {
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
         {/* Meeting selector */}
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {MOCK_MEETINGS.map(m => (
-            <button key={m.meetingId}
-              onClick={() => { setSelectedMeetingId(m.meetingId); setSelectedRaceNumber(null); }}
-              className={`shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all ${selectedMeetingId === m.meetingId ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-600'}`}
-              style={selectedMeetingId === m.meetingId ? { backgroundColor: GOLD } : {}}>
+          {loadingMeetings ? (
+            <div className="flex gap-2">{[1,2,3].map(i => <div key={i} className="shrink-0 w-20 h-14 rounded-xl bg-gray-900 animate-pulse" />)}</div>
+          ) : apiMeetings.length === 0 ? (
+            <p className="text-xs text-gray-600 italic py-2">Sin reuniones próximas</p>
+          ) : apiMeetings.map(m => (
+            <button key={m.id}
+              onClick={() => { setSelectedMeetingId(m.id); setSelectedRaceNumber(null); }}
+              className={`shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all ${selectedMeetingId === m.id ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-600'}`}
+              style={selectedMeetingId === m.id ? { backgroundColor: GOLD } : {}}>
               <span className="font-bold text-sm">R{m.meetingNumber}</span>
-              <span className="opacity-80">{m.date}</span>
+              <span className="opacity-80">{new Date(m.date).toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit' })}</span>
             </button>
           ))}
         </div>
@@ -463,11 +478,16 @@ export default function PronosticosPage() {
             <Link href="/" className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>+ Golds</Link>
           </div>
         )}
-        {/* Race buttons C1–C11 */}
+        {/* Race buttons */}
         <div>
           <p className="text-xs text-gray-600 mb-2 font-medium uppercase tracking-wide">Selecciona una carrera</p>
+          {loadingMeeting ? (
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+              {[...Array(11)].map((_,i) => <div key={i} className="h-14 rounded-xl bg-gray-900 animate-pulse" />)}
+            </div>
+          ) : (
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-            {meeting.races.map((race, idx) => {
+            {races.map((race, idx) => {
               const unlocked = isRaceUnlocked(race.raceId, idx);
               const hasForecasts = race.forecasts.length > 0;
               const isSelected = selectedRaceNumber === race.raceNumber;
@@ -490,6 +510,7 @@ export default function PronosticosPage() {
               );
             })}
           </div>
+          )}
         </div>
         {/* Race detail */}
         {selectedRace ? (
