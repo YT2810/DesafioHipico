@@ -60,7 +60,10 @@ export default function ExchangeRatePage() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-lg flex items-center gap-3">
-          <Link href="/perfil" className="text-gray-500 hover:text-white text-lg leading-none shrink-0">←</Link>
+          <Link href="/perfil" className="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors shrink-0">
+            <span className="text-base leading-none">←</span>
+            <span className="hidden sm:inline">Panel</span>
+          </Link>
           <div>
             <h1 className="text-base font-bold text-white">💱 Tasa de Cambio BCV</h1>
             <p className="text-xs text-gray-500">Actualización manual — Bs / USD</p>
