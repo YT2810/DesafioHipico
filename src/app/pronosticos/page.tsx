@@ -32,13 +32,15 @@ function calcFactors(forecasts: ForecastItem[]): HorseFactor[] {
     .sort((a, b) => b.factor - a.factor);
 }
 
-const LABEL_CFG: Record<ForecastLabel, { color: string; bg: string; border: string; emoji: string }> = {
+const LABEL_CFG: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
+  '':               { color: 'text-gray-500',   bg: 'bg-gray-800/30',    border: 'border-gray-700',   emoji: '' },
   'Línea':          { color: 'text-gray-300',   bg: 'bg-gray-700/50',    border: 'border-gray-600',   emoji: '📌' },
   'Casi Fijo':      { color: 'text-blue-300',   bg: 'bg-blue-900/40',   border: 'border-blue-700',   emoji: '🔵' },
   'Súper Especial': { color: 'text-yellow-300', bg: 'bg-yellow-900/40', border: 'border-yellow-600', emoji: '⭐' },
   'Buen Dividendo': { color: 'text-green-300',  bg: 'bg-green-900/40',  border: 'border-green-700',  emoji: '💰' },
   'Batacazo':       { color: 'text-orange-300', bg: 'bg-orange-900/40', border: 'border-orange-600', emoji: '🔥' },
 };
+const getLabelCfg = (label?: string) => LABEL_CFG[label ?? ''] ?? LABEL_CFG[''];
 const GOLD = '#D4AF37';
 
 // ── API meeting shape ──────────────────────────────────────────────────────
@@ -95,7 +97,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
         {!open && !_locked && sortedMarks.length > 0 && (
           <div className="flex items-center gap-1 shrink-0">
             {sortedMarks.slice(0, 3).map(m => {
-              const cfg = LABEL_CFG[m.label];
+              const cfg = getLabelCfg(m.label);
               return (
                 <span
                   key={m.preferenceOrder}
@@ -156,7 +158,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
           ) : (
             <div className="space-y-1.5">
               {sortedMarks.map(mark => {
-                const cfg = LABEL_CFG[mark.label];
+                const cfg = getLabelCfg(mark.label);
                 const isFijo = mark.preferenceOrder === 1 && mark.label === 'Casi Fijo';
                 return (
                   <div
