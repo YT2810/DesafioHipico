@@ -11,7 +11,16 @@ export async function middleware(req: NextRequest) {
 
   for (const [prefix, allowedRoles] of Object.entries(PROTECTED_ROUTES)) {
     if (pathname.startsWith(prefix)) {
-      const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+      const secure = req.nextUrl.protocol === 'https:';
+      const cookieName = secure
+        ? '__Secure-authjs.session-token'
+        : 'authjs.session-token';
+
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET,
+        cookieName,
+      });
 
       if (!token) {
         const signInUrl = new URL('/auth/signin', req.url);
