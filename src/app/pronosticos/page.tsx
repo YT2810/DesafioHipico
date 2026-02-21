@@ -16,11 +16,8 @@ interface HorseFactor { horseName: string; dorsalNumber?: number; points: number
 function calcFactors(forecasts: ForecastItem[]): HorseFactor[] {
   const pub = forecasts.filter(f => !f._locked);
   if (!pub.length) return [];
-  // Max per forecast: 8 if single Línea mark (Fijo único), else 5 (top position)
-  const maxTotal = pub.reduce((sum, fc) => {
-    const isFijoUnico = fc.marks.length === 1 && fc.marks[0].label === 'Línea';
-    return sum + (isFijoUnico ? FIJO_BONUS_POINTS : MARK_POINTS[1]);
-  }, 0);
+  // Max per forecaster is always 8 (FIJO_BONUS_POINTS) — 1 pronosticador=8, 2=16, etc.
+  const maxTotal = pub.length * FIJO_BONUS_POINTS;
   const map = new Map<string, { points: number; dorsalNumber?: number }>();
   for (const fc of pub) {
     for (const m of fc.marks) {
