@@ -11,12 +11,13 @@ import Person from '@/models/Person';
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await dbConnect();
 
-    const entries = await Entry.find({ raceId: params.id, 'result.isScratched': { $ne: true } })
+    const entries = await Entry.find({ raceId: id, 'result.isScratched': { $ne: true } })
       .populate<{ horseId: { name: string } }>('horseId', 'name')
       .populate<{ jockeyId: { name: string } }>('jockeyId', 'name')
       .sort({ dorsalNumber: 1 })
