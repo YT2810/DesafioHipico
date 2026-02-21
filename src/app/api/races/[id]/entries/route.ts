@@ -17,7 +17,7 @@ export async function GET(
     const { id } = await params;
     await dbConnect();
 
-    const entries = await Entry.find({ raceId: id, 'result.isScratched': { $ne: true } })
+    const entries = await Entry.find({ raceId: id, status: { $ne: 'scratched' } })
       .populate<{ horseId: { name: string } }>('horseId', 'name')
       .populate<{ jockeyId: { name: string } }>('jockeyId', 'name')
       .sort({ dorsalNumber: 1 })
