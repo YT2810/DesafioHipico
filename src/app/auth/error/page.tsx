@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 const ERRORS: Record<string, { title: string; desc: string }> = {
   Configuration:   { title: 'Error de configuración', desc: 'El proveedor de inicio de sesión no está configurado correctamente. Usa el enlace mágico por correo mientras tanto.' },
@@ -12,13 +13,13 @@ const ERRORS: Record<string, { title: string; desc: string }> = {
   Default:         { title: 'Error de autenticación',   desc: 'Ocurrió un error inesperado. Intenta de nuevo.' },
 };
 
-export default function AuthErrorPage() {
+function ErrorContent() {
   const params = useSearchParams();
   const code = params.get('error') ?? 'Default';
   const cfg = ERRORS[code] ?? ERRORS.Default;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 text-center">
+    <>
       <div className="text-5xl mb-4">⚠️</div>
       <h1 className="text-xl font-bold text-white mb-2">{cfg.title}</h1>
       <p className="text-sm text-gray-400 max-w-xs mb-8">{cfg.desc}</p>
@@ -30,6 +31,16 @@ export default function AuthErrorPage() {
       <Link href="/" className="mt-4 text-xs text-gray-600 hover:text-gray-400 transition-colors">
         Ir al inicio
       </Link>
+    </>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 text-center">
+      <Suspense fallback={<div className="text-gray-500 text-sm">Cargando...</div>}>
+        <ErrorContent />
+      </Suspense>
     </div>
   );
 }
