@@ -1,0 +1,152 @@
+/**
+ * POST /api/admin/intelligence/publish
+ *
+ * Saves approved ExpertForecasts to DB.
+ * Creates ExpertSource (ghost) if not exists.
+ * Prevents duplicate ingestion via contentHash.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import dbConnect from '@/lib/mongodb';
+import ExpertSource from '@/models/ExpertSource';
+import ExpertForecast from '@/models/ExpertForecast';
+import Race from '@/models/Race';
+import { Types } from 'mongoose';
+
+interface PublishMark {
+  preferenceOrder: number;
+  rawName: string;
+  resolvedHorseName?: string;
+  resolvedEntryId?: string;
+  dorsalNumber?: number;
+  label: string;
+  matchConfidence: number;
+}
+
+interface PublishForecast {
+  raceNumber: number;
+  raceId?: string;
+  marks: PublishMark[];
+}
+
+interface PublishBody {
+  expertName: string;
+  platform: string;
+  handle?: string;
+  link?: string;
+  isClaimable?: boolean;
+  meetingId: string;
+  sourceType: string;
+  sourceUrl?: string;
+  rawContent?: string;
+  contentHash: string;
+  forecasts: PublishForecast[];
+}
+
+export async function POST(req: NextRequest) {
+  const secure = req.nextUrl.protocol === 'https:';
+  const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
+  const roles: string[] = (token?.roles as string[]) ?? [];
+  if (!token || !roles.some(r => ['admin', 'staff'].includes(r))) {
+    return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+  }
+
+  const body: PublishBody = await req.json().catch(() => null);
+  if (!body?.meetingId || !body?.contentHash || !body?.forecasts?.length) {
+    return NextResponse.json({ error: 'Datos incompletos.' }, { status: 400 });
+  }
+
+  await dbConnect();
+
+  // ── 1. Deduplication check ────────────────────────────────────────────────
+  const existing = await ExpertForecast.findOne({ contentHash: body.contentHash }).lean();
+  if (existing) {
+    return NextResponse.json({ error: 'Este contenido ya fue ingresado anteriormente.' }, { status: 409 });
+  }
+
+  // ── 2. Upsert ExpertSource (ghost profile) ────────────────────────────────
+  const platform = body.platform || 'Otro';
+  const isClaimable = platform !== 'Revista';
+
+  let expertSource = await ExpertSource.findOne({
+    name: body.expertName.trim(),
+    platform,
+  });
+
+  if (!expertSource) {
+    expertSource = await ExpertSource.create({
+      name: body.expertName.trim(),
+      platform,
+      handle: body.handle ?? undefined,
+      link: body.link ?? undefined,
+      isVerified: false,
+      isClaimable,
+      isGhost: true,
+    });
+  }
+
+  // ── 3. Save each forecast ─────────────────────────────────────────────────
+  const meetingObjId = new Types.ObjectId(body.meetingId);
+  const reviewerId = new Types.ObjectId(token.userId as string);
+  const saved: string[] = [];
+  const errors: string[] = [];
+
+  for (const fc of body.forecasts) {
+    try {
+      let raceObjId: Types.ObjectId;
+      if (fc.raceId) {
+        raceObjId = new Types.ObjectId(fc.raceId);
+      } else {
+        const race = await Race.findOne({ meetingId: meetingObjId, raceNumber: fc.raceNumber }).lean();
+        if (!race) {
+          errors.push(`Carrera ${fc.raceNumber}: no encontrada en DB.`);
+          continue;
+        }
+        raceObjId = (race as any)._id;
+      }
+
+      const marks = fc.marks.slice(0, 5).map(m => ({
+        preferenceOrder: m.preferenceOrder,
+        rawName: m.rawName,
+        resolvedHorseName: m.resolvedHorseName ?? undefined,
+        resolvedEntryId: m.resolvedEntryId ? new Types.ObjectId(m.resolvedEntryId) : undefined,
+        dorsalNumber: m.dorsalNumber ?? undefined,
+        label: m.label,
+        matchConfidence: m.matchConfidence ?? 1.0,
+      }));
+
+      const doc = await ExpertForecast.create({
+        expertSourceId: expertSource._id,
+        meetingId: meetingObjId,
+        raceId: raceObjId,
+        raceNumber: fc.raceNumber,
+        marks,
+        sourceUrl: body.sourceUrl ?? undefined,
+        sourceType: body.sourceType || 'social_text',
+        rawContent: body.rawContent ?? undefined,
+        contentHash: body.contentHash,
+        status: 'published',
+        publishedAt: new Date(),
+        reviewedBy: reviewerId,
+      });
+
+      saved.push(doc._id.toString());
+    } catch (e: any) {
+      errors.push(`Carrera ${fc.raceNumber}: ${e.message}`);
+    }
+  }
+
+  // ── 4. Update expert stats ────────────────────────────────────────────────
+  await ExpertSource.findByIdAndUpdate(expertSource._id, {
+    $inc: { totalForecasts: saved.length },
+  });
+
+  return NextResponse.json({
+    success: saved.length > 0,
+    savedCount: saved.length,
+    expertSourceId: expertSource._id.toString(),
+    errors,
+  });
+}
