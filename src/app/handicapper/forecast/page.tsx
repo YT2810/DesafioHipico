@@ -22,18 +22,27 @@ interface RaceOption {
   scheduledTime: string;
 }
 
+interface EntryOption {
+  entryId: string;
+  dorsal: number;
+  horseName: string;
+  jockeyName: string;
+}
+
 interface MarkForm {
   preferenceOrder: number;
+  entryId: string;
   horseName: string;
-  dorsalNumber: string;
+  dorsalNumber: number;
   label: ForecastLabel;
   note: string;
 }
 
 const EMPTY_MARK = (order: number): MarkForm => ({
   preferenceOrder: order,
+  entryId: '',
   horseName: '',
-  dorsalNumber: '',
+  dorsalNumber: 0,
   label: 'Línea',
   note: '',
 });
@@ -53,9 +62,12 @@ const POINTS_BY_ORDER: Record<number, number> = { 1: 5, 2: 3, 3: 2, 4: 1, 5: 1 }
 export default function HandicapperForecastPage() {
   const [meetings, setMeetings] = useState<MeetingOption[]>([]);
   const [races, setRaces] = useState<RaceOption[]>([]);
+  const [entries, setEntries] = useState<EntryOption[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(false);
   const [selectedMeetingId, setSelectedMeetingId] = useState('');
   const [selectedRaceId, setSelectedRaceId] = useState('');
-  const [marks, setMarks] = useState<MarkForm[]>([EMPTY_MARK(1)]);
+  const [marks, setMarks] = useState<MarkForm[]>([]);
+  const [sortMode, setSortMode] = useState<'preference' | 'dorsal'>('preference');
   const [isVip, setIsVip] = useState(false);
   const [publish, setPublish] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -64,7 +76,6 @@ export default function HandicapperForecastPage() {
   const [success, setSuccess] = useState('');
   const [myForecasts, setMyForecasts] = useState<any[]>([]);
 
-  // Load upcoming meetings
   useEffect(() => {
     fetch('/api/meetings/upcoming?limit=10')
       .then(r => r.json())
@@ -73,16 +84,24 @@ export default function HandicapperForecastPage() {
       .finally(() => setLoadingMeetings(false));
   }, []);
 
-  // Load races when meeting changes
   useEffect(() => {
-    if (!selectedMeetingId) { setRaces([]); setSelectedRaceId(''); return; }
+    if (!selectedMeetingId) { setRaces([]); setSelectedRaceId(''); setEntries([]); return; }
     fetch(`/api/meetings/${selectedMeetingId}/races`)
       .then(r => r.json())
-      .then(d => { setRaces(d.races ?? []); setSelectedRaceId(''); })
+      .then(d => { setRaces(d.races ?? []); setSelectedRaceId(''); setEntries([]); setMarks([]); })
       .catch(() => {});
   }, [selectedMeetingId]);
 
-  // Load my forecasts for this meeting
+  useEffect(() => {
+    if (!selectedRaceId) { setEntries([]); setMarks([]); return; }
+    setLoadingEntries(true);
+    fetch(`/api/races/${selectedRaceId}/entries`)
+      .then(r => r.json())
+      .then(d => { setEntries(d.entries ?? []); setMarks([]); })
+      .catch(() => {})
+      .finally(() => setLoadingEntries(false));
+  }, [selectedRaceId]);
+
   useEffect(() => {
     if (!selectedMeetingId) { setMyForecasts([]); return; }
     fetch(`/api/handicapper/forecast?meetingId=${selectedMeetingId}`)
@@ -91,18 +110,53 @@ export default function HandicapperForecastPage() {
       .catch(() => {});
   }, [selectedMeetingId, success]);
 
-  function addMark() {
+  const selectedEntryIds = marks.map(m => m.entryId).filter(Boolean);
+
+  function toggleEntry(entry: EntryOption) {
+    const alreadyIdx = marks.findIndex(m => m.entryId === entry.entryId);
+    if (alreadyIdx >= 0) {
+      setMarks(prev => prev.filter((_, i) => i !== alreadyIdx).map((m, i) => ({ ...m, preferenceOrder: i + 1 })));
+      return;
+    }
     if (marks.length >= 5) return;
-    setMarks(prev => [...prev, EMPTY_MARK(prev.length + 1)]);
+    setMarks(prev => [...prev, {
+      preferenceOrder: prev.length + 1,
+      entryId: entry.entryId,
+      horseName: entry.horseName,
+      dorsalNumber: entry.dorsal,
+      label: 'Línea',
+      note: '',
+    }]);
+  }
+
+  function updateMarkLabel(idx: number, label: ForecastLabel) {
+    setMarks(prev => prev.map((m, i) => i === idx ? { ...m, label } : m));
+  }
+
+  function updateMarkNote(idx: number, note: string) {
+    setMarks(prev => prev.map((m, i) => i === idx ? { ...m, note } : m));
   }
 
   function removeMark(idx: number) {
-    if (marks.length <= 1) return;
     setMarks(prev => prev.filter((_, i) => i !== idx).map((m, i) => ({ ...m, preferenceOrder: i + 1 })));
   }
 
-  function updateMark(idx: number, field: keyof MarkForm, value: string) {
-    setMarks(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
+  function moveUp(idx: number) {
+    if (idx === 0) return;
+    setMarks(prev => {
+      const next = [...prev];
+      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+      return next.map((m, i) => ({ ...m, preferenceOrder: i + 1 }));
+    });
+  }
+
+  function moveDown(idx: number) {
+    setMarks(prev => {
+      if (idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+      return next.map((m, i) => ({ ...m, preferenceOrder: i + 1 }));
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -114,10 +168,8 @@ export default function HandicapperForecastPage() {
       setError('Selecciona una reunión y una carrera.');
       return;
     }
-
-    const validMarks = marks.filter(m => m.horseName.trim());
-    if (validMarks.length === 0) {
-      setError('Agrega al menos una marca con nombre del ejemplar.');
+    if (marks.length === 0) {
+      setError('Selecciona al menos un ejemplar.');
       return;
     }
 
@@ -129,10 +181,10 @@ export default function HandicapperForecastPage() {
         body: JSON.stringify({
           meetingId: selectedMeetingId,
           raceId: selectedRaceId,
-          marks: validMarks.map(m => ({
+          marks: marks.map(m => ({
             preferenceOrder: m.preferenceOrder,
-            horseName: m.horseName.trim().toUpperCase(),
-            dorsalNumber: m.dorsalNumber ? parseInt(m.dorsalNumber) : undefined,
+            horseName: m.horseName,
+            dorsalNumber: m.dorsalNumber || undefined,
             label: m.label,
             note: m.note.trim() || undefined,
           })),
@@ -150,9 +202,9 @@ export default function HandicapperForecastPage() {
           ? `✅ Pronóstico actualizado${data.notified > 0 ? ` · ${data.notified} seguidores notificados` : ''}`
           : `✅ Pronóstico guardado${publish ? (data.notified > 0 ? ` · ${data.notified} seguidores notificados` : ' · Publicado') : ' · Guardado como borrador'}`
       );
-      // Reset marks
-      setMarks([EMPTY_MARK(1)]);
+      setMarks([]);
       setSelectedRaceId('');
+      setEntries([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -161,6 +213,9 @@ export default function HandicapperForecastPage() {
   }
 
   const selectedRace = races.find(r => r.id === selectedRaceId);
+  const displayEntries = sortMode === 'dorsal'
+    ? [...entries].sort((a, b) => a.dorsal - b.dorsal)
+    : entries;
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -249,57 +304,165 @@ export default function HandicapperForecastPage() {
           )}
         </section>
 
-        {/* ── Step 2: Marks ── */}
+        {/* ── Step 2: Entry selection ── */}
         {selectedRaceId && (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <section className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">
+
+            {/* Entry picker */}
+            <section className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold text-black" style={{ backgroundColor: GOLD }}>2</span>
-                  Marcas ({marks.length}/5)
+                  Selecciona ejemplares ({marks.length}/5)
                 </h2>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>1ra=5pts</span>
-                  <span>·</span>
-                  <span className="text-blue-400">Fijo=8pts</span>
-                  <span>·</span>
-                  <span>2da=3pts</span>
-                  <span>·</span>
-                  <span>3ra=2pts</span>
+                {/* Sort toggle */}
+                <div className="flex bg-gray-800 border border-gray-700 rounded-lg p-0.5 gap-0.5">
+                  <button type="button" onClick={() => setSortMode('preference')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${sortMode === 'preference' ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
+                    Por orden
+                  </button>
+                  <button type="button" onClick={() => setSortMode('dorsal')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${sortMode === 'dorsal' ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
+                    Por dorsal
+                  </button>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                {marks.map((mark, idx) => (
-                  <MarkRow
-                    key={idx}
-                    mark={mark}
-                    idx={idx}
-                    canRemove={marks.length > 1}
-                    onChange={(field, val) => updateMark(idx, field, val)}
-                    onRemove={() => removeMark(idx)}
-                  />
-                ))}
-              </div>
+              <p className="text-xs text-gray-500">
+                Toca para seleccionar en orden de preferencia. Máximo 5. Toca de nuevo para quitar.
+              </p>
 
-              {marks.length < 5 && (
-                <button
-                  type="button"
-                  onClick={addMark}
-                  className="w-full py-2.5 rounded-xl border border-dashed border-gray-700 text-xs font-semibold text-gray-500 hover:border-yellow-700/50 hover:text-yellow-400 transition-colors"
-                >
-                  + Agregar marca ({marks.length + 1}ra preferencia)
-                </button>
+              {loadingEntries ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {[1,2,3,4].map(i => <div key={i} className="h-14 rounded-xl bg-gray-800 animate-pulse" />)}
+                </div>
+              ) : entries.length === 0 ? (
+                <p className="text-xs text-gray-600 italic text-center py-4">
+                  No hay ejemplares cargados para esta carrera.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {displayEntries.map(entry => {
+                    const markIdx = marks.findIndex(m => m.entryId === entry.entryId);
+                    const isSelected = markIdx >= 0;
+                    const isDisabled = !isSelected && marks.length >= 5;
+                    const order = isSelected ? marks[markIdx].preferenceOrder : null;
+                    return (
+                      <button
+                        key={entry.entryId}
+                        type="button"
+                        onClick={() => !isDisabled && toggleEntry(entry)}
+                        disabled={isDisabled}
+                        className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all active:scale-95 ${
+                          isSelected
+                            ? 'border-yellow-600 bg-yellow-950/30'
+                            : isDisabled
+                            ? 'border-gray-800 bg-gray-900 opacity-40 cursor-not-allowed'
+                            : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+                        }`}
+                      >
+                        {/* Dorsal badge */}
+                        <span className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-extrabold ${
+                          isSelected ? 'text-black' : 'text-white bg-gray-700'
+                        }`} style={isSelected ? { backgroundColor: GOLD } : {}}>
+                          {entry.dorsal}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-gray-200'}`}>
+                            {entry.horseName}
+                          </p>
+                          <p className="text-xs text-gray-600 truncate">{entry.jockeyName}</p>
+                        </div>
+                        {/* Preference order badge */}
+                        {order !== null && (
+                          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-950 border-2 border-yellow-600 flex items-center justify-center text-xs font-extrabold text-yellow-400">
+                            {order}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </section>
 
-            {/* ── Step 3: Options ── */}
+            {/* ── Marks list with labels ── */}
+            {marks.length > 0 && (
+              <section className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold text-black" style={{ backgroundColor: GOLD }}>3</span>
+                    Etiquetas y orden
+                  </h2>
+                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <span>1ra=5pts</span>
+                    <span>·</span>
+                    <span className="text-yellow-500">Fijo=8pts</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {marks.map((mark, idx) => {
+                    const cfg = LABEL_CFG[mark.label];
+                    const isFijo = mark.preferenceOrder === 1 && (mark.label === 'Casi Fijo');
+                    const pts = isFijo ? 8 : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
+                    return (
+                      <div key={mark.entryId} className={`rounded-xl border p-3 space-y-2 ${cfg.border} bg-gray-800/40`}>
+                        {/* Horse header */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold text-black shrink-0" style={{ backgroundColor: GOLD }}>
+                            {mark.preferenceOrder}
+                          </span>
+                          <span className="w-6 h-6 rounded-lg bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 shrink-0">
+                            {mark.dorsalNumber}
+                          </span>
+                          <span className="text-sm font-bold text-white flex-1 truncate">{mark.horseName}</span>
+                          <span className="text-xs text-gray-600 font-mono shrink-0">{pts}pts</span>
+                          {/* Move up/down */}
+                          <div className="flex gap-1 shrink-0">
+                            <button type="button" onClick={() => moveUp(idx)} disabled={idx === 0}
+                              className="text-gray-600 hover:text-white disabled:opacity-20 text-sm leading-none transition-colors">↑</button>
+                            <button type="button" onClick={() => moveDown(idx)} disabled={idx === marks.length - 1}
+                              className="text-gray-600 hover:text-white disabled:opacity-20 text-sm leading-none transition-colors">↓</button>
+                          </div>
+                          <button type="button" onClick={() => removeMark(idx)}
+                            className="text-gray-600 hover:text-red-400 text-sm transition-colors shrink-0">✕</button>
+                        </div>
+
+                        {/* Label buttons */}
+                        <div className="flex gap-1.5 flex-wrap">
+                          {FORECAST_LABELS.map(label => {
+                            const lcfg = LABEL_CFG[label];
+                            const sel = mark.label === label;
+                            return (
+                              <button key={label} type="button" onClick={() => updateMarkLabel(idx, label)}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                                  sel ? `${lcfg.color} ${lcfg.border} bg-gray-700/80` : 'text-gray-600 border-gray-700 hover:text-gray-400'
+                                }`}>
+                                {lcfg.emoji} {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Note */}
+                        <input type="text" value={mark.note} onChange={e => updateMarkNote(idx, e.target.value)}
+                          placeholder="Nota opcional"
+                          maxLength={200}
+                          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-1.5 text-xs text-gray-400 placeholder-gray-700 focus:outline-none focus:border-yellow-600/50 transition-colors" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ── Step 4: Options ── */}
             <section className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold text-black" style={{ backgroundColor: GOLD }}>3</span>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold text-black" style={{ backgroundColor: GOLD }}>4</span>
                 Opciones
               </h2>
-
               <label className="flex items-center justify-between gap-3 cursor-pointer">
                 <div>
                   <p className="text-sm font-semibold text-white">Pronóstico VIP</p>
@@ -307,9 +470,7 @@ export default function HandicapperForecastPage() {
                 </div>
                 <Toggle value={isVip} onChange={setIsVip} />
               </label>
-
               <div className="h-px bg-gray-800" />
-
               <label className="flex items-center justify-between gap-3 cursor-pointer">
                 <div>
                   <p className="text-sm font-semibold text-white">Publicar ahora</p>
@@ -319,7 +480,6 @@ export default function HandicapperForecastPage() {
               </label>
             </section>
 
-            {/* Errors / Success */}
             {error && (
               <div className="flex items-start gap-2 text-red-400 text-xs bg-red-950/40 border border-red-800/50 rounded-xl px-3 py-2.5">
                 <span>⚠️</span><span>{error}</span>
@@ -331,12 +491,9 @@ export default function HandicapperForecastPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
+            <button type="submit" disabled={loading || marks.length === 0}
               className="w-full py-3.5 rounded-xl text-sm font-bold text-black disabled:opacity-50 transition-opacity"
-              style={{ backgroundColor: GOLD }}
-            >
+              style={{ backgroundColor: GOLD }}>
               {loading ? 'Guardando...' : publish ? '📤 Publicar pronóstico' : '💾 Guardar borrador'}
             </button>
           </form>
@@ -376,14 +533,16 @@ export default function HandicapperForecastPage() {
                     </span>
                     <button
                       onClick={() => {
-                        setSelectedRaceId(fc.raceId?._id ?? fc.raceId ?? '');
+                        const raceId = fc.raceId?._id ?? fc.raceId ?? '';
+                        setSelectedRaceId(raceId);
                         setMarks(fc.marks?.map((m: any) => ({
                           preferenceOrder: m.preferenceOrder,
+                          entryId: m.entryId ?? '',
                           horseName: m.horseName,
-                          dorsalNumber: m.dorsalNumber?.toString() ?? '',
+                          dorsalNumber: m.dorsalNumber ?? 0,
                           label: m.label as ForecastLabel,
                           note: m.note ?? '',
-                        })) ?? [EMPTY_MARK(1)]);
+                        })) ?? []);
                         setIsVip(fc.isVip ?? false);
                       }}
                       className="shrink-0 text-xs text-yellow-500 hover:text-yellow-300 font-semibold transition-colors"
@@ -398,99 +557,6 @@ export default function HandicapperForecastPage() {
         )}
 
       </main>
-    </div>
-  );
-}
-
-// ─── Mark Row ─────────────────────────────────────────────────────────────────
-
-function MarkRow({ mark, idx, canRemove, onChange, onRemove }: {
-  mark: MarkForm;
-  idx: number;
-  canRemove: boolean;
-  onChange: (field: keyof MarkForm, value: string) => void;
-  onRemove: () => void;
-}) {
-  const cfg = LABEL_CFG[mark.label];
-  const isFijo = mark.preferenceOrder === 1 && mark.label === 'Casi Fijo';
-  const pts = isFijo ? 8 : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
-
-  return (
-    <div className={`rounded-xl border p-3 space-y-2.5 ${cfg.border} bg-gray-800/30`}>
-      {/* Row header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300">
-            {mark.preferenceOrder}
-          </span>
-          <span className={`text-xs font-semibold ${cfg.color}`}>
-            {mark.preferenceOrder === 1 ? '1ra preferencia' :
-             mark.preferenceOrder === 2 ? '2da preferencia' :
-             mark.preferenceOrder === 3 ? '3ra preferencia' :
-             mark.preferenceOrder === 4 ? '4ta preferencia' : '5ta preferencia'}
-          </span>
-          <span className="text-xs text-gray-600 font-mono">{pts}pts</span>
-          {isFijo && <span className="text-xs font-bold text-blue-300 bg-blue-900/40 border border-blue-700/40 px-1.5 py-0.5 rounded-full">FIJO</span>}
-        </div>
-        {canRemove && (
-          <button type="button" onClick={onRemove} className="text-gray-600 hover:text-red-400 text-sm transition-colors">✕</button>
-        )}
-      </div>
-
-      {/* Horse name + dorsal */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={mark.horseName}
-          onChange={e => onChange('horseName', e.target.value)}
-          placeholder="Nombre del ejemplar"
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors uppercase"
-        />
-        <input
-          type="number"
-          value={mark.dorsalNumber}
-          onChange={e => onChange('dorsalNumber', e.target.value)}
-          placeholder="Nº"
-          min="1"
-          max="20"
-          className="w-16 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors text-center"
-        />
-      </div>
-
-      {/* Label selector */}
-      <div className="flex gap-1.5 flex-wrap">
-        {FORECAST_LABELS.map(label => {
-          const lcfg = LABEL_CFG[label];
-          const selected = mark.label === label;
-          return (
-            <button
-              key={label}
-              type="button"
-              onClick={() => onChange('label', label)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
-                selected
-                  ? `${lcfg.color} ${lcfg.border} bg-gray-700/80`
-                  : 'text-gray-600 border-gray-700 hover:border-gray-600 hover:text-gray-400'
-              }`}
-            >
-              {lcfg.emoji} {label}
-              {label === 'Casi Fijo' && mark.preferenceOrder === 1 && (
-                <span className="text-blue-400 font-bold ml-0.5">★</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Note */}
-      <input
-        type="text"
-        value={mark.note}
-        onChange={e => onChange('note', e.target.value)}
-        placeholder="Nota opcional (ej: viene de buena forma)"
-        maxLength={200}
-        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-1.5 text-xs text-gray-400 placeholder-gray-700 focus:outline-none focus:border-yellow-600/50 transition-colors"
-      />
     </div>
   );
 }
