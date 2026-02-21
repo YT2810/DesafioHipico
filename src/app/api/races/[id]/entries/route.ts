@@ -6,8 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Entry from '@/models/Entry';
-import Horse from '@/models/Horse';
-import Person from '@/models/Person';
+import '@/models/Horse';
+import '@/models/Person';
 
 export async function GET(
   _req: NextRequest,
@@ -18,20 +18,21 @@ export async function GET(
     await dbConnect();
 
     const entries = await Entry.find({ raceId: id, status: { $ne: 'scratched' } })
-      .populate<{ horseId: { name: string } }>('horseId', 'name')
-      .populate<{ jockeyId: { name: string } }>('jockeyId', 'name')
+      .populate('horseId', 'name')
+      .populate('jockeyId', 'name')
       .sort({ dorsalNumber: 1 })
       .lean();
 
-    const result = entries.map((e: any) => ({
+    const result = (entries as any[]).map((e) => ({
       entryId: e._id.toString(),
       dorsal: e.dorsalNumber,
-      horseName: e.horseId?.name ?? '—',
-      jockeyName: e.jockeyId?.name ?? '—',
+      horseName: (e.horseId as any)?.name ?? '—',
+      jockeyName: (e.jockeyId as any)?.name ?? '—',
     }));
 
     return NextResponse.json({ entries: result });
   } catch (err) {
-    return NextResponse.json({ error: 'Error al cargar ejemplares.' }, { status: 500 });
+    console.error('[entries]', err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Error al cargar ejemplares.' }, { status: 500 });
   }
 }
