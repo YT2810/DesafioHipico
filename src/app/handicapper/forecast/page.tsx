@@ -395,17 +395,18 @@ export default function HandicapperForecastPage() {
                     Etiquetas y orden
                   </h2>
                   <div className="flex items-center gap-2 text-xs text-gray-600">
-                    <span>1ra=5pts</span>
-                    <span>·</span>
-                    <span className="text-yellow-500">Fijo=8pts</span>
+                    {marks.length === 1 && marks[0].label === 'Casi Fijo'
+                      ? <span className="text-yellow-400 font-bold">Fijo único = 8pts</span>
+                      : <span>1ra=5 · 2da=3 · 3ra=2 · 4ta/5ta=1</span>
+                    }
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   {marks.map((mark, idx) => {
                     const cfg = LABEL_CFG[mark.label];
-                    const isFijo = mark.preferenceOrder === 1 && (mark.label === 'Casi Fijo');
-                    const pts = isFijo ? 8 : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
+                    const isFijoUnico = marks.length === 1 && mark.label === 'Casi Fijo';
+                    const pts = isFijoUnico ? 8 : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
                     return (
                       <div key={mark.entryId} className={`rounded-xl border p-3 space-y-2 ${cfg.border} bg-gray-800/40`}>
                         {/* Horse header */}
@@ -417,7 +418,7 @@ export default function HandicapperForecastPage() {
                             {mark.dorsalNumber}
                           </span>
                           <span className="text-sm font-bold text-white flex-1 truncate">{mark.horseName}</span>
-                          <span className="text-xs text-gray-600 font-mono shrink-0">{pts}pts</span>
+                          <span className={`text-xs font-mono shrink-0 ${isFijoUnico ? 'text-yellow-400 font-bold' : 'text-gray-600'}`}>{pts}pts</span>
                           {/* Move up/down */}
                           <div className="flex gap-1 shrink-0">
                             <button type="button" onClick={() => moveUp(idx)} disabled={idx === 0}
@@ -434,12 +435,14 @@ export default function HandicapperForecastPage() {
                           {FORECAST_LABELS.map(label => {
                             const lcfg = LABEL_CFG[label];
                             const sel = mark.label === label;
+                            const wouldBeFijo = marks.length === 1 && label === 'Casi Fijo';
                             return (
                               <button key={label} type="button" onClick={() => updateMarkLabel(idx, label)}
                                 className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all ${
                                   sel ? `${lcfg.color} ${lcfg.border} bg-gray-700/80` : 'text-gray-600 border-gray-700 hover:text-gray-400'
                                 }`}>
                                 {lcfg.emoji} {label}
+                                {wouldBeFijo && <span className="text-yellow-400 ml-0.5">★8</span>}
                               </button>
                             );
                           })}
