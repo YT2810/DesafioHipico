@@ -34,7 +34,7 @@ interface MarkForm {
   entryId: string;
   horseName: string;
   dorsalNumber: number;
-  label: ForecastLabel;
+  label: ForecastLabel | '';
   note: string;
 }
 
@@ -43,16 +43,17 @@ const EMPTY_MARK = (order: number): MarkForm => ({
   entryId: '',
   horseName: '',
   dorsalNumber: 0,
-  label: 'Línea',
+  label: '',
   note: '',
 });
 
-const LABEL_CFG: Record<ForecastLabel, { color: string; border: string; emoji: string; pts: string }> = {
-  'Línea':          { color: 'text-gray-300',   border: 'border-gray-600',   emoji: '📌', pts: '' },
-  'Casi Fijo':      { color: 'text-blue-300',   border: 'border-blue-700',   emoji: '🔵', pts: '(8pts si es 1ra)' },
-  'Súper Especial': { color: 'text-yellow-300', border: 'border-yellow-600', emoji: '⭐', pts: '' },
-  'Buen Dividendo': { color: 'text-green-300',  border: 'border-green-700',  emoji: '💰', pts: '' },
-  'Batacazo':       { color: 'text-orange-300', border: 'border-orange-600', emoji: '🔥', pts: '' },
+const LABEL_CFG: Record<string, { color: string; border: string; emoji: string }> = {
+  '':               { color: 'text-gray-500',   border: 'border-gray-700',   emoji: '' },
+  'Línea':          { color: 'text-gray-300',   border: 'border-gray-600',   emoji: '📌' },
+  'Casi Fijo':      { color: 'text-blue-300',   border: 'border-blue-700',   emoji: '🔵' },
+  'Súper Especial': { color: 'text-yellow-300', border: 'border-yellow-600', emoji: '⭐' },
+  'Buen Dividendo': { color: 'text-green-300',  border: 'border-green-700',  emoji: '💰' },
+  'Batacazo':       { color: 'text-orange-300', border: 'border-orange-600', emoji: '🔥' },
 };
 
 const POINTS_BY_ORDER: Record<number, number> = { 1: 5, 2: 3, 3: 2, 4: 1, 5: 1 };
@@ -124,12 +125,12 @@ export default function HandicapperForecastPage() {
       entryId: entry.entryId,
       horseName: entry.horseName,
       dorsalNumber: entry.dorsal,
-      label: 'Línea',
+      label: '',
       note: '',
     }]);
   }
 
-  function updateMarkLabel(idx: number, label: ForecastLabel) {
+  function updateMarkLabel(idx: number, label: ForecastLabel | '') {
     setMarks(prev => prev.map((m, i) => i === idx ? { ...m, label } : m));
   }
 
