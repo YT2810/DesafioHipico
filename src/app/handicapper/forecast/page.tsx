@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FORECAST_LABELS, ForecastLabel } from '@/lib/constants';
+import { FORECAST_LABELS, ForecastLabel, FIJO_BONUS_POINTS } from '@/lib/constants';
 
 const GOLD = '#D4AF37';
 
@@ -397,7 +397,7 @@ export default function HandicapperForecastPage() {
                   </h2>
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     {marks.length === 1 && marks[0].label === 'Línea'
-                      ? <span className="text-yellow-400 font-bold">Fijo único = 8pts</span>
+                      ? <span className="text-yellow-400 font-bold">Fijo único = {FIJO_BONUS_POINTS}pts</span>
                       : <span>1ra=5 · 2da=3 · 3ra=2 · 4ta/5ta=1</span>
                     }
                   </div>
@@ -407,7 +407,7 @@ export default function HandicapperForecastPage() {
                   {marks.map((mark, idx) => {
                     const cfg = LABEL_CFG[mark.label];
                     const isFijoUnico = marks.length === 1 && mark.label === 'Línea';
-                    const pts = isFijoUnico ? 8 : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
+                    const pts = isFijoUnico ? FIJO_BONUS_POINTS : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
                     return (
                       <div key={mark.entryId} className={`rounded-xl border p-3 space-y-2 ${cfg.border} bg-gray-800/40`}>
                         {/* Horse header */}
@@ -443,7 +443,7 @@ export default function HandicapperForecastPage() {
                                   sel ? `${lcfg.color} ${lcfg.border} bg-gray-700/80` : 'text-gray-600 border-gray-700 hover:text-gray-400'
                                 }`}>
                                 {lcfg.emoji} {label}
-                                {wouldBeFijo && <span className="text-yellow-400 ml-0.5">★8</span>}
+                                {wouldBeFijo && <span className="text-yellow-400 ml-0.5">★{FIJO_BONUS_POINTS}</span>}
                               </button>
                             );
                           })}

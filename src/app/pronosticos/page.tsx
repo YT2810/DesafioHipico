@@ -180,7 +180,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
                     </span>
                     {isFijo && (
                       <span className="shrink-0 text-xs font-bold text-blue-300 bg-blue-900/50 border border-blue-700/40 px-1.5 py-0.5 rounded-full">
-                        8pts
+                        {FIJO_BONUS_POINTS}pts
                       </span>
                     )}
                     {/* Horse name — subtle, secondary info */}
