@@ -9,7 +9,7 @@ import NotificationBell from '@/components/NotificationBell';
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; }
 interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; }
-interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: number; forecasts: ForecastItem[]; }
+interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; }
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
 interface HorseFactor { horseName: string; dorsalNumber?: number; points: number; factor: number; }
 
@@ -217,7 +217,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
             <span className="text-xs text-gray-600">{race.scheduledTime}</span>
             {hasBatacazo && unlocked && <span className="text-xs font-bold text-orange-400 bg-orange-950/60 border border-orange-700/40 px-2 py-0.5 rounded-full">🔥 BATACAZO</span>}
           </div>
-          <p className="text-xs text-gray-600 mt-0.5">{race.conditions} · Premio Bs. {race.prizePool.toLocaleString()}</p>
+          <p className="text-xs text-gray-600 mt-0.5">{race.conditions}{typeof race.prizePool === 'object' && race.prizePool.bs ? ` · Premio Bs. ${race.prizePool.bs.toLocaleString()}` : typeof race.prizePool === 'number' && race.prizePool > 0 ? ` · Premio Bs. ${race.prizePool.toLocaleString()}` : ''}</p>
         </div>
         {!unlocked && (
           <button onClick={onUnlock} disabled={goldBalance < 1}
