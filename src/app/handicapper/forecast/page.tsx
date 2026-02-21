@@ -396,7 +396,7 @@ export default function HandicapperForecastPage() {
                     Etiquetas y orden
                   </h2>
                   <div className="flex items-center gap-2 text-xs text-gray-600">
-                    {marks.length === 1 && marks[0].label === 'Casi Fijo'
+                    {marks.length === 1 && marks[0].label === 'Línea'
                       ? <span className="text-yellow-400 font-bold">Fijo único = 8pts</span>
                       : <span>1ra=5 · 2da=3 · 3ra=2 · 4ta/5ta=1</span>
                     }
@@ -406,7 +406,7 @@ export default function HandicapperForecastPage() {
                 <div className="space-y-2">
                   {marks.map((mark, idx) => {
                     const cfg = LABEL_CFG[mark.label];
-                    const isFijoUnico = marks.length === 1 && mark.label === 'Casi Fijo';
+                    const isFijoUnico = marks.length === 1 && mark.label === 'Línea';
                     const pts = isFijoUnico ? 8 : (POINTS_BY_ORDER[mark.preferenceOrder] ?? 1);
                     return (
                       <div key={mark.entryId} className={`rounded-xl border p-3 space-y-2 ${cfg.border} bg-gray-800/40`}>
@@ -436,7 +436,7 @@ export default function HandicapperForecastPage() {
                           {FORECAST_LABELS.map(label => {
                             const lcfg = LABEL_CFG[label];
                             const sel = mark.label === label;
-                            const wouldBeFijo = marks.length === 1 && label === 'Casi Fijo';
+                            const wouldBeFijo = marks.length === 1 && label === 'Línea';
                             return (
                               <button key={label} type="button" onClick={() => updateMarkLabel(idx, label)}
                                 className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all ${
