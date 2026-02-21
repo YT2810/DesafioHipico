@@ -27,9 +27,19 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
 
-    const profile = await HandicapperProfile.findOne({ userId: new Types.ObjectId(session.user.id) });
+    let profile = await HandicapperProfile.findOne({ userId: new Types.ObjectId(session.user.id) });
     if (!profile) {
-      return NextResponse.json({ error: 'Perfil de handicapper no encontrado. Contacta al administrador.' }, { status: 404 });
+      if (!roles.some(r => ['admin', 'staff'].includes(r))) {
+        return NextResponse.json({ error: 'Perfil de handicapper no encontrado. Contacta al administrador.' }, { status: 404 });
+      }
+      // Auto-create profile for admin/staff
+      const name = (session.user as any).name ?? (session.user as any).email ?? 'Admin';
+      profile = await HandicapperProfile.create({
+        userId: new Types.ObjectId(session.user.id),
+        pseudonym: name,
+        isActive: true,
+        isPublic: true,
+      });
     }
 
     const body = await req.json();
