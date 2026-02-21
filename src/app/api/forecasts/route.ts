@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Forecast from '@/models/Forecast';
+import '@/models/HandicapperProfile';
 import { getMeetingAccessMap } from '@/services/forecastAccessService';
 
 export async function GET(req: NextRequest) {
