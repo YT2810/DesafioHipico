@@ -16,12 +16,16 @@ interface HorseFactor { horseName: string; dorsalNumber?: number; points: number
 function calcFactors(forecasts: ForecastItem[]): HorseFactor[] {
   const pub = forecasts.filter(f => !f._locked);
   if (!pub.length) return [];
-  const maxTotal = pub.length * FIJO_BONUS_POINTS;
+  // Max per forecast: 8 if single Casi Fijo mark, else 5 (top position)
+  const maxTotal = pub.reduce((sum, fc) => {
+    const isFijoUnico = fc.marks.length === 1 && fc.marks[0].label === 'Casi Fijo';
+    return sum + (isFijoUnico ? FIJO_BONUS_POINTS : MARK_POINTS[1]);
+  }, 0);
   const map = new Map<string, { points: number; dorsalNumber?: number }>();
   for (const fc of pub) {
     for (const m of fc.marks) {
       const key = m.horseName.toUpperCase();
-      const isFijo = m.preferenceOrder === 1 && m.label === 'Casi Fijo';
+      const isFijo = fc.marks.length === 1 && m.label === 'Casi Fijo';
       const pts = isFijo ? FIJO_BONUS_POINTS : (MARK_POINTS[m.preferenceOrder] ?? 1);
       const prev = map.get(key);
       map.set(key, { points: (prev?.points ?? 0) + pts, dorsalNumber: prev?.dorsalNumber ?? m.dorsalNumber });
