@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import crypto from 'crypto';
+
 import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
 import Race from '@/models/Race';
@@ -25,6 +26,9 @@ import {
   RaceEntryItem,
 } from '@/services/ai/geminiProcessor';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 function isYouTubeUrl(s: string) {
   return /youtube\.com|youtu\.be/.test(s);
 }
@@ -34,6 +38,7 @@ function isBase64Image(s: string) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const secure = req.nextUrl.protocol === 'https:';
   const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
   const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
@@ -169,4 +174,9 @@ export async function POST(req: NextRequest) {
     alreadyIngested: !!existing,
     rawTranscript: result.rawTranscript ?? null,
   });
+  } catch (err) {
+    console.error('[intelligence/process]', err);
+    const msg = err instanceof Error ? err.message : 'Error interno del servidor';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
