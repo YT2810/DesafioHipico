@@ -15,7 +15,7 @@ import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
 import Race from '@/models/Race';
 import Entry from '@/models/Entry';
-import Horse from '@/models/Horse';
+import '@/models/Horse';
 import ExpertForecast from '@/models/ExpertForecast';
 import {
   processText,
