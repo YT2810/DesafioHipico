@@ -14,12 +14,14 @@ export interface IHandicapperStats {
 }
 
 export interface IHandicapperProfile extends Document {
-  userId: Types.ObjectId;
+  userId?: Types.ObjectId;
   pseudonym: string;
   contactNumber?: string;
   bio?: string;
   isActive: boolean;
   isPublic: boolean;
+  isGhost: boolean;
+  expertSourceId?: Types.ObjectId;
   revenueSharePct: number;
   stats: IHandicapperStats;
   createdAt: Date;
@@ -28,8 +30,10 @@ export interface IHandicapperProfile extends Document {
 
 const HandicapperProfileSchema = new Schema<IHandicapperProfile>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: false, sparse: true },
     pseudonym: { type: String, required: true, trim: true, unique: true },
+    isGhost: { type: Boolean, default: false },
+    expertSourceId: { type: Schema.Types.ObjectId, ref: 'ExpertSource' },
     contactNumber: { type: String, trim: true },
     bio: { type: String, trim: true, maxlength: 500 },
     isActive: { type: Boolean, default: true },

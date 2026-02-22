@@ -11,6 +11,8 @@ import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import ExpertSource from '@/models/ExpertSource';
 import ExpertForecast from '@/models/ExpertForecast';
+import HandicapperProfile from '@/models/HandicapperProfile';
+import Forecast from '@/models/Forecast';
 import Race from '@/models/Race';
 import { Types } from 'mongoose';
 
@@ -87,7 +89,19 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── 3. Save each forecast ─────────────────────────────────────────────────
+  // ── 3. Upsert ghost HandicapperProfile linked to ExpertSource ─────────────
+  let ghostProfile = await HandicapperProfile.findOne({ expertSourceId: expertSource._id });
+  if (!ghostProfile) {
+    ghostProfile = await HandicapperProfile.create({
+      pseudonym: body.expertName.trim(),
+      isGhost: true,
+      isActive: true,
+      isPublic: true,
+      expertSourceId: expertSource._id,
+    });
+  }
+
+  // ── 4. Save each forecast ─────────────────────────────────────────────────
   const meetingObjId = new Types.ObjectId(body.meetingId);
   const reviewerId = new Types.ObjectId(token.userId as string);
   const saved: string[] = [];
@@ -107,7 +121,7 @@ export async function POST(req: NextRequest) {
         raceObjId = (race as any)._id;
       }
 
-      const marks = fc.marks.slice(0, 5).map(m => ({
+      const expertMarks = fc.marks.slice(0, 5).map(m => ({
         preferenceOrder: m.preferenceOrder,
         rawName: m.rawName,
         resolvedHorseName: m.resolvedHorseName ?? undefined,
@@ -117,12 +131,13 @@ export async function POST(req: NextRequest) {
         matchConfidence: m.matchConfidence ?? 1.0,
       }));
 
+      // Save ExpertForecast for audit/history
       const doc = await ExpertForecast.create({
         expertSourceId: expertSource._id,
         meetingId: meetingObjId,
         raceId: raceObjId,
         raceNumber: fc.raceNumber,
-        marks,
+        marks: expertMarks,
         sourceUrl: body.sourceUrl ?? undefined,
         sourceType: body.sourceType || 'social_text',
         rawContent: body.rawContent ?? undefined,
@@ -132,13 +147,38 @@ export async function POST(req: NextRequest) {
         reviewedBy: reviewerId,
       });
 
+      // Also upsert a real Forecast so it appears in /pronosticos
+      const forecastMarks = fc.marks.slice(0, 5).map(m => ({
+        preferenceOrder: m.preferenceOrder,
+        horseName: m.resolvedHorseName ?? m.rawName,
+        dorsalNumber: m.dorsalNumber ?? undefined,
+        label: (m.label as any) || '',
+        note: '',
+      }));
+
+      await Forecast.findOneAndUpdate(
+        { handicapperId: ghostProfile._id, raceId: raceObjId },
+        {
+          $set: {
+            meetingId: meetingObjId,
+            marks: forecastMarks,
+            isVip: false,
+            isPublished: true,
+            publishedAt: new Date(),
+            source: body.sourceType || 'social_text',
+            sourceRef: body.sourceUrl ?? '',
+          },
+        },
+        { upsert: true, new: true }
+      );
+
       saved.push(doc._id.toString());
     } catch (e: any) {
       errors.push(`Carrera ${fc.raceNumber}: ${e.message}`);
     }
   }
 
-  // ── 4. Update expert stats ────────────────────────────────────────────────
+  // ── 5. Update expert stats ────────────────────────────────────────────────
   await ExpertSource.findByIdAndUpdate(expertSource._id, {
     $inc: { totalForecasts: saved.length },
   });
