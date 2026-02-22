@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 
 const GOLD = '#D4AF37';
@@ -51,6 +51,14 @@ interface Meeting {
   trackName?: string;
 }
 
+interface ExpertOption {
+  _id: string;
+  name: string;
+  platform: string;
+  handle?: string;
+  totalForecasts: number;
+}
+
 const PLATFORMS = ['YouTube', 'X', 'Instagram', 'Revista', 'Telegram', 'Otro'] as const;
 type Platform = typeof PLATFORMS[number];
 
@@ -81,6 +89,10 @@ export default function IntelligencePage() {
   // Editable forecasts
   const [editableForecasts, setEditableForecasts] = useState<ResolvedForecast[]>([]);
 
+  // Existing experts
+  const [existingExperts, setExistingExperts] = useState<ExpertOption[]>([]);
+  const [selectedExpertId, setSelectedExpertId] = useState<string>('__new__');
+
   // Publish state
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
@@ -88,13 +100,17 @@ export default function IntelligencePage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load meetings on mount
-  useState(() => {
+  // Load meetings and existing experts on mount
+  useEffect(() => {
     fetch('/api/meetings/upcoming?limit=20')
       .then(r => r.json())
       .then(d => setMeetings(d.meetings ?? d ?? []))
       .catch(() => {});
-  });
+    fetch('/api/admin/intelligence/experts')
+      .then(r => r.json())
+      .then(d => setExistingExperts(d.experts ?? []))
+      .catch(() => {});
+  }, []);
 
   const detectInputType = (val: string): InputType => {
     if (/youtube\.com|youtu\.be/.test(val)) return 'youtube';
@@ -142,6 +158,23 @@ export default function IntelligencePage() {
       const inputType = detectInputType(input);
       if (inputType === 'youtube') setPlatform('YouTube');
       else if (inputType === 'image_ocr') setPlatform('Revista');
+
+      // Auto-fill expert from Gemini detection
+      const detectedName = data.forecasts?.[0]?.expertName;
+      if (detectedName) {
+        const match = existingExperts.find(
+          e => e.name.toLowerCase().trim() === detectedName.toLowerCase().trim()
+        );
+        if (match) {
+          setSelectedExpertId(match._id);
+          setExpertName(match.name);
+          setPlatform(match.platform as Platform);
+          setHandle(match.handle ?? '');
+        } else {
+          setSelectedExpertId('__new__');
+          setExpertName(detectedName);
+        }
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -438,6 +471,36 @@ export default function IntelligencePage() {
               <h2 className="text-sm font-bold text-white">3. Datos del experto y publicar</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-gray-400 mb-1 block">Experto</label>
+                  <select
+                    value={selectedExpertId}
+                    onChange={e => {
+                      const id = e.target.value;
+                      setSelectedExpertId(id);
+                      if (id === '__new__') {
+                        setExpertName('');
+                        setHandle('');
+                      } else {
+                        const exp = existingExperts.find(x => x._id === id);
+                        if (exp) {
+                          setExpertName(exp.name);
+                          setPlatform(exp.platform as Platform);
+                          setHandle(exp.handle ?? '');
+                        }
+                      }
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-600"
+                  >
+                    <option value="__new__">➕ Nuevo experto</option>
+                    {existingExperts.map(e => (
+                      <option key={e._id} value={e._id}>
+                        {e.name} · {e.platform} · {e.totalForecasts} pronósticos
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedExpertId === '__new__' && (
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Nombre del experto *</label>
                   <input
@@ -447,6 +510,7 @@ export default function IntelligencePage() {
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
                   />
                 </div>
+                )}
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Plataforma</label>
                   <select
