@@ -122,8 +122,21 @@ export default function IntelligencePage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const base64 = e.target?.result as string;
-      setImagePreview(base64);
-      setInput(base64);
+      // Compress image client-side to stay under payload limits
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        setImagePreview(compressed);
+        setInput(compressed);
+      };
+      img.src = base64;
     };
     reader.readAsDataURL(file);
   }, []);
@@ -148,7 +161,11 @@ export default function IntelligencePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: input.trim(), meetingId: selectedMeetingId || undefined }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch {
+        throw new Error(`Error del servidor (${res.status}). La imagen puede ser demasiado grande — intenta con una imagen más pequeña o recórtala.`);
+      }
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar.');
 
       setResult(data);
