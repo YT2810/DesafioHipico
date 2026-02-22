@@ -383,13 +383,28 @@ export default function IntelligencePage() {
                 )}
               </div>
 
-              {editableForecasts.map((fc, fcIdx) => (
+              {editableForecasts.map((fc, fcIdx) => {
+                const totalMarks = fc.marks.length;
+                const matchedMarks = fc.marks.filter(m => m.resolvedHorseName).length;
+                const matchPct = totalMarks > 0 ? Math.round((matchedMarks / totalMarks) * 100) : 0;
+                const matchColor = matchPct >= 70 ? 'text-green-400' : matchPct >= 40 ? 'text-yellow-400' : 'text-red-400';
+                const matchBg = matchPct >= 70 ? 'bg-green-900/30 border-green-800/50' : matchPct >= 40 ? 'bg-yellow-900/30 border-yellow-800/50' : 'bg-red-900/30 border-red-800/50';
+                return (
                 <div key={fcIdx} className="border border-gray-700 rounded-xl overflow-hidden">
-                  <div className="bg-gray-800 px-4 py-2 flex items-center justify-between">
+                  <div className="bg-gray-800 px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-sm font-bold text-white">Carrera {fc.raceNumber}</span>
-                    {fc.expertName && (
-                      <span className="text-xs text-gray-400">por {fc.expertName}</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {fc.dbEntries.length > 0 ? (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${matchBg} ${matchColor}`}>
+                          {matchPct >= 70 ? '✓' : matchPct >= 40 ? '~' : '✗'} {matchedMarks}/{totalMarks} coinciden ({matchPct}%)
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-600 px-2 py-0.5 rounded-full border border-gray-700">Sin datos en DB para esta carrera</span>
+                      )}
+                      {fc.expertName && (
+                        <span className="text-xs text-gray-400">por {fc.expertName}</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Comparison grid */}
@@ -480,7 +495,8 @@ export default function IntelligencePage() {
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </section>
 
             {/* ── Step 3: Expert info + publish ── */}
