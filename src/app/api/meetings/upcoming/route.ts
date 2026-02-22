@@ -16,9 +16,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '5'), 20);
 
-    const now = new Date();
+    // Venezuela is UTC-4; use start of local day to avoid excluding today's meetings
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    today.setTime(today.getTime() - 4 * 60 * 60 * 1000); // shift back 4h to cover VE timezone
 
-    const meetings = await Meeting.find({ date: { $gte: now } })
+    const meetings = await Meeting.find({ date: { $gte: today } })
       .sort({ date: 1 })
       .limit(limit)
       .populate('trackId', 'name location')
