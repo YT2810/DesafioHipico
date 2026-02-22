@@ -161,7 +161,7 @@ export async function processImage(
             { inline_data: { mime_type: mimeType, data: imageBase64 } },
           ],
         }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
       }),
     });
 
@@ -240,12 +240,29 @@ function parseGeminiResponse(
   rawTranscript?: string
 ): GeminiExtractionResult {
   try {
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    // Strip markdown code fences if present
+    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return { success: false, inputType, forecasts: [], rawTranscript, error: 'Gemini no devolvió JSON válido.' };
+      return { success: false, inputType, forecasts: [], rawTranscript, error: `Gemini no devolvió JSON válido. Respuesta: ${rawText.slice(0, 200)}` };
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    let jsonStr = jsonMatch[0];
+    // Attempt to fix truncated JSON by closing open structures
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // Try to salvage partial JSON by truncating at last complete object
+      const lastBrace = jsonStr.lastIndexOf('},');
+      if (lastBrace > 0) {
+        jsonStr = jsonStr.slice(0, lastBrace + 1) + ']}}'; // close marks array, forecast obj, forecasts array, root
+        try { parsed = JSON.parse(jsonStr); } catch { parsed = null; }
+      }
+      if (!parsed) {
+        return { success: false, inputType, forecasts: [], rawTranscript, error: `JSON truncado de Gemini. Intenta de nuevo o usa una imagen más pequeña.` };
+      }
+    }
     const forecasts: RawExtractedForecast[] = (parsed.forecasts ?? []).map((f: any) => ({
       raceNumber: Number(f.raceNumber),
       expertName: f.expertName ?? null,
