@@ -45,7 +45,7 @@ interface ProcessResult {
 }
 
 interface Meeting {
-  _id: string;
+  id: string;
   meetingNumber: number;
   date: string;
   trackName?: string;
@@ -288,7 +288,7 @@ export default function IntelligencePage() {
             >
               <option value="">— Detectar automáticamente —</option>
               {meetings.map(m => (
-                <option key={m._id} value={m._id}>
+                <option key={m.id} value={m.id}>
                   Reunión {m.meetingNumber} · {new Date(m.date).toLocaleDateString('es-VE')}
                   {m.trackName ? ` · ${m.trackName}` : ''}
                 </option>
