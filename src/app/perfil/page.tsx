@@ -41,6 +41,19 @@ export default function PerfilPage() {
   const [loadingReq, setLoadingReq] = useState(true);
   const [showTopUp, setShowTopUp] = useState(false);
 
+  // Name editing
+  const [editingName, setEditingName] = useState(false);
+  const [aliasInput, setAliasInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
+
+  // Handicapper pseudonym editing
+  const [hProfile, setHProfile] = useState<{ pseudonym: string; bio: string; contactNumber: string } | null>(null);
+  const [editingPseudonym, setEditingPseudonym] = useState(false);
+  const [pseudonymInput, setPseudonymInput] = useState('');
+  const [savingPseudonym, setSavingPseudonym] = useState(false);
+  const [pseudonymError, setPseudonymError] = useState('');
+
   // Handicapper request form
   const [showForm, setShowForm] = useState(false);
   const [pseudonym, setPseudonym] = useState('');
@@ -54,11 +67,21 @@ export default function PerfilPage() {
   const [txs, setTxs] = useState<TxItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  const { update: updateSession } = useSession();
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
   const golds: number = user?.balance?.golds ?? 0;
   const isHandicapper = roles.includes('handicapper');
   const isPrivileged = roles.some((r: string) => ['admin', 'staff'].includes(r));
+
+  // Load handicapper profile if applicable
+  useEffect(() => {
+    if (status !== 'authenticated' || !isHandicapper) return;
+    fetch('/api/handicapper/profile')
+      .then(r => r.json())
+      .then(d => { if (d.profile) setHProfile(d.profile); })
+      .catch(() => {});
+  }, [status, isHandicapper]);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -87,6 +110,50 @@ export default function PerfilPage() {
       if (wants) setShowForm(true);
     }
   }, []);
+
+  async function handleSaveName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!aliasInput.trim()) return;
+    setSavingName(true);
+    setNameError('');
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: aliasInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error');
+      await updateSession({ alias: data.alias });
+      setEditingName(false);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function handleSavePseudonym(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pseudonymInput.trim()) return;
+    setSavingPseudonym(true);
+    setPseudonymError('');
+    try {
+      const res = await fetch('/api/handicapper/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pseudonym: pseudonymInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error');
+      setHProfile(p => p ? { ...p, pseudonym: data.pseudonym } : p);
+      setEditingPseudonym(false);
+    } catch (err) {
+      setPseudonymError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setSavingPseudonym(false);
+    }
+  }
 
   async function handleSubmitRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -156,11 +223,41 @@ export default function PerfilPage() {
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-extrabold text-black shrink-0"
               style={{ backgroundColor: GOLD }}>
-              {(user?.name ?? user?.email ?? 'U')[0].toUpperCase()}
+              {(user?.alias ?? user?.name ?? user?.email ?? 'U')[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base font-bold text-white truncate">{user?.alias ?? user?.name ?? 'Usuario'}</p>
-              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              {editingName ? (
+                <form onSubmit={handleSaveName} className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={aliasInput}
+                    onChange={e => setAliasInput(e.target.value)}
+                    maxLength={40}
+                    className="flex-1 min-w-0 bg-gray-800 border border-yellow-600 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none"
+                  />
+                  <button type="submit" disabled={savingName || !aliasInput.trim()}
+                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-black disabled:opacity-40"
+                    style={{ backgroundColor: GOLD }}>
+                    {savingName ? '...' : 'Guardar'}
+                  </button>
+                  <button type="button" onClick={() => { setEditingName(false); setNameError(''); }}
+                    className="shrink-0 px-2 py-1.5 rounded-lg text-xs text-gray-400 bg-gray-800 border border-gray-700">
+                    ✕
+                  </button>
+                </form>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p className="text-base font-bold text-white truncate">{user?.alias ?? user?.name ?? 'Usuario'}</p>
+                  <button
+                    onClick={() => { setAliasInput(user?.alias ?? user?.name ?? ''); setEditingName(true); setNameError(''); }}
+                    className="shrink-0 text-xs text-gray-600 hover:text-yellow-400 transition-colors"
+                    title="Cambiar nombre">
+                    ✏️
+                  </button>
+                </div>
+              )}
+              {nameError && <p className="text-xs text-red-400 mt-1">{nameError}</p>}
+              <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
               <div className="flex gap-1 mt-1.5 flex-wrap">
                 {roles.map((r: string) => (
                   <span key={r} className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 capitalize border border-gray-700">{r}</span>
@@ -228,8 +325,47 @@ export default function PerfilPage() {
 
         {/* Handicapper section */}
         {isHandicapper ? (
-          <div className="bg-gray-900 border border-green-800/40 rounded-2xl p-4">
-            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">Handicapper</p>
+          <div className="bg-gray-900 border border-green-800/40 rounded-2xl p-4 space-y-3">
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Handicapper</p>
+
+            {/* Pseudonym editor */}
+            {hProfile && (
+              <div className="bg-gray-800/50 rounded-xl px-3 py-2.5">
+                <p className="text-xs text-gray-500 mb-1.5">Seudónimo público</p>
+                {editingPseudonym ? (
+                  <form onSubmit={handleSavePseudonym} className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={pseudonymInput}
+                      onChange={e => setPseudonymInput(e.target.value)}
+                      maxLength={40}
+                      className="flex-1 min-w-0 bg-gray-700 border border-yellow-600 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none"
+                    />
+                    <button type="submit" disabled={savingPseudonym || !pseudonymInput.trim()}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-black disabled:opacity-40"
+                      style={{ backgroundColor: GOLD }}>
+                      {savingPseudonym ? '...' : 'Guardar'}
+                    </button>
+                    <button type="button" onClick={() => { setEditingPseudonym(false); setPseudonymError(''); }}
+                      className="shrink-0 px-2 py-1.5 rounded-lg text-xs text-gray-400 bg-gray-700 border border-gray-600">
+                      ✕
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">{hProfile.pseudonym}</span>
+                    <button
+                      onClick={() => { setPseudonymInput(hProfile.pseudonym); setEditingPseudonym(true); setPseudonymError(''); }}
+                      className="text-xs text-gray-600 hover:text-yellow-400 transition-colors"
+                      title="Cambiar seudónimo">
+                      ✏️
+                    </button>
+                  </div>
+                )}
+                {pseudonymError && <p className="text-xs text-red-400 mt-1">{pseudonymError}</p>}
+              </div>
+            )}
+
             <Link href="/handicapper/forecast"
               className="flex items-center justify-between px-3 py-2.5 rounded-xl text-black font-bold text-sm"
               style={{ backgroundColor: GOLD }}>

@@ -103,10 +103,10 @@ export const authConfig: NextAuthConfig = {
           {
             $set: {
               email,
-              alias: user.name ?? email.split('@')[0],
               ...(account.provider === 'google' && { googleId: account.providerAccountId }),
             },
             $setOnInsert: {
+              alias: user.name ?? email.split('@')[0],
               roles: extraRoles,
               balance: { golds: 0, diamonds: 0 },
               meetingConsumptions: [],
@@ -150,6 +150,7 @@ export const authConfig: NextAuthConfig = {
 
       if (trigger === 'update') {
         if (session?.balance)  token.balance  = session.balance;
+        if (session?.alias)    token.alias    = session.alias;
         if (session?.billing)  {
           token.fullName         = session.billing.fullName;
           token.identityDocument = session.billing.identityDocument;
