@@ -56,7 +56,8 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
 }
 
 function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: ForecastItem; isFollowed: boolean; onFollow: () => void }) {
-  const { handicapper, marks, isVip, _locked } = forecast;
+  const { handicapper, marks, isVip } = forecast;
+  const _locked = false; // Launch mode: all content is open
   const [open, setOpen] = useState(false);
 
   const sortedMarks = [...marks].sort((a, b) => a.preferenceOrder - b.preferenceOrder);
@@ -115,8 +116,8 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
             )}
           </div>
         )}
-        {!open && _locked && (
-          <span className="text-xs text-yellow-600 shrink-0">VIP 🔒</span>
+        {!open && isVip && (
+          <span className="text-xs shrink-0" style={{color:'#D4AF37'}}>🎁 Liberado</span>
         )}
 
         {/* Follow + chevron */}
@@ -148,15 +149,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
       {/* ── Expanded marks ── */}
       {open && (
         <div className="pb-3 pt-1">
-          {_locked ? (
-            <div className="rounded-xl border border-yellow-800/30 bg-yellow-950/20 px-3 py-2.5 flex items-center gap-2">
-              <span className="text-base">🔒</span>
-              <div>
-                <p className="text-xs font-semibold text-yellow-300">Pronóstico VIP</p>
-                <p className="text-xs text-gray-600">Desbloquea esta carrera para ver las marcas</p>
-              </div>
-            </div>
-          ) : (
+          {false ? null : (
             <div className="space-y-1.5">
               {sortedMarks.map(mark => {
                 const cfg = getLabelCfg(mark.label);
@@ -229,10 +222,11 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
         )}
       </div>
       {!unlocked && (
-        <div className="px-4 py-10 flex flex-col items-center gap-3 text-center">
-          <span className="text-5xl">🔒</span>
-          <p className="text-sm text-gray-500">Desbloquea para ver los pronósticos de esta carrera</p>
-          {goldBalance < 1 && <Link href="/" className="text-xs font-bold px-4 py-2 rounded-xl text-black" style={{ backgroundColor: GOLD }}>Recargar Golds</Link>}
+        <div className="px-4 py-6 flex flex-col items-center gap-3 text-center">
+          <div className="rounded-xl border border-yellow-700/40 bg-yellow-950/20 px-4 py-3 w-full">
+            <p className="text-xs font-bold text-yellow-300 mb-1">🎁 Contenido Premium liberado por inauguración</p>
+            <p className="text-xs text-gray-500">Regístrate gratis para ver todos los pronósticos</p>
+          </div>
         </div>
       )}
       {unlocked && (
@@ -383,36 +377,56 @@ export default function PronosticosPage() {
             <span className="text-sm font-bold text-white">🏇 Pronósticos</span>
           </div>
         </header>
-        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center gap-6">
-          <div>
-            <div className="text-5xl mb-4">🔐</div>
-            <h2 className="text-xl font-bold text-white mb-2">Inicia sesión para ver los pronósticos</h2>
-            <p className="text-sm text-gray-500 max-w-xs">
-              Las 2 primeras carreras de cada reunión son gratis. El resto se desbloquea con Golds.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 w-full max-w-xs">
-            <Link href="/auth/signin"
-              className="w-full py-3.5 rounded-2xl text-base font-bold text-black text-center"
-              style={{ backgroundColor: '#D4AF37' }}>
-              Entrar
-            </Link>
-            <Link href="/auth/signin?mode=register"
-              className="w-full py-3.5 rounded-2xl text-sm font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors text-center">
-              Crear cuenta gratis
-            </Link>
+        {/* Promo banner */}
+        <div className="bg-gradient-to-r from-yellow-900/60 to-yellow-800/40 border-b border-yellow-700/40 px-4 py-3 text-center">
+          <p className="text-sm font-bold text-yellow-300">🎁 PROMO DE LANZAMIENTO · Todo el análisis hípico liberado por tiempo limitado</p>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center gap-6 py-10">
+          {/* Blurred preview */}
+          <div className="relative w-full max-w-sm">
+            <div className="blur-sm pointer-events-none select-none space-y-2 opacity-60">
+              {[{name:'El Profeta',marks:['#3 RELÁMPAGO','#7 SOL NACIENTE','#1 VIENTO NORTE']},{name:'La Cátedra',marks:['#5 LUNA LLENA','#2 TRUENO REAL']}].map((exp,ei) => (
+                <div key={ei} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-left">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-8 h-8 rounded-full bg-yellow-900/40 border border-yellow-700/30 flex items-center justify-center text-xs font-bold text-yellow-400">{exp.name[0]}</span>
+                    <span className="text-sm font-bold text-white">{exp.name}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{color:'#D4AF37',backgroundColor:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.25)'}}>VIP</span>
+                  </div>
+                  {exp.marks.map((m,mi) => (
+                    <div key={mi} className="flex items-center gap-2 bg-gray-800/50 rounded-xl px-3 py-2 mb-1.5">
+                      <span className="text-xs font-bold text-gray-500">{mi+1}</span>
+                      <span className="text-xs font-semibold text-white">{m}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {/* Overlay CTA */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-950/60 rounded-2xl backdrop-blur-[2px]">
+              <div>
+                <p className="text-base font-extrabold text-white mb-1">Regístrate gratis para ver</p>
+                <p className="text-sm text-yellow-300 font-semibold">las marcas de los 10 mejores expertos</p>
+              </div>
+              <div className="flex flex-col gap-2 w-full max-w-[220px]">
+                <Link href="/auth/signin?mode=register"
+                  className="w-full py-3 rounded-2xl text-sm font-bold text-black text-center"
+                  style={{ backgroundColor: '#D4AF37' }}>
+                  🎁 Regístrate gratis
+                </Link>
+                <Link href="/auth/signin"
+                  className="w-full py-2.5 rounded-2xl text-xs font-semibold text-gray-300 bg-gray-800 border border-gray-700 text-center">
+                  Ya tengo cuenta
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  function isRaceUnlocked(raceId: string, idx: number) {
-    if (isPrivileged) return true;
-    if (idx < FREE_RACES_PER_MEETING) return true;
-    // Access comes from server-side access map
-    const race = meeting?.races[idx];
-    return (race as any)?._access?.unlocked ?? false;
+  function isRaceUnlocked(_raceId: string, _idx: number) {
+    return true; // Launch mode: all races open for registered users
   }
 
   function handleUnlock(_raceId: string) {
@@ -476,16 +490,14 @@ export default function PronosticosPage() {
             </button>
           ))}
         </div>
-        {/* Freemium banner */}
-        {!isPrivileged && (
-          <div className="rounded-xl border border-yellow-800/40 bg-yellow-950/20 px-4 py-2.5 flex items-center justify-between gap-3">
-            <p className="text-xs text-yellow-200/80">
-              <span className="font-semibold text-yellow-300">{freeRemaining} carrera{freeRemaining!==1?'s':''} gratis</span>
-              {' '}en esta reunión · resto <span className="font-semibold">1 Gold</span> c/u
-            </p>
-            <Link href="/" className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>+ Golds</Link>
-          </div>
-        )}
+        {/* Launch promo banner */}
+        <div className="rounded-xl border border-yellow-700/50 bg-gradient-to-r from-yellow-900/40 to-yellow-800/20 px-4 py-2.5 flex items-center gap-3">
+          <span className="text-lg shrink-0">🎁</span>
+          <p className="text-xs text-yellow-200/90 flex-1">
+            <span className="font-bold text-yellow-300">¡PROMO DE LANZAMIENTO!</span>
+            {' '}Todo el análisis hípico liberado por tiempo limitado
+          </p>
+        </div>
         {/* Race buttons */}
         <div>
           <p className="text-xs text-gray-600 mb-2 font-medium uppercase tracking-wide">Selecciona una carrera</p>
