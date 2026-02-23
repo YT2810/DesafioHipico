@@ -52,6 +52,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Máximo 5 marcas por pronóstico.' }, { status: 400 });
     }
 
+    // Block edits after race has started/finished (admins exempt)
+    const isAdmin = roles.some(r => ['admin', 'staff'].includes(r));
+    if (!isAdmin) {
+      const Race = (await import('@/models/Race')).default;
+      const race = await Race.findById(raceId).lean() as any;
+      if (race) {
+        const raceTime = race.scheduledTime
+          ? new Date(race.scheduledTime)
+          : null;
+        if (race.status === 'finished' || race.status === 'active') {
+          return NextResponse.json({ error: 'No puedes editar un pronóstico de una carrera que ya comenzó o terminó.' }, { status: 403 });
+        }
+        if (raceTime && new Date() >= raceTime) {
+          return NextResponse.json({ error: 'No puedes editar un pronóstico después de la hora de largada.' }, { status: 403 });
+        }
+      }
+    }
+
     const isUpdate = !!(await Forecast.findOne({ handicapperId: profile._id, raceId: new Types.ObjectId(raceId) }));
 
     const forecast = await Forecast.findOneAndUpdate(
