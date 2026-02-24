@@ -51,7 +51,8 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   const carreraMatch = block.match(/^CARRERA DEL DIA:\s*\n(\d+)/m);
   const distMatch    = block.match(/^DISTANCIA:\s*\n([\d.]+)/m);
   const premioMatch  = block.match(/^Bs\s+([\d.,]+)/m);
-  const condMatch    = block.match(/^(?:HANDICAP|PESOS|P E\.|COPA)[^\n]+(?:\n[^\n]+)*/m);
+  // Conditions: from HANDICAP/PESOS/etc. up to (but not including) PREMIO BS.
+  const condMatch    = block.match(/^((?:HANDICAP|PESOS|P E\.|COPA)[\s\S]+?)(?=\nPREMIO BS\.)/m);
   const anualMatch   = block.match(/^CARRERA DEL AÑO:\s*\n(\d+)/m);
 
   const raceNumber = carreraMatch ? parseInt(carreraMatch[1]) : 0;
@@ -133,14 +134,21 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     const horseName  = entryLines[i + 1] ? clean(entryLines[i + 1]) : '';
     if (!horseName || /^(PROGRAMACION|INSTITUTO|HIPODROMO|JUNTA|CARRERA|%|Mtrs)/i.test(horseName)) { i++; continue; }
 
-    // Layout after horseName: pedigree, [optional med B.L/L/B,L], price (0,00), weight, jockey, implements, trainer, PP
-    // Find weight dynamically — it's the first line after pedigree that starts with a digit (not 0,00)
-    let wi = i + 3; // start after pedigree (i+2)
-    // skip optional med marker (B.L / L / B,L) and price (0,00)
-    while (wi < entryLines.length && !/^\d+[,.]?\d*(-\d+)?$/.test(entryLines[wi].trim()) || entryLines[wi].trim() === '0,00') {
-      if (entryLines[wi].trim() === '0,00') { wi++; break; }
-      wi++;
+    // Layout: [i]=dorsal, [i+1]=horse, [i+2]=pedigree, [i+3]=med OR price, ...
+    // Medication line is B.L / B,L / L — optional. Price is always 0,00.
+    // Find medication and price dynamically.
+    let wi = i + 3;
+    let medication: string | undefined;
+    // Check if i+3 is a med marker (not a number)
+    const maybeMed = entryLines[wi]?.trim() ?? '';
+    if (/^[BL][.,]?L?$/.test(maybeMed) || /^B[.,]L$/i.test(maybeMed)) {
+      medication = maybeMed === 'B.L' || maybeMed === 'B,L' ? 'BUT-LAX' :
+                   maybeMed === 'B' || maybeMed === 'B.' ? 'BUT' :
+                   maybeMed === 'L' ? 'LAX' : maybeMed;
+      wi++; // skip med marker
     }
+    // Now skip price (0,00)
+    if (entryLines[wi]?.trim() === '0,00') wi++;
     // wi now points to weight
     const weightRaw  = entryLines[wi]     ? entryLines[wi].trim()     : '';
     const jockeyName = entryLines[wi + 1] ? clean(entryLines[wi + 1]) : '';
@@ -161,7 +169,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
       postPosition: pp,
       weight,
       weightRaw,
-      medication: undefined,
+      medication: medication || undefined,
       implements: implements_ || undefined,
       horse,
       jockey,
