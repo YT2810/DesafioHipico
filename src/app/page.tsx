@@ -157,7 +157,7 @@ export default function HomePage() {
               const isValencia = m.trackName.toLowerCase().includes('valencia');
               const trackLabel = isValencia ? '🏟 Valencia' : '🏇 La Rinconada';
               return (
-                <Link key={m.id} href={`/pronosticos`}
+                <Link key={m.id} href={`/programa/${m.id}`}
                   className="flex items-center gap-3 bg-gray-900 border border-gray-800 hover:border-yellow-800/40 rounded-2xl px-4 py-3 transition-colors group">
                   <div className="shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-black font-bold text-xs"
                     style={{ backgroundColor: GOLD }}>
