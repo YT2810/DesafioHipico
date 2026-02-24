@@ -125,9 +125,9 @@ export default function HomePage() {
       <main className="flex-1 mx-auto w-full max-w-lg px-4 pt-8 pb-10 flex flex-col items-center text-center gap-6">
         <div>
           <h1 className="text-4xl font-extrabold text-white leading-tight">
-            Inscritos y pronósticos<br /><span style={{ color: GOLD }}>La Rinconada</span> y Valencia
+            Pronósticos<br /><span style={{ color: GOLD }}>hípicos</span> VIP
           </h1>
-          <p className="text-sm text-gray-500 mt-3">Inscritos · Pronósticos · Resultados · Venezuela</p>
+          <p className="text-sm text-gray-500 mt-3">Inscritos La Rinconada y Valencia · Resultados · Venezuela</p>
         </div>
 
         {/* CTA buttons */}
