@@ -237,8 +237,8 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
 // Strategy: use medication (BUT-LAX|BUT|LAX|etc) and implements (L.XX.YY.) as anchors.
 // Lines may wrap — preprocessText joins them.
 
-// Known medication codes
-const MED_PATTERN = /(?:BUT-LAX|BUT|LAX|COR|FUR|ACE|DIC|OXY|[A-Z]{2,5}(?:-[A-Z]{2,5})+)/;
+// Known exact medication codes — order matters: longest first to avoid partial matches
+const MED_CODES = ['BUT-LAX', 'BUT', 'LAX', 'COR-FUR', 'COR', 'FUR', 'ACE', 'DIC', 'OXY', 'ATR', 'DIM'];
 // Implements: one or more uppercase 1-3 letter codes separated by dots, ending with dot
 const IMPL_PATTERN = /(?:[A-Z]{1,3}\.){2,}/;
 
@@ -249,8 +249,16 @@ function parseEntryLine(line: string): ExtractedEntry | null {
   const dorsal = parseInt(dorsalMatch[1]);
   const rest = dorsalMatch[2];
 
-  // Find medication anchor — it's always uppercase letters/hyphens, known codes
-  const medMatch = rest.match(new RegExp(`(.*?)(${MED_PATTERN.source})(\\d+(?:[\\.,]\\d+)?(?:-\\d+(?:[\\.,]\\d+)?)?)(.*)`));
+  // Find medication anchor — search for each known code preceded by a letter (end of horse name)
+  // This prevents partial name fragments (GO, MA) from being captured as medication prefix
+  let medMatch: RegExpMatchArray | null = null;
+  for (const code of MED_CODES) {
+    // The medication code must be immediately preceded by a letter or space (end of horse name)
+    // and immediately followed by digits (the weight)
+    const pattern = new RegExp(`^(.*?[A-ZÁÉÍÓÚÑ'\\)\\s])(${code.replace('-', '\\-')})(\\d+(?:[\\.,]\\d+)?(?:-\\d+(?:[\\.,]\\d+)?)?)(.*)$`);
+    const m = rest.match(pattern);
+    if (m) { medMatch = m; break; }
+  }
   if (!medMatch) return null;
 
   const horseName = clean(medMatch[1]);
