@@ -480,15 +480,20 @@ export default function PronosticosPage() {
             <div className="flex gap-2">{[1,2,3].map(i => <div key={i} className="shrink-0 w-20 h-14 rounded-xl bg-gray-900 animate-pulse" />)}</div>
           ) : apiMeetings.length === 0 ? (
             <p className="text-xs text-gray-600 italic py-2">Sin reuniones próximas</p>
-          ) : apiMeetings.map(m => (
-            <button key={m.id}
-              onClick={() => { setSelectedMeetingId(m.id); setSelectedRaceNumber(null); }}
-              className={`shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all ${selectedMeetingId === m.id ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-600'}`}
-              style={selectedMeetingId === m.id ? { backgroundColor: GOLD } : {}}>
-              <span className="font-bold text-sm">R{m.meetingNumber}</span>
-              <span className="opacity-80">{new Date(m.date).toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit' })}</span>
-            </button>
-          ))}
+          ) : apiMeetings.map(m => {
+            const isValencia = m.trackName.toLowerCase().includes('valencia');
+            const trackAbbr = isValencia ? 'VLC' : 'LRC';
+            return (
+              <button key={m.id}
+                onClick={() => { setSelectedMeetingId(m.id); setSelectedRaceNumber(null); }}
+                className={`shrink-0 flex flex-col items-center px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${selectedMeetingId === m.id ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-600'}`}
+                style={selectedMeetingId === m.id ? { backgroundColor: GOLD } : {}}>
+                <span className="font-bold text-sm">R{m.meetingNumber}</span>
+                <span className="opacity-80">{new Date(m.date).toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit', timeZone:'UTC' })}</span>
+                <span className={`text-[10px] font-bold mt-0.5 ${selectedMeetingId === m.id ? 'text-black/60' : isValencia ? 'text-blue-400' : 'text-yellow-600'}`}>{trackAbbr}</span>
+              </button>
+            );
+          })}
         </div>
         {/* Launch promo banner */}
         <div className="rounded-xl border border-yellow-700/50 bg-gradient-to-r from-yellow-900/40 to-yellow-800/20 px-4 py-2.5 flex items-center gap-3">
