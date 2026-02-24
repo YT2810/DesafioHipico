@@ -125,9 +125,9 @@ export default function HomePage() {
       <main className="flex-1 mx-auto w-full max-w-lg px-4 pt-8 pb-10 flex flex-col items-center text-center gap-6">
         <div>
           <h1 className="text-4xl font-extrabold text-white leading-tight">
-            Pronósticos<br /><span style={{ color: GOLD }}>hípicos</span> VIP
+            Inscritos y pronósticos<br /><span style={{ color: GOLD }}>La Rinconada</span> y Valencia
           </h1>
-          <p className="text-sm text-gray-500 mt-3">Venezuela · La Rinconada</p>
+          <p className="text-sm text-gray-500 mt-3">Gaceta hípica digital · Venezuela · INH · HINAVA</p>
         </div>
 
         {/* CTA buttons */}
@@ -144,6 +144,36 @@ export default function HomePage() {
             </Link>
           )}
         </div>
+
+        {/* ── Upcoming meetings — shown first for SEO and UX ── */}
+        {meetings.length > 0 && (
+          <div className="w-full space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Próximas reuniones</p>
+              <span className="text-xs text-gray-700">Inscritos disponibles</span>
+            </div>
+            {meetings.map(m => {
+              const d = new Date(m.date);
+              const isValencia = m.trackName.toLowerCase().includes('valencia');
+              const trackLabel = isValencia ? '🏟 Valencia' : '🏇 La Rinconada';
+              return (
+                <Link key={m.id} href={`/pronosticos`}
+                  className="flex items-center gap-3 bg-gray-900 border border-gray-800 hover:border-yellow-800/40 rounded-2xl px-4 py-3 transition-colors group">
+                  <div className="shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-black font-bold text-xs"
+                    style={{ backgroundColor: GOLD }}>
+                    <span className="text-base font-extrabold leading-none">{d.getUTCDate()}</span>
+                    <span className="uppercase leading-none">{d.toLocaleDateString('es-VE', { month: 'short', timeZone: 'UTC' })}</span>
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{trackLabel} · Reunión {m.meetingNumber}</p>
+                    <p className="text-xs text-gray-500">{m.raceCount} carreras programadas · Ver inscritos</p>
+                  </div>
+                  <span className="text-gray-700 group-hover:text-yellow-600 transition-colors text-lg">›</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Forecast preview ── */}
         {status !== 'loading' && (
@@ -210,30 +240,10 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Upcoming meetings */}
-        {meetings.length > 0 && (
-          <div className="w-full space-y-2">
-            <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Próximas reuniones</p>
-            {meetings.map(m => {
-              const d = new Date(m.date);
-              return (
-                <Link key={m.id} href="/pronosticos"
-                  className="flex items-center gap-3 bg-gray-900 border border-gray-800 hover:border-yellow-800/40 rounded-2xl px-4 py-3 transition-colors group">
-                  <div className="shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-black font-bold text-xs"
-                    style={{ backgroundColor: GOLD }}>
-                    <span className="text-base font-extrabold leading-none">{d.getDate()}</span>
-                    <span className="uppercase leading-none">{d.toLocaleDateString('es-VE', { month: 'short' })}</span>
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{m.trackName}</p>
-                    <p className="text-xs text-gray-600">Reunión {m.meetingNumber} · {m.raceCount} carreras</p>
-                  </div>
-                  <span className="text-gray-700 group-hover:text-yellow-600 transition-colors text-lg">›</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+        {/* SEO footer text — visible but subtle, helps Google index key terms */}
+        <p className="text-xs text-gray-800 text-center leading-relaxed">
+          Inscritos La Rinconada · Inscritos Valencia · Resultados hípicos Venezuela · Gaceta La Rinconada · Datos INH · HINAVA
+        </p>
       </main>
 
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
