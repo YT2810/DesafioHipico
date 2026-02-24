@@ -127,7 +127,7 @@ export default function HomePage() {
           <h1 className="text-4xl font-extrabold text-white leading-tight">
             Inscritos y pronósticos<br /><span style={{ color: GOLD }}>La Rinconada</span> y Valencia
           </h1>
-          <p className="text-sm text-gray-500 mt-3">Gaceta hípica digital · Venezuela · INH · HINAVA</p>
+          <p className="text-sm text-gray-500 mt-3">Inscritos · Pronósticos · Resultados · Venezuela</p>
         </div>
 
         {/* CTA buttons */}
@@ -242,7 +242,7 @@ export default function HomePage() {
 
         {/* SEO footer text — visible but subtle, helps Google index key terms */}
         <p className="text-xs text-gray-800 text-center leading-relaxed">
-          Inscritos La Rinconada · Inscritos Valencia · Resultados hípicos Venezuela · Gaceta La Rinconada · Datos INH · HINAVA
+          Inscritos La Rinconada · Inscritos Valencia · Resultados hípicos Venezuela · Revista La Rinconada · Datos INH · HINAVA
         </p>
       </main>
 

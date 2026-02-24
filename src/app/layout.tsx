@@ -19,13 +19,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Desafío Hípico · Inscritos y Pronósticos La Rinconada y Valencia",
-  description: "Gaceta hípica de Venezuela: inscritos La Rinconada, inscritos Valencia, pronósticos de expertos, resultados y resumen de cada reunión. INH · HINAVA.",
+  description: "Inscritos La Rinconada e inscritos Valencia: pronósticos de expertos, resultados y resumen de cada reunión hípica. INH · HINAVA.",
   keywords: [
     "inscritos La Rinconada",
     "inscritos Valencia hipódromo",
     "pronósticos hípicos Venezuela",
     "revista hípica Venezuela",
-    "gaceta La Rinconada",
+    "revista hípica La Rinconada",
     "resultados La Rinconada",
     "resultados Valencia hipódromo",
     "resumen La Rinconada",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: "Desafío Hípico · Inscritos y Pronósticos La Rinconada",
-    description: "Consulta los inscritos, pronósticos de expertos y resultados de La Rinconada y Valencia. La gaceta hípica digital de Venezuela.",
+    description: "Consulta los inscritos, pronósticos de expertos y resultados de La Rinconada y Valencia. La plataforma hípica digital de Venezuela.",
     url: "https://www.desafiohipico.com",
     siteName: "Desafío Hípico",
     locale: "es_VE",
