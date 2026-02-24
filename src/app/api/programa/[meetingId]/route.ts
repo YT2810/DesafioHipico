@@ -38,7 +38,7 @@ export async function GET(
 
     const racesWithEntries = await Promise.all(
       races.map(async (race) => {
-        const entries = await Entry.find({ raceId: race._id, 'result.isScratched': { $ne: true } })
+        const entries = await Entry.find({ raceId: race._id })
           .sort({ dorsalNumber: 1 })
           .populate('horseId', 'name')
           .populate('jockeyId', 'name')

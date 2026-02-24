@@ -313,7 +313,9 @@ function parseEntries(block: string): ExtractedEntry[] {
   const rawLines = block.split('\n');
   const joinedLines: string[] = [];
   for (const raw of rawLines) {
-    const line = raw.trim();
+    // Strip leading non-alphanumeric chars (non-breaking spaces, pipes, dashes)
+    // that can appear before the dorsal number in some PDF extractions
+    const line = raw.trim().replace(/^[^A-Za-z0-9ÁÉÍÓÚÑ]+/, '');
     if (!line) continue;
     // New entry: starts with 1-2 digits immediately followed by uppercase letter
     if (/^\d{1,2}[A-ZÁÉÍÓÚÑ'(]/.test(line)) {
