@@ -96,73 +96,95 @@ function preprocessText(raw: string): string {
 }
 
 // ─── Meeting Parser ───────────────────────────────────────────────────────────
-// Real format: "9  DOMINGO" appears as its own line (reunion + day of week).
-// Date "22/02/2026" appears in the values line.
+// pdf-parse format: labels and values on separate lines.
+//   "Reunión:\n9\nDía:\nDOMINGO"
+//   "22/02/2026\nFecha:"  (date appears before its label)
 
 function parseMeeting(text: string, warnings: string[]): ExtractedMeeting {
   const trackMatch = text.match(/Hip[oó]dromo\s+(.+?)(?:\n|Direcci[oó]n)/i);
   const trackName = trackMatch ? clean(trackMatch[1]) : 'LA RINCONADA';
 
-  // "9  DOMINGO" standalone line OR embedded in values line "9  DOMINGO  1200 mts. ..."
-  const reunionDiaMatch = text.match(/^(\d+)\s{2,}(LUNES|MARTES|MI[EÉ]RCOLES|JUEVES|VIERNES|S[AÁ]BADO|DOMINGO)(?:\s|$)/im);
+  // "Reunión:\n9" or "Reunión: 9"
+  const reunionMatch = text.match(/Reuni[oó]n[:\s]*\n?(\d+)/i);
+  // "Día:\nDOMINGO" or inline
+  const diaMatch = text.match(/D[ií]a[:\s]*\n?(LUNES|MARTES|MI[EÉ]RCOLES|JUEVES|VIERNES|S[AÁ]BADO|DOMINGO)/i);
   const fechaMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
 
-  if (!reunionDiaMatch) warnings.push('No se detectó número de reunión.');
+  if (!reunionMatch) warnings.push('No se detectó número de reunión.');
   if (!fechaMatch) warnings.push('No se detectó fecha.');
 
   return {
     track: { name: trackName.toUpperCase(), location: trackName.toUpperCase(), country: 'VE' },
     date: fechaMatch ? parseVEDate(fechaMatch[1]) : new Date().toISOString(),
-    meetingNumber: reunionDiaMatch ? parseInt(reunionDiaMatch[1]) : 0,
-    dayOfWeek: reunionDiaMatch ? reunionDiaMatch[2].toUpperCase() : undefined,
+    meetingNumber: reunionMatch ? parseInt(reunionMatch[1]) : 0,
+    dayOfWeek: diaMatch ? diaMatch[1].toUpperCase() : undefined,
   };
 }
 
 // ─── Race Header Parser ───────────────────────────────────────────────────────
-// Real values line (from pdfjs Y-grouping):
-//   "1400 mts.  1  4  76  01:25 p. m.  22/02/2026"
-//   order: Distancia  CarreraNro  Llamado  AnualNro  Hora  Fecha
-// For carrera 2+, reunion+dia may be prepended on same line:
-//   "9  DOMINGO  1200 mts.  2  20  77  01:50 p. m.  22/02/2026"
+// pdf-parse format — labels and values on separate lines:
+//   "Distancia:\n1400 mts.1"  ← distance + raceNumber concatenated
+//   "Carrera Nro:Llamado:\n476"  ← raceNro + llamado concatenated
+//   "Carrera Anual Nro.:Hora:\n01:25 p. m."
+//   "Premio Bs.:\n3600\nBono $:\n37180"
 
 function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
-  // Primary: match the values line containing distance + race fields + time + date
-  const valuesMatch = block.match(
-    /(\d{3,4})\s+mts\.\s{2,}(\d{1,2})\s{2,}(\d{1,2})\s{2,}(\d{1,3})\s{2,}(\d{1,2}:\d{2}\s*[aApP]\.\s*[mM]\.\s*)\s{2,}(\d{1,2}\/\d{1,2}\/\d{4})/
-  );
-
   let raceNumber = 0, llamado = 0, annualRaceNumber = 0, distance = 0, scheduledTime = '';
 
-  if (valuesMatch) {
-    distance = parseInt(valuesMatch[1]);
-    raceNumber = parseInt(valuesMatch[2]);
-    llamado = parseInt(valuesMatch[3]);
-    annualRaceNumber = parseInt(valuesMatch[4]);
-    scheduledTime = clean(valuesMatch[5]);
+  // Distance line: "1400 mts.1" or "1200 mts.2" — distance + raceNumber glued
+  const distLine = block.match(/(\d{3,4})\s*mts\.(\d{1,2})(?:\s|$)/);
+  if (distLine) {
+    distance = parseInt(distLine[1]);
+    raceNumber = parseInt(distLine[2]);
   } else {
-    // Fallback individual extraction
-    const dm = block.match(/(\d{3,4})\s*mts\./i);
-    const rm = block.match(/Carrera\s+Nro[:\s.]+(\d+)/i);
-    const lm = block.match(/Llamado[:\s]+(\d+)/i);
-    const am = block.match(/Carrera\s+Anual\s+Nro[.:\s]+(\d+)/i);
-    const hm = block.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
-    distance = dm ? parseInt(dm[1]) : 0;
-    raceNumber = rm ? parseInt(rm[1]) : 0;
-    llamado = lm ? parseInt(lm[1]) : 0;
-    annualRaceNumber = am ? parseInt(am[1]) : 0;
-    scheduledTime = hm ? clean(hm[1]) : '';
+    const dm = block.match(/Distancia[:\s]*\n?(\d{3,4})\s*mts\./i);
+    if (dm) distance = parseInt(dm[1]);
   }
 
+  // "Carrera Nro:Llamado:\n476" — value line has raceNro and llamado glued
+  // Pattern: after "Carrera Nro:Llamado:" there's a line like "476"
+  // raceNro is 1-2 digits, llamado is 1-2 digits, rest is annualNro
+  const carreraLlamadoLine = block.match(/Carrera\s+Nro:Llamado:\s*\n?(\d{1,2})(\d{1,2})(\d{1,3})?/i);
+  if (carreraLlamadoLine) {
+    if (!raceNumber) raceNumber = parseInt(carreraLlamadoLine[1]);
+    llamado = parseInt(carreraLlamadoLine[2]);
+  } else {
+    // Fallback: value line after the combined label is a short number string
+    const valLine = block.match(/Carrera\s+Nro:Llamado:\s*\n(\d+)/i);
+    if (valLine) {
+      const val = valLine[1];
+      // e.g. "476" → raceNro=4, llamado=7, annualNro=6? No — "476" = raceNro=4, llamado=7, annual=6
+      // But "2077" = raceNro=2, llamado=0, annual=77? Let's use: first 1-2 digits = raceNro
+      if (!raceNumber) raceNumber = parseInt(val.slice(0, val.length > 3 ? 1 : 1));
+      llamado = parseInt(val.slice(raceNumber.toString().length, raceNumber.toString().length + 2)) || 0;
+    }
+  }
+
+  // "Carrera Anual Nro.:Hora:\n01:25 p. m."
+  const horaLine = block.match(/Carrera\s+Anual\s+Nro\.:Hora:\s*\n?(\d{1,2}:\d{2}\s*[aApP]\.\s*[mM]\.)/i);
+  if (horaLine) {
+    scheduledTime = clean(horaLine[1]);
+  } else {
+    const hm = block.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
+    if (hm) scheduledTime = clean(hm[1]);
+  }
+
+  if (!raceNumber) {
+    // Last fallback: look for standalone raceNumber
+    const rm = block.match(/Carrera\s+Nro[:\s.]+(\d+)/i);
+    if (rm) raceNumber = parseInt(rm[1]);
+  }
   if (!raceNumber) warnings.push('No se detectó número de carrera en un bloque.');
 
-  // Conditions: collect HANDICAP/PARA text lines, stop at Premio or table header
-  const condMatch = block.match(/((?:HANDICAP|PARA\s+CABALLOS|PARA\s+YEGUAS)[\s\S]+?)(?=Premio\s+Bs\.|N[°o]\s+Ejemplar)/i);
-  const conditions = condMatch ? clean(condMatch[1].replace(/Condici[oó]n\s*:/gi, '')) : '';
+  // Conditions
+  const condMatch = block.match(/Condici[oó]n:\s*\n?([\s\S]+?)(?=Reuni[oó]n:|Premio\s+Bs\.|N[°o]Ejemplar)/i);
+  const conditions = condMatch ? clean(condMatch[1]) : '';
 
-  // Prize line: "3600  37180" — a line with exactly two numbers after the % distribution line
-  const prizeLineMatch = block.match(/^(\d{3,6})\s{2,}(\d{4,6})\s*$/m);
-  const bs = prizeLineMatch ? parseInt(prizeLineMatch[1]) : 0;
-  const bono = prizeLineMatch ? parseInt(prizeLineMatch[2]) : undefined;
+  // Prize: "Premio Bs.:\n3600" and "Bono $:\n37180"
+  const bsMatch = block.match(/Premio\s+Bs\.[:\s]*\n?(\d{3,6})/i);
+  const bonoMatch = block.match(/Bono\s+\$[:\s]*\n?(\d{4,6})/i);
+  const bs = bsMatch ? parseInt(bsMatch[1]) : 0;
+  const bono = bonoMatch ? parseInt(bonoMatch[1]) : undefined;
 
   // Prize distribution percentages
   const distPcts = [...block.matchAll(/(\d+)%\s+al\s+(\d+)[°o]/gi)];
@@ -210,73 +232,97 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
 }
 
 // ─── Entry Table Parser ───────────────────────────────────────────────────────
-// After preprocessText(), each entry is on a single line:
-//   "1  QUALITY PRINCESS  BUT-LAX  53  RODRIGUEZ JEAN C  L.BZ.V.GR.LA.  RODRIGUEZ JOSE G  8"
-// Columns separated by 2+ spaces. Weight may include penalty: "53-2", "55-4", "53.5"
+// pdf-parse v1 produces entries WITHOUT column separators:
+//   "1QUALITY PRINCESSBUT-LAX53RODRIGUEZ JEAN CL.BZ.V.GR.LA.RODRIGUEZ JOSE G8"
+// Strategy: use medication (BUT-LAX|BUT|LAX|etc) and implements (L.XX.YY.) as anchors.
+// Lines may wrap — preprocessText joins them.
+
+// Known medication codes
+const MED_PATTERN = /(?:BUT-LAX|BUT|LAX|COR|FUR|ACE|DIC|OXY|[A-Z]{2,5}(?:-[A-Z]{2,5})+)/;
+// Implements: one or more uppercase 1-3 letter codes separated by dots, ending with dot
+const IMPL_PATTERN = /(?:[A-Z]{1,3}\.){2,}/;
+
+function parseEntryLine(line: string): ExtractedEntry | null {
+  // Must start with 1-2 digit dorsal immediately followed by uppercase letter
+  const dorsalMatch = line.match(/^(\d{1,2})([A-ZÁÉÍÓÚÑ'(].*)/);
+  if (!dorsalMatch) return null;
+  const dorsal = parseInt(dorsalMatch[1]);
+  const rest = dorsalMatch[2];
+
+  // Find medication anchor — it's always uppercase letters/hyphens, known codes
+  const medMatch = rest.match(new RegExp(`(.*?)(${MED_PATTERN.source})(\\d+(?:[\\.,]\\d+)?(?:-\\d+(?:[\\.,]\\d+)?)?)(.*)`));
+  if (!medMatch) return null;
+
+  const horseName = clean(medMatch[1]);
+  const medication = clean(medMatch[2]);
+  const weightRaw = medMatch[3].replace(',', '.');
+  const afterWeight = medMatch[4];
+
+  // Parse weight
+  let weight: number;
+  const allowanceMatch = weightRaw.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (allowanceMatch) {
+    weight = parseFloat(allowanceMatch[1]) - parseFloat(allowanceMatch[2]);
+  } else {
+    weight = parseFloat(weightRaw) || 0;
+  }
+
+  // Find implements anchor in afterWeight — pattern like "L.BZ.V.GR.LA."
+  const implMatch = afterWeight.match(new RegExp(`(.*?)(${IMPL_PATTERN.source})(.*)`));
+  if (!implMatch) return null;
+
+  const jockeyName = clean(implMatch[1]);
+  const implements_ = clean(implMatch[2]);
+  const trainerAndPP = implMatch[3];
+
+  // Last 1-2 digits are post position
+  const ppMatch = trainerAndPP.match(/^(.*?)(\d{1,2})\s*$/);
+  if (!ppMatch) return null;
+
+  const trainerName = clean(ppMatch[1]);
+  const pp = parseInt(ppMatch[2]);
+
+  if (!horseName || !jockeyName || !trainerName || isNaN(pp) || pp > 30) return null;
+
+  return {
+    dorsalNumber: dorsal,
+    postPosition: pp,
+    weight,
+    weightRaw,
+    medication: medication || undefined,
+    implements: implements_ || undefined,
+    horse: { name: horseName, pedigree: {} },
+    jockey: { name: jockeyName, type: 'jockey', licenseId: makePersonLicenseId(jockeyName, 'jockey') },
+    trainer: { name: trainerName, type: 'trainer', licenseId: makePersonLicenseId(trainerName, 'trainer') },
+  };
+}
 
 function parseEntries(block: string): ExtractedEntry[] {
   const entries: ExtractedEntry[] = [];
-  const lines = block.split('\n');
-  let inTable = false;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-
-    if (/N[°o]?\s+Ejemplar/i.test(line)) { inTable = true; continue; }
-    if (/JUEGOS|OBSERVACI[OÓ]N/i.test(line)) { inTable = false; }
-    if (!inTable || !line) continue;
-
-    // Must start with 1-2 digit dorsal
-    if (!/^\d{1,2}\s/.test(line)) continue;
-
-    // Split on 2+ spaces — this is the column separator after preprocessText
-    const cols = line.split(/\s{2,}/);
-    // Expected: [dorsal, horse, medication, weight, jockey, implements, trainer, pp]
-    if (cols.length < 7) continue;
-
-    const dorsal = parseInt(cols[0]);
-    if (isNaN(dorsal)) continue;
-
-    // Last column is P.P. (post position) — a 1-2 digit number
-    const ppRaw = cols[cols.length - 1].trim();
-    const pp = parseInt(ppRaw);
-    if (isNaN(pp) || pp > 30) continue;
-
-    // Weight is 3rd-from-last or at index 3 — it's a number possibly with penalty suffix
-    // We find it by looking for a column matching weight pattern
-    // cols[3] should be weight (e.g. "53", "53-2", "55-4", "53.5")
-    const weightRaw = cols[3]?.trim() ?? '';
-    // "53-3" = base 53 minus jockey allowance 3 → net 50kg
-    // "55.5" = 55.5kg (half-kilo increment, no allowance)
-    // "53"   = 53kg flat
-    let weight: number;
-    const allowanceMatch = weightRaw.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
-    if (allowanceMatch) {
-      weight = parseFloat(allowanceMatch[1]) - parseFloat(allowanceMatch[2]);
-    } else {
-      weight = parseFloat(weightRaw) || 0;
+  // Normalize: join lines that are continuations of a wrapped entry
+  // A continuation line starts with spaces or a lowercase letter or a digit that is NOT a new dorsal
+  const rawLines = block.split('\n');
+  const joinedLines: string[] = [];
+  for (const raw of rawLines) {
+    const line = raw.trim();
+    if (!line) continue;
+    // New entry: starts with 1-2 digits immediately followed by uppercase letter
+    if (/^\d{1,2}[A-ZÁÉÍÓÚÑ'(]/.test(line)) {
+      joinedLines.push(line);
+    } else if (joinedLines.length > 0 && !/^(JUEGOS|OBSERVACI|GANADOR|Carrera\s+Prog|N[°o]Ejemplar)/i.test(line)) {
+      // Continuation of previous line
+      joinedLines[joinedLines.length - 1] += line;
     }
+  }
 
-    const horseName = clean(cols[1] ?? '');
-    const medication = clean(cols[2] ?? '');
-    const jockeyName = clean(cols[4] ?? '');
-    const implements_ = clean(cols[5] ?? '');
-    // Trainer may span multiple cols if split happened inside name — rejoin from col 6 to col length-2
-    const trainerName = clean(cols.slice(6, cols.length - 1).join(' '));
-
-    if (!horseName || !jockeyName || !trainerName) continue;
-
-    entries.push({
-      dorsalNumber: dorsal,
-      postPosition: pp,
-      weight,
-      weightRaw,
-      medication: medication || undefined,
-      implements: implements_ || undefined,
-      horse: { name: horseName, pedigree: {} },
-      jockey: { name: jockeyName, type: 'jockey', licenseId: makePersonLicenseId(jockeyName, 'jockey') },
-      trainer: { name: trainerName, type: 'trainer', licenseId: makePersonLicenseId(trainerName, 'trainer') },
-    });
+  for (let line of joinedLines) {
+    if (/JUEGOS|OBSERVACI[OÓ]N/i.test(line)) continue;
+    // Strip OBSERVACION/GANADOR text that bleeds in from next section
+    line = line.replace(/GANADOR\s+UN\s+EJE.*$/i, '').replace(/OBSERVACI[OÓ]N.*$/i, '').trim();
+    // Remove pipe chars and surrounding spaces (PDF line-break artifact)
+    line = line.replace(/\s*\|\s*/g, '');
+    const entry = parseEntryLine(line);
+    if (entry) entries.push(entry);
   }
 
   return entries;
