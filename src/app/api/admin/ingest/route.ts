@@ -15,33 +15,11 @@ export async function POST(request: NextRequest) {
 
       if (file) {
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-          // Use pdfjs-dist with worker file path (server-side safe)
           const arrayBuffer = await file.arrayBuffer();
-          const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-          const { resolve } = await import('path');
-          const workerPath = resolve(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs');
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `file://${workerPath}`;
-          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer), useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
-          const pdfDoc = await loadingTask.promise;
-          const pages: string[] = [];
-          for (let i = 1; i <= pdfDoc.numPages; i++) {
-            const page = await pdfDoc.getPage(i);
-            const content = await page.getTextContent();
-            // Group text items by Y position to reconstruct lines
-            const lineMap = new Map<number, string[]>();
-            for (const item of content.items) {
-              if (!('str' in item) || !item.str.trim()) continue;
-              const y = Math.round((item as { transform: number[] }).transform[5]);
-              if (!lineMap.has(y)) lineMap.set(y, []);
-              lineMap.get(y)!.push(item.str);
-            }
-            // Sort lines top-to-bottom (descending Y in PDF coords)
-            const sortedLines = [...lineMap.entries()]
-              .sort((a, b) => b[0] - a[0])
-              .map(([, parts]) => parts.join('  '));
-            pages.push(sortedLines.join('\n'));
-          }
-          rawText = pages.join('\n');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const pdfParse = require('pdf-parse');
+          const result = await pdfParse(Buffer.from(arrayBuffer));
+          rawText = result.text;
         } else {
           rawText = await file.text();
         }
