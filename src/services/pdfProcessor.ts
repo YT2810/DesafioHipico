@@ -50,7 +50,7 @@ export function simpleHash(text: string): string {
   return Math.abs(h).toString(16);
 }
 function clean(s: string): string { return s.replace(/\s+/g, ' ').trim(); }
-function parseVEDate(raw: string): string {
+export function parseVEDate(raw: string): string {
   const m = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (!m) return new Date().toISOString();
   const [, d, mo, y] = m;
@@ -344,9 +344,21 @@ function splitIntoRaceBlocks(text: string): string[] {
   return text.split(/(?=Carrera Programada:)/i).filter(p => /Carrera Programada:/i.test(p));
 }
 
+// ─── Source detector ──────────────────────────────────────────────────────────
+
+function detectSource(rawText: string): 'inh' | 'hinava' {
+  if (/HIPODROMO NACIONAL DE VALENCIA/i.test(rawText)) return 'hinava';
+  return 'inh';
+}
+
 // ─── Main Processor ───────────────────────────────────────────────────────────
 
 export function processDocument(rawText: string): ProcessedDocument {
+  if (detectSource(rawText) === 'hinava') {
+    const { parseHinavaDocument } = require('./parsers/hinava');
+    return parseHinavaDocument(rawText);
+  }
+
   const warnings: string[] = [];
   const hash = simpleHash(rawText);
 
