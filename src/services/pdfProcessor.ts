@@ -141,22 +141,26 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (dm) distance = parseInt(dm[1]);
   }
 
-  // "Carrera Nro:Llamado:\n476" — value line has raceNro and llamado glued
-  // Pattern: after "Carrera Nro:Llamado:" there's a line like "476"
-  // raceNro is 1-2 digits, llamado is 1-2 digits, rest is annualNro
-  const carreraLlamadoLine = block.match(/Carrera\s+Nro:Llamado:\s*\n?(\d{1,2})(\d{1,2})(\d{1,3})?/i);
-  if (carreraLlamadoLine) {
-    if (!raceNumber) raceNumber = parseInt(carreraLlamadoLine[1]);
-    llamado = parseInt(carreraLlamadoLine[2]);
-  } else {
-    // Fallback: value line after the combined label is a short number string
-    const valLine = block.match(/Carrera\s+Nro:Llamado:\s*\n(\d+)/i);
-    if (valLine) {
-      const val = valLine[1];
-      // e.g. "476" → raceNro=4, llamado=7, annualNro=6? No — "476" = raceNro=4, llamado=7, annual=6
-      // But "2077" = raceNro=2, llamado=0, annual=77? Let's use: first 1-2 digits = raceNro
-      if (!raceNumber) raceNumber = parseInt(val.slice(0, val.length > 3 ? 1 : 1));
-      llamado = parseInt(val.slice(raceNumber.toString().length, raceNumber.toString().length + 2)) || 0;
+  // "Carrera Nro:Llamado:\n2695" — the PDF concatenates llamado+raceNro+annualNro on one line.
+  // e.g. "2695" = llamado=26, raceNro=9, annual=5
+  //      "476"  = llamado=4,  raceNro=7, annual=6
+  // Strategy: if raceNumber already known from distLine ("1100 mts.9"), strip it from the end
+  // of the concatenated value to get llamado. Otherwise first 1-2 digits = raceNro.
+  const valLine = block.match(/Carrera\s+Nro:Llamado:\s*\n?(\d+)/i);
+  if (valLine) {
+    const val = valLine[1];
+    if (raceNumber) {
+      // raceNumber already known — strip it from the right side of val to get llamado
+      const rnStr = raceNumber.toString();
+      const rnIdx = val.lastIndexOf(rnStr);
+      if (rnIdx > 0) {
+        llamado = parseInt(val.slice(0, rnIdx)) || 0;
+        annualRaceNumber = parseInt(val.slice(rnIdx + rnStr.length)) || 0;
+      }
+    } else {
+      // raceNumber unknown — first 1-2 digits = raceNro, next 1-2 = llamado
+      raceNumber = parseInt(val.slice(0, 1));
+      llamado = parseInt(val.slice(1, 3)) || 0;
     }
   }
 
@@ -241,7 +245,7 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
 const MED_CODES = ['BUT-LAX', 'BUT', 'LAX', 'COR-FUR', 'COR', 'FUR', 'ACE', 'DIC', 'OXY', 'ATR', 'DIM'];
 // Implements: always starts with L. (látigo) followed by more codes — "L.BZ.CC.V.M.LA."
 // Starting with L. prevents last letter of jockey name from being captured
-const IMPL_PATTERN = /L\.(?:[A-Z]{1,3}\.)+/;
+const IMPL_PATTERN = /L\.(?:[A-Z]{1,3}\.)*/;
 
 function parseEntryLine(line: string): ExtractedEntry | null {
   // Must start with 1-2 digit dorsal immediately followed by uppercase letter
