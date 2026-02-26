@@ -11,6 +11,7 @@ interface ResolvedMark {
   preferenceOrder: number;
   hasExplicitOrder?: boolean;
   rawName: string;
+  rawLabel?: string | null;
   resolvedHorseName: string | null;
   resolvedEntryId: string | null;
   dorsalNumber?: number;
@@ -428,8 +429,11 @@ export default function IntelligencePage() {
                             {mark.dorsalNumber && (
                               <span className="text-xs text-gray-500">#{mark.dorsalNumber}</span>
                             )}
+                            {mark.rawLabel && (
+                              <span className="text-xs text-purple-400 border border-purple-800 rounded px-1 py-0.5 leading-none font-mono" title="Etiqueta original del pronosticador">{mark.rawLabel}</span>
+                            )}
                             {mark.hasExplicitOrder === false && (
-                              <span className="text-xs text-amber-600 border border-amber-800 rounded px-1 py-0.5 leading-none" title="Orden inferido por posición en el texto, no explícito">~orden</span>
+                              <span className="text-xs text-amber-600 border border-amber-800 rounded px-1 py-0.5 leading-none" title="Orden inferido por posición en el texto">~orden</span>
                             )}
                           </div>
                           <select

@@ -26,6 +26,7 @@ export interface RawExtractedMark {
   preferenceOrder: number;
   hasExplicitOrder?: boolean;
   rawName: string;
+  rawLabel?: string;
   dorsalNumber?: number;
   label: ForecastLabel;
   note?: string;
@@ -59,32 +60,35 @@ function buildPrompt(content: string, raceEntries?: RaceEntriesContext[]): strin
       }`
     : '';
 
-  return `Eres un experto en pronósticos hípicos venezolanos. Analiza el siguiente contenido y extrae TODOS los pronósticos mencionados.
+  return `Eres un asistente de extracción de pronósticos hípicos venezolanos. Tu única tarea es extraer la información tal como está en el texto — NO interpretar, NO normalizar, NO cambiar etiquetas.
 
-━━━ REGLAS DE ETIQUETAS ━━━
-Asigna EXACTAMENTE la etiqueta que corresponda al lenguaje usado. NO uses "Línea" por defecto.
+━━━ CAMPO rawLabel ━━━
+Extrae la etiqueta/calificación EXACTA que usa el pronosticador, en sus propias palabras.
+Ejemplos: "SF", "F", "CE", "fijo", "línea", "super fijo", "especial", "BD", "bat", "opción", "casi", o lo que diga el texto.
+Si no hay etiqueta explícita para un caballo, usa null.
+NO traduzcas ni mapees a otra cosa.
 
-• "Línea" → UN SOLO caballo que el handicapper da como fijo/seguro/ganador. Palabras clave: "fijo", "línea fija", "el que va", "seguro", "ganador". SOLO se aplica a 1 caballo por carrera.
-• "Casi Fijo" → muy probable pero no 100% seguro. Palabras: "casi fijo", "casi seguro", "muy probable", "casi".
-• "Súper Especial" → destacado con énfasis especial. Palabras: "súper especial", "super especial", "especial", "destacado".
-• "Buen Dividendo" → paga bien, sorpresa controlada. Palabras: "buen dividendo", "dividendo", "paga bien", "opción pagadora".
-• "Batacazo" → sorpresa grande, cotización alta. Palabras: "batacazo", "sorpresón", "longshot", "paga muchísimo".
+━━━ CAMPO label (normalizado para puntuación) ━━━
+Este campo se asigna con las siguientes reglas ESTRICTAS:
+• Si rawLabel indica claramente un solo ganador fijo ("fijo", "F", "SF", "línea", "línea fija", "el que va", "seguro") Y es el único con esa etiqueta en la carrera → "Línea"
+• Si varios caballos de la misma carrera tienen etiqueta de "fijo" → todos van como "Casi Fijo" (no puede haber 2 líneas en una carrera)
+• "casi", "casi fijo", "CF", "CE" → "Casi Fijo"
+• "especial", "súper especial", "SE", "super" → "Súper Especial"
+• "dividendo", "BD", "buen dividendo", "paga" → "Buen Dividendo"
+• "batacazo", "bat", "sorpresa", "longshot" → "Batacazo"
+• Sin etiqueta o etiqueta ambigua → "Casi Fijo"
+Etiquetas válidas: ${labelsStr}
 
-Si el handicapper menciona VARIOS caballos sin calificar ninguno como fijo (ej: "opciones: A, B, C" o una lista sin jerarquía), asigna a TODOS la misma etiqueta "Casi Fijo" — NO "Línea".
-Si menciona "descartes", NO incluyas esos caballos en marks.
-
-━━━ REGLAS DE ORDEN DE PREFERENCIA ━━━
-• preferenceOrder: número del 1 al 5 (1 = mayor preferencia).
-• hasExplicitOrder: true si el texto menciona orden explícito ("primero", "1ro", "antes que", "luego", numeración, etc.). false si el orden es inferido por posición en el texto.
-• Si no hay orden explícito y son "opciones" equivalentes, asigna hasExplicitOrder: false y ordénalos tal como aparecen en el texto (1, 2, 3...).
-• El caballo "Línea" siempre va con preferenceOrder: 1 y hasExplicitOrder: true.
+━━━ CAMPO preferenceOrder / hasExplicitOrder ━━━
+• preferenceOrder: 1 al 5 (1 = mayor preferencia). La "Línea" siempre es 1.
+• hasExplicitOrder: true si el texto indica orden explícito (numeración, "primero", "luego", etc.). false si es lista sin jerarquía.
 
 ━━━ OTRAS REGLAS ━━━
-1. Extrae la fecha o número de reunión si se menciona.
-2. Extrae el dorsal si se menciona explícitamente (ej: "#5", "el 5", "dorsal 5").
-3. Si hay múltiples pronosticadores, identifica cada uno por nombre.
-4. Devuelve rawName tal como aparece en el texto original (sin corregir).
-5. Máximo 5 marcas por carrera.${entriesContext}
+• Descartes: NO incluir en marks.
+• Extrae dorsalNumber si aparece explícitamente ("#5", "el 5", dorsal).
+• rawName: copia el nombre TAL COMO aparece en el texto.
+• Máximo 5 marcas por carrera.
+• Extrae fecha o número de reunión si se menciona.${entriesContext}
 
 ━━━ FORMATO DE RESPUESTA (JSON puro, sin markdown, sin texto extra) ━━━
 {
@@ -99,6 +103,7 @@ Si menciona "descartes", NO incluyas esos caballos en marks.
           "preferenceOrder": 1,
           "hasExplicitOrder": true,
           "rawName": "NOMBRE TAL COMO APARECE",
+          "rawLabel": "SF",
           "dorsalNumber": 5,
           "label": "Línea",
           "note": "comentario opcional o null"
