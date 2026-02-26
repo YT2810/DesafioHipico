@@ -52,10 +52,11 @@ export interface GeminiExtractionResult {
 
 function buildPrompt(content: string, raceEntries?: RaceEntriesContext[]): string {
   const labelsStr = FORECAST_LABELS.join(', ');
+  // Limit context size: max 12 horses per race to avoid truncation
   const entriesContext = raceEntries && raceEntries.length > 0
     ? `\n\nCONTEXTO DE CARRERAS EN DB (usa esto para mapear nombres y dorsales):\n${
         raceEntries.map(r =>
-          `Carrera ${r.raceNumber}: ${r.entries.map(e => `#${e.dorsal} ${e.horseName}`).join(', ')}`
+          `C${r.raceNumber}: ${r.entries.slice(0, 12).map(e => `#${e.dorsal} ${e.horseName}`).join(', ')}`
         ).join('\n')
       }`
     : '';
@@ -154,7 +155,7 @@ async function callLLM(prompt: string): Promise<string> {
         model: OPENROUTER_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
-        max_tokens: 4096,
+        max_tokens: 8192,
       }),
     });
     if (!res.ok) {
@@ -162,7 +163,14 @@ async function callLLM(prompt: string): Promise<string> {
       throw new Error(`OpenRouter error: ${JSON.stringify(err)}`);
     }
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content ?? '';
+    const choice = data?.choices?.[0];
+    const finishReason = choice?.finish_reason;
+    const content = choice?.message?.content ?? '';
+    if (finishReason === 'length') {
+      // Model hit token limit — append sentinel so parseGeminiResponse knows
+      return content + '__TRUNCATED__';
+    }
+    return content;
   }
 
   // Fallback: Google Generative Language API
@@ -172,7 +180,7 @@ async function callLLM(prompt: string): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
     }),
   });
   if (!res.ok) {
@@ -306,8 +314,13 @@ function parseGeminiResponse(
   rawTranscript?: string
 ): GeminiExtractionResult {
   try {
-    // Strip markdown code fences if present
-    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const wasTruncated = rawText.includes('__TRUNCATED__');
+    // Strip sentinel and markdown code fences
+    const cleaned = rawText
+      .replace('__TRUNCATED__', '')
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return { success: false, inputType, forecasts: [], rawTranscript, error: `Gemini no devolvió JSON válido. Respuesta: ${rawText.slice(0, 200)}` };
@@ -368,6 +381,10 @@ function parseGeminiResponse(
       })).filter((m: RawExtractedMark) => m.rawName.length > 0),
     })).filter((f: RawExtractedForecast) => f.raceNumber > 0 && f.marks.length > 0);
 
+    const truncatedWarning = wasTruncated && forecasts.length > 0
+      ? `⚠️ Respuesta parcial (texto muy largo) — se recuperaron ${forecasts.length} carrera(s). Verifica que estén todas las carreras esperadas.`
+      : undefined;
+
     return {
       success: forecasts.length > 0,
       inputType,
@@ -375,7 +392,9 @@ function parseGeminiResponse(
       meetingNumber: parsed.meetingNumber ?? undefined,
       forecasts,
       rawTranscript,
-      error: forecasts.length === 0 ? 'No se detectaron pronósticos en el contenido.' : undefined,
+      error: forecasts.length === 0
+        ? (wasTruncated ? 'Respuesta truncada sin datos recuperables. Divide el texto por secciones e intenta de nuevo.' : 'No se detectaron pronósticos en el contenido.')
+        : truncatedWarning,
     };
   } catch {
     return { success: false, inputType, forecasts: [], rawTranscript, error: 'Error al parsear respuesta de Gemini.' };

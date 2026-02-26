@@ -44,6 +44,7 @@ interface ProcessResult {
   contentHash: string;
   alreadyIngested: boolean;
   rawTranscript: string | null;
+  warning?: string | null;
 }
 
 interface Meeting {
@@ -383,6 +384,11 @@ export default function IntelligencePage() {
         {/* ── Step 2: Comparison table ── */}
         {result && !published && (
           <>
+            {result.warning && (
+              <div className="bg-yellow-950/40 border border-yellow-800/50 rounded-xl px-4 py-3 text-sm text-yellow-400">
+                {result.warning}
+              </div>
+            )}
             {result.alreadyIngested && (
               <div className="bg-yellow-950/40 border border-yellow-800/50 rounded-xl px-4 py-3 text-sm text-yellow-400">
                 ⚠️ Este contenido ya fue ingresado anteriormente. Puedes revisarlo pero no se guardará duplicado.

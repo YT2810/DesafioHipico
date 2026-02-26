@@ -173,6 +173,7 @@ export async function POST(req: NextRequest) {
     contentHash,
     alreadyIngested: !!existing,
     rawTranscript: result.rawTranscript ?? null,
+    warning: result.error ?? null,
   });
   } catch (err) {
     console.error('[intelligence/process]', err);
