@@ -16,7 +16,7 @@ export interface IForecastMark {
   preferenceOrder: number;
   horseName: string;
   dorsalNumber?: number;
-  label: ForecastLabel;
+  label?: ForecastLabel;
   note?: string;
 }
 
@@ -50,7 +50,7 @@ const ForecastMarkSchema = new Schema<IForecastMark>(
     preferenceOrder: { type: Number, required: true, min: 1, max: 5 },
     horseName: { type: String, required: true, trim: true },
     dorsalNumber: { type: Number },
-    label: { type: String, enum: FORECAST_LABELS, required: true },
+    label: { type: String, enum: [...FORECAST_LABELS, null, undefined] },
     note: { type: String, trim: true, maxlength: 200 },
   },
   { _id: false }

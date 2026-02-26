@@ -5,13 +5,12 @@ export type ExpertForecastStatus = 'pending_review' | 'published' | 'rejected';
 
 export interface IExpertMark {
   preferenceOrder: number;
-  hasExplicitOrder?: boolean;
-  rawName: string;
+  rawName?: string;
   rawLabel?: string;
   resolvedHorseName?: string;
   resolvedEntryId?: Types.ObjectId;
   dorsalNumber?: number;
-  label: ForecastLabel;
+  label?: ForecastLabel;
   matchConfidence: number;
 }
 
@@ -43,13 +42,12 @@ export interface IExpertForecast extends Document {
 const ExpertMarkSchema = new Schema<IExpertMark>(
   {
     preferenceOrder: { type: Number, required: true, min: 1, max: 5 },
-    hasExplicitOrder: { type: Boolean },
-    rawName: { type: String, required: true, trim: true },
+    rawName: { type: String, trim: true },
     rawLabel: { type: String, trim: true },
     resolvedHorseName: { type: String, trim: true },
     resolvedEntryId: { type: Schema.Types.ObjectId, ref: 'Entry' },
     dorsalNumber: { type: Number },
-    label: { type: String, enum: FORECAST_LABELS, required: true },
+    label: { type: String, enum: [...FORECAST_LABELS, null, undefined] },
     matchConfidence: { type: Number, default: 1.0, min: 0, max: 1 },
   },
   { _id: false }

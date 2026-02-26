@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
         resolvedHorseName: m.resolvedHorseName ?? undefined,
         resolvedEntryId: m.resolvedEntryId ? new Types.ObjectId(m.resolvedEntryId) : undefined,
         dorsalNumber: m.dorsalNumber ?? undefined,
-        label: (m.label && VALID_LABELS.includes(m.label)) ? m.label : 'Casi Fijo',
+        label: (m.label && VALID_LABELS.includes(m.label)) ? m.label : undefined,
         matchConfidence: m.matchConfidence ?? 1.0,
       }));
 
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
           preferenceOrder: m.preferenceOrder,
           horseName: m.resolvedHorseName ?? m.rawName ?? (m.dorsalNumber ? `Dorsal ${m.dorsalNumber}` : null),
           dorsalNumber: m.dorsalNumber ?? undefined,
-          label: (VALID_LABELS.includes(m.label as any) ? m.label : 'Casi Fijo') as any,
+          label: (VALID_LABELS.includes(m.label as any) ? m.label : undefined) as any,
           note: '',
         }))
         .filter(m => m.horseName);

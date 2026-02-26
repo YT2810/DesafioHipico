@@ -465,20 +465,6 @@ export default function IntelligencePage() {
                               <span className="text-xs text-purple-400 border border-purple-800 rounded px-1 py-0.5 leading-none font-mono" title="Etiqueta original del pronosticador">{mark.rawLabel}</span>
                             )}
                           </div>
-                          <select
-                            value={mark.label ?? ''}
-                            onChange={e => updateMark(fcIdx, markIdx, 'label', e.target.value || null)}
-                            className={`text-xs bg-gray-800 border rounded-lg px-2 py-1 focus:outline-none ${
-                              mark.label === 'Línea' ? 'border-blue-700 text-blue-300' :
-                              mark.label ? 'border-gray-600 text-gray-300' :
-                              'border-gray-800 text-gray-600'
-                            }`}
-                          >
-                            <option value="">— sin etiqueta —</option>
-                            {FORECAST_LABELS.map(l => (
-                              <option key={l} value={l}>{l}</option>
-                            ))}
-                          </select>
                         </div>
 
                         {/* Right: resolved DB entry */}
