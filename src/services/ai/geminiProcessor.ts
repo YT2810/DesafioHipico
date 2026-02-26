@@ -9,10 +9,15 @@
 
 import { FORECAST_LABELS, ForecastLabel } from '@/models/Forecast';
 
-const GEMINI_API_KEY = process.env.GOOGLE_AI_KEY ?? '';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
+const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY ?? '';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
-const GEMINI_TEXT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-const GEMINI_VISION_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+const USE_OPENROUTER = !!OPENROUTER_API_KEY;
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GEMINI_TEXT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GOOGLE_AI_KEY}`;
 
 
 export type InputType = 'youtube' | 'social_text' | 'image_ocr';
@@ -106,35 +111,114 @@ export interface RaceEntriesContext {
   entries: RaceEntryItem[];
 }
 
+// ─── Core LLM caller (OpenRouter or Google direct) ────────────────────────────
+
+async function callLLM(prompt: string): Promise<string> {
+  if (USE_OPENROUTER) {
+    const res = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://desafiohipico.com',
+        'X-Title': 'Desafío Hípico',
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 4096,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`OpenRouter error: ${JSON.stringify(err)}`);
+    }
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? '';
+  }
+
+  // Fallback: Google Generative Language API
+  if (!GOOGLE_AI_KEY) throw new Error('No AI key configured. Set OPENROUTER_API_KEY or GOOGLE_AI_KEY.');
+  const res = await fetch(GEMINI_TEXT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Gemini API error: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+async function callLLMVision(prompt: string, imageBase64: string, mimeType: string): Promise<string> {
+  if (USE_OPENROUTER) {
+    const res = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://desafiohipico.com',
+        'X-Title': 'Desafío Hípico',
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          ],
+        }],
+        temperature: 0.1,
+        max_tokens: 8192,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`OpenRouter vision error: ${JSON.stringify(err)}`);
+    }
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? '';
+  }
+
+  // Fallback: Google direct (vision)
+  if (!GOOGLE_AI_KEY) throw new Error('No AI key configured.');
+  const res = await fetch(GEMINI_TEXT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: mimeType, data: imageBase64 } },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Gemini Vision error: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processText(
   text: string,
   raceEntries?: RaceEntriesContext[]
 ): Promise<GeminiExtractionResult> {
-  if (!GEMINI_API_KEY) {
-    return { success: false, inputType: 'social_text', forecasts: [], error: 'GOOGLE_AI_KEY no configurado.' };
-  }
-
   const prompt = buildPrompt(text, raceEntries);
-
   try {
-    const res = await fetch(GEMINI_TEXT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { success: false, inputType: 'social_text', forecasts: [], error: `Gemini API error: ${JSON.stringify(err)}` };
-    }
-
-    const data = await res.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const rawText = await callLLM(prompt);
     return parseGeminiResponse(rawText, 'social_text', text);
   } catch (e) {
     return { success: false, inputType: 'social_text', forecasts: [], error: e instanceof Error ? e.message : 'Error desconocido' };
@@ -146,34 +230,9 @@ export async function processImage(
   mimeType: string,
   raceEntries?: RaceEntriesContext[]
 ): Promise<GeminiExtractionResult> {
-  if (!GEMINI_API_KEY) {
-    return { success: false, inputType: 'image_ocr', forecasts: [], error: 'GOOGLE_AI_KEY no configurado.' };
-  }
-
   const prompt = buildPrompt('(contenido extraído de la imagen adjunta)', raceEntries);
-
   try {
-    const res = await fetch(GEMINI_VISION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: imageBase64 } },
-          ],
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { success: false, inputType: 'image_ocr', forecasts: [], error: `Gemini Vision error: ${JSON.stringify(err)}` };
-    }
-
-    const data = await res.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const rawText = await callLLMVision(prompt, imageBase64, mimeType);
     return parseGeminiResponse(rawText, 'image_ocr');
   } catch (e) {
     return { success: false, inputType: 'image_ocr', forecasts: [], error: e instanceof Error ? e.message : 'Error desconocido' };
@@ -184,26 +243,18 @@ export async function processYouTube(
   url: string,
   raceEntries?: RaceEntriesContext[]
 ): Promise<GeminiExtractionResult> {
-  if (!GEMINI_API_KEY) {
-    return { success: false, inputType: 'youtube', forecasts: [], error: 'GOOGLE_AI_KEY no configurado.' };
-  }
-
   const videoId = extractYouTubeId(url);
   if (!videoId) {
     return { success: false, inputType: 'youtube', forecasts: [], error: 'URL de YouTube inválida.' };
   }
 
   const transcript = await fetchYouTubeTranscript(videoId);
-  if (!transcript) {
-    const prompt = buildPrompt(
-      `Video de YouTube: ${url}\n\nNo se pudo obtener transcripción automática. Analiza el título/descripción si es posible.`,
-      raceEntries
-    );
-    return processTextDirect(prompt, 'youtube', url);
-  }
+  const content = transcript
+    ? `TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`
+    : `Video de YouTube: ${url}\n\nNo se pudo obtener transcripción automática.`;
 
-  const prompt = buildPrompt(`TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`, raceEntries);
-  return processTextDirect(prompt, 'youtube', transcript);
+  const prompt = buildPrompt(content, raceEntries);
+  return processTextDirect(prompt, 'youtube', transcript ?? url);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -214,27 +265,13 @@ async function processTextDirect(
   rawTranscript?: string
 ): Promise<GeminiExtractionResult> {
   try {
-    const res = await fetch(GEMINI_TEXT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { success: false, inputType, forecasts: [], error: `Gemini error: ${JSON.stringify(err)}` };
-    }
-
-    const data = await res.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const rawText = await callLLM(prompt);
     return parseGeminiResponse(rawText, inputType, rawTranscript);
   } catch (e) {
-    return { success: false, inputType, forecasts: [], error: e instanceof Error ? e.message : 'Error desconocido' };
+    return { success: false, inputType, forecasts: [], rawTranscript, error: e instanceof Error ? e.message : 'Error desconocido' };
   }
 }
+
 
 function parseGeminiResponse(
   rawText: string,
