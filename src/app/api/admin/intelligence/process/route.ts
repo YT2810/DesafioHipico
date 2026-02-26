@@ -86,14 +86,14 @@ export async function POST(req: NextRequest) {
   // ── 2. Detect input type and call Gemini ──────────────────────────────────
   let result;
   if (isYouTubeUrl(input)) {
-    result = await processYouTube(input, raceEntries);
+    result = await processYouTube(input);
   } else if (isBase64Image(input)) {
     const [header, base64data] = input.split(',');
     const mimeMatch = header.match(/data:(image\/[a-z]+);base64/);
     const mimeType = mimeMatch?.[1] ?? 'image/jpeg';
-    result = await processImage(base64data, mimeType, raceEntries);
+    result = await processImage(base64data, mimeType);
   } else {
-    result = await processText(input, raceEntries);
+    result = await processText(input);
   }
 
   if (!result.success) {
@@ -144,6 +144,7 @@ export async function POST(req: NextRequest) {
 
       return {
         raceNumber: fc.raceNumber,
+        hasOrder: fc.hasOrder,
         expertName: fc.expertName ?? null,
         raceId: race ? (race as any)._id.toString() : null,
         marks: resolvedMarks,

@@ -9,7 +9,6 @@ type InputType = 'youtube' | 'social_text' | 'image_ocr';
 
 interface ResolvedMark {
   preferenceOrder: number;
-  hasExplicitOrder?: boolean;
   rawName: string;
   rawLabel?: string | null;
   resolvedHorseName: string | null;
@@ -27,6 +26,7 @@ interface DbEntry {
 
 interface ResolvedForecast {
   raceNumber: number;
+  hasOrder: boolean;
   expertName: string | null;
   raceId: string | null;
   marks: ResolvedMark[];
@@ -413,8 +413,15 @@ export default function IntelligencePage() {
                 const matchBg = matchPct >= 70 ? 'bg-green-900/30 border-green-800/50' : matchPct >= 40 ? 'bg-yellow-900/30 border-yellow-800/50' : 'bg-red-900/30 border-red-800/50';
                 return (
                 <div key={fcIdx} className="border border-gray-700 rounded-xl overflow-hidden">
-                  <div className="bg-gray-800 px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-white">Carrera {fc.raceNumber}</span>
+                  <div className="bg-gray-800 px-4 py-2 flex items-center justify-between gap-2 flex-wrap" title={fc.hasOrder ? 'El pronosticador indicó orden de preferencia' : 'Sin orden de preferencia explícito — son opciones equivalentes'}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">Carrera {fc.raceNumber}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${
+                        fc.hasOrder ? 'text-blue-400 border-blue-800 bg-blue-950/40' : 'text-gray-500 border-gray-700'
+                      }`}>
+                        {fc.hasOrder ? 'con orden' : 'sin orden'}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       {fc.dbEntries.length > 0 ? (
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${matchBg} ${matchColor}`}>
@@ -451,9 +458,6 @@ export default function IntelligencePage() {
                             )}
                             {mark.rawLabel && (
                               <span className="text-xs text-purple-400 border border-purple-800 rounded px-1 py-0.5 leading-none font-mono" title="Etiqueta original del pronosticador">{mark.rawLabel}</span>
-                            )}
-                            {mark.hasExplicitOrder === false && (
-                              <span className="text-xs text-amber-600 border border-amber-800 rounded px-1 py-0.5 leading-none" title="Orden inferido por posición en el texto">~orden</span>
                             )}
                           </div>
                           <select

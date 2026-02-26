@@ -7,7 +7,6 @@
  * Returns structured forecast data ready for human review before publishing.
  */
 
-import { FORECAST_LABELS, ForecastLabel } from '@/models/Forecast';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY ?? '';
@@ -24,16 +23,14 @@ export type InputType = 'youtube' | 'social_text' | 'image_ocr';
 
 export interface RawExtractedMark {
   preferenceOrder: number;
-  hasExplicitOrder?: boolean;
   rawName: string;
   rawLabel?: string;
   dorsalNumber?: number;
-  label?: ForecastLabel;
-  note?: string;
 }
 
 export interface RawExtractedForecast {
   raceNumber: number;
+  hasOrder: boolean;
   expertName?: string;
   marks: RawExtractedMark[];
 }
@@ -50,80 +47,23 @@ export interface GeminiExtractionResult {
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
-function buildPrompt(content: string, raceEntries?: RaceEntriesContext[]): string {
-  const labelsStr = FORECAST_LABELS.join(', ');
-  // Limit context size: max 12 horses per race to avoid truncation
-  const entriesContext = raceEntries && raceEntries.length > 0
-    ? `\n\nCONTEXTO DE CARRERAS EN DB (usa esto para mapear nombres y dorsales):\n${
-        raceEntries.map(r =>
-          `C${r.raceNumber}: ${r.entries.slice(0, 12).map(e => `#${e.dorsal} ${e.horseName}`).join(', ')}`
-        ).join('\n')
-      }`
-    : '';
+function buildPrompt(content: string): string {
+  return `Eres un extractor de datos. Convierte este texto de pronósticos hípicos a JSON. Extrae SOLO lo que está escrito, sin interpretar ni agregar nada.
 
-  return `Eres un asistente de extracción de pronósticos hípicos venezolanos. Tu única tarea es extraer la información tal como está en el texto — NO interpretar, NO normalizar, NO cambiar etiquetas.
+CAMPOS:
+- raceNumber: número entero de la carrera. Convierte ordinales: "primera"=1, "segunda"=2, "quinta"=5, etc.
+- dorsalNumber: número de dorsal si está explícito ("el 4", "#7", "dorsal 3"). Si no hay, omite el campo.
+- rawName: nombre del caballo EXACTAMENTE como aparece en el texto.
+- rawLabel: etiqueta exacta del pronosticador ("SF", "F", "fijo", "opción", "bat", "CF", lo que sea). Si no hay etiqueta, omite el campo.
+- hasOrder: true si el texto indica jerarquía explícita entre los caballos de esa carrera (números, "primero"/"segundo", etc.). false si son opciones equivalentes sin orden.
+- preferenceOrder: 1 para el primero mencionado, 2 para el segundo, etc. Máximo 5 por carrera.
+- Excluir descartes del JSON.
+- meetingNumber: número de reunión si se menciona, si no null.
 
-━━━ CAMPO rawLabel ━━━
-Extrae la etiqueta/calificación EXACTA que usa el pronosticador, en sus propias palabras.
-Ejemplos: "SF", "F", "CE", "fijo", "línea", "super fijo", "especial", "BD", "bat", "opción", "casi", o lo que diga el texto.
-Si no hay etiqueta explícita para un caballo, usa null.
-NO traduzcas ni mapees a otra cosa.
+JSON puro sin markdown:
+{"meetingNumber":null,"forecasts":[{"raceNumber":1,"hasOrder":false,"marks":[{"preferenceOrder":1,"dorsalNumber":4,"rawName":"COSMOS","rawLabel":"SF"},{"preferenceOrder":2,"rawName":"NEPTUNO"}]}]}
 
-━━━ CAMPO label (normalizado para puntuación) ━━━
-Este campo se asigna con las siguientes reglas ESTRICTAS:
-• Si rawLabel indica claramente un solo ganador fijo ("fijo", "F", "SF", "línea", "línea fija", "el que va", "seguro") Y es el único con esa etiqueta en la carrera → "Línea"
-• Si varios caballos de la misma carrera tienen etiqueta de "fijo" → todos van como "Casi Fijo" (no puede haber 2 líneas en una carrera)
-• "casi", "casi fijo", "CF", "CE" → "Casi Fijo"
-• "especial", "súper especial", "SE", "super" → "Súper Especial"
-• "dividendo", "BD", "buen dividendo", "paga" → "Buen Dividendo"
-• "batacazo", "bat", "sorpresa", "longshot" → "Batacazo"
-• Sin etiqueta, lista plana sin calificación → null (dejar sin etiqueta, no asumas nada)
-Etiquetas válidas: ${labelsStr}
-
-━━━ CAMPO preferenceOrder / hasExplicitOrder ━━━
-• preferenceOrder: 1 al 5 (1 = mayor preferencia). La "Línea" siempre es 1. Si no hay orden, usa el orden de aparición en el texto.
-• hasExplicitOrder: true si el texto indica orden explícito (numeración, "primero", "luego", etc.). false si es lista sin jerarquía explícita.
-
-━━━ OTRAS REGLAS ━━━
-• Descartes: NO incluir en marks.
-• Extrae dorsalNumber si aparece explícitamente ("#5", "el 5", dorsal).
-• rawName: copia el nombre TAL COMO aparece en el texto.
-• Máximo 5 marcas por carrera.
-• Extrae fecha o número de reunión si se menciona.${entriesContext}
-
-━━━ FORMATO DE RESPUESTA (JSON puro, sin markdown, sin texto extra) ━━━
-{
-  "meetingDate": "YYYY-MM-DD o null",
-  "meetingNumber": número o null,
-  "forecasts": [
-    {
-      "raceNumber": 1,
-      "expertName": "nombre o null",
-      "marks": [
-        {
-          "preferenceOrder": 1,
-          "hasExplicitOrder": true,
-          "rawName": "NOMBRE TAL COMO APARECE",
-          "rawLabel": "SF",
-          "dorsalNumber": 5,
-          "label": "Línea",
-          "note": "comentario opcional o null"
-        },
-        {
-          "preferenceOrder": 2,
-          "hasExplicitOrder": false,
-          "rawName": "OTRO CABALLO",
-          "rawLabel": null,
-          "dorsalNumber": null,
-          "label": null,
-          "note": null
-        }
-      ]
-    }
-  ]
-}
-
-CONTENIDO A ANALIZAR:
+TEXTO:
 ${content}`;
 }
 
@@ -248,10 +188,9 @@ async function callLLMVision(prompt: string, imageBase64: string, mimeType: stri
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processText(
-  text: string,
-  raceEntries?: RaceEntriesContext[]
+  text: string
 ): Promise<GeminiExtractionResult> {
-  const prompt = buildPrompt(text, raceEntries);
+  const prompt = buildPrompt(text);
   try {
     const rawText = await callLLM(prompt);
     return parseGeminiResponse(rawText, 'social_text', text);
@@ -262,10 +201,9 @@ export async function processText(
 
 export async function processImage(
   imageBase64: string,
-  mimeType: string,
-  raceEntries?: RaceEntriesContext[]
+  mimeType: string
 ): Promise<GeminiExtractionResult> {
-  const prompt = buildPrompt('(contenido extraído de la imagen adjunta)', raceEntries);
+  const prompt = buildPrompt('(contenido extraído de la imagen adjunta)');
   try {
     const rawText = await callLLMVision(prompt, imageBase64, mimeType);
     return parseGeminiResponse(rawText, 'image_ocr');
@@ -275,8 +213,7 @@ export async function processImage(
 }
 
 export async function processYouTube(
-  url: string,
-  raceEntries?: RaceEntriesContext[]
+  url: string
 ): Promise<GeminiExtractionResult> {
   const videoId = extractYouTubeId(url);
   if (!videoId) {
@@ -288,7 +225,7 @@ export async function processYouTube(
     ? `TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`
     : `Video de YouTube: ${url}\n\nNo se pudo obtener transcripción automática.`;
 
-  const prompt = buildPrompt(content, raceEntries);
+  const prompt = buildPrompt(content);
   return processTextDirect(prompt, 'youtube', transcript ?? url);
 }
 
@@ -372,13 +309,11 @@ function parseGeminiResponse(
       expertName: f.expertName ?? null,
       marks: (f.marks ?? []).slice(0, 5).map((m: any, idx: number) => ({
         preferenceOrder: m.preferenceOrder ?? idx + 1,
-        hasExplicitOrder: m.hasExplicitOrder ?? false,
         rawName: String(m.rawName ?? '').trim().toUpperCase(),
         rawLabel: m.rawLabel ?? undefined,
         dorsalNumber: m.dorsalNumber ? Number(m.dorsalNumber) : undefined,
-        label: FORECAST_LABELS.includes(m.label) ? m.label as ForecastLabel : (m.label === null ? undefined : FORECAST_LABELS[1] as ForecastLabel),
-        note: m.note ?? undefined,
       })).filter((m: RawExtractedMark) => m.rawName.length > 0),
+      hasOrder: f.hasOrder === true,
     })).filter((f: RawExtractedForecast) => f.raceNumber > 0 && f.marks.length > 0);
 
     const truncatedWarning = wasTruncated && forecasts.length > 0
