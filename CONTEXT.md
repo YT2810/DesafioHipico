@@ -43,8 +43,8 @@ El proyecto **NO es solo Venezuela ni solo hípica**. La arquitectura debe sopor
 | Estilos | Tailwind CSS v4 | Sin `tailwind.config.js`, config en CSS |
 | Lenguaje | TypeScript 5 | Strict mode, 0 errores `tsc --noEmit` |
 | Email | Resend API | Magic links propios, sin adapter de NextAuth |
-| PDF | pdfjs-dist (legacy build) | Server-side únicamente |
-| Deploy | Vercel (pendiente) | Node.js 20+ |
+| PDF | pdf-parse v1.1.1 (CJS, no DOMMatrix) | Server-side únicamente. Importar desde `src/lib/pdf-parse.js` |
+| Deploy | Vercel (activo) | Node.js 20+, auto-deploy en push a `main` |
 
 ---
 
@@ -224,12 +224,18 @@ El proyecto **NO es solo Venezuela ni solo hípica**. La arquitectura debe sopor
 4. Al aprobar: agrega rol `handicapper` al usuario + crea `HandicapperProfile` + notifica usuario
 5. Al rechazar: guarda motivo + notifica usuario
 
-### Ingestión de PDFs INH
+### Ingestión de PDFs (INH + HINAVA)
 1. Admin sube PDF en `/admin/ingest`
-2. `pdfProcessor.ts` extrae texto y parsea: reunión, hipódromo, 11 carreras, ejemplares, jinetes, pesos
-3. Preview antes de confirmar (modo `?preview=true`)
-4. `ingestService.ts` hace upsert idempotente por `{trackId, date, meetingNumber}`
-5. Al confirmar: `notifyNewMeeting()` → todos los usuarios + handicappers reciben notificación
+2. `pdfProcessor.ts` detecta fuente automáticamente (INH = La Rinconada, HINAVA = Valencia) y delega al parser correspondiente
+3. Parser INH: `pdfProcessor.ts` — split por `Carrera Programada:`, parsea header (raceNumber del `distLine` = `1200 mts.5`), entries con anchors medicación + implementos
+4. Parser HINAVA: `src/services/parsers/hinava.ts` — mismo enfoque con ajustes de formato Valencia
+5. **Reglas críticas del parser INH:**
+   - `IMPL_PATTERN = /L\.(?:[A-Z]{1,3}\.)*/` — el `*` (no `+`) permite `L.` solo sin códigos adicionales
+   - El `raceNumber` se extrae de `"1200 mts.5"` (distancia+número pegados), NO del bloque `Carrera Nro:Llamado:`
+   - El strip de chars no-alfanuméricos antes del dorsal maneja PDFs con artefactos
+6. Preview antes de confirmar (modo `?preview=true`)
+7. `ingestService.ts` hace upsert idempotente por `{trackId, date, meetingNumber}`
+8. Al confirmar: `notifyNewMeeting()` → todos los usuarios + handicappers reciben notificación
 
 ### Tasa BCV
 - Almacenada en MongoDB como documento único con `key: 'bcv'`
@@ -278,6 +284,7 @@ El proyecto **NO es solo Venezuela ni solo hípica**. La arquitectura debe sopor
 |--------|------|-------------|
 | GET | `/api/meetings/upcoming?limit=N` | Próximas reuniones |
 | GET | `/api/exchange-rate` | Tasa BCV actual |
+| GET | `/api/programa/[meetingId]` | Inscritos + preview forecasts por reunión |
 
 ### Requieren autenticación
 | Método | Ruta | Descripción |

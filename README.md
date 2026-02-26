@@ -3,7 +3,7 @@
 **Marketplace de pronósticos hípicos para Venezuela.**
 Plataforma freemium donde handicappers publican pronósticos y usuarios los consumen con un sistema de créditos (Golds). Pago vía Pago Móvil venezolano, aprobación manual por staff.
 
-> **Estado actual (Feb 2026):** MVP funcional corriendo en local. Listo para deploy en Vercel + MongoDB Atlas.
+> **Estado actual (Feb 2026):** En producción en Vercel + MongoDB Atlas. Parser INH + HINAVA operativo. Ruta pública `/programa/[meetingId]` activa.
 > Para contexto completo de arquitectura y lógica → ver [`CONTEXT.md`](./CONTEXT.md)
 
 ---
@@ -18,7 +18,7 @@ Plataforma freemium donde handicappers publican pronósticos y usuarios los cons
 | Estilos | Tailwind CSS v4 |
 | Lenguaje | TypeScript 5 |
 | Email | Resend API (magic links sin contraseña) |
-| PDF Parsing | pdfjs-dist (server-side) |
+| PDF Parsing | pdf-parse v1.1.1 (CJS, server-side) |
 | Deploy | Vercel (recomendado) o cualquier Node.js 20+ host |
 
 ---
@@ -86,8 +86,9 @@ src/
 │   │   └── error/page.tsx               # Errores OAuth con mensajes amigables
 │   ├── perfil/page.tsx                   # Perfil: saldo, historial, solicitud handicapper
 │   ├── pronosticos/page.tsx              # Dashboard pronósticos freemium (API real)
+│   ├── programa/[meetingId]/page.tsx    # Pública: inscritos + preview pronósticos con blur/CTA
 │   ├── admin/
-│   │   ├── ingest/page.tsx               # Ingestión PDFs INH (drag & drop + preview)
+│   │   ├── ingest/page.tsx               # Ingestión PDFs INH + HINAVA (drag & drop + preview)
 │   │   ├── topup/page.tsx                # Aprobar/rechazar recargas Pago Móvil
 │   │   ├── handicapper-request/page.tsx  # Aprobar/rechazar solicitudes handicapper
 │   │   ├── users/page.tsx                # Buscar usuarios + asignar/quitar roles
@@ -113,6 +114,7 @@ src/
 │       ├── handicappers/[id]/follow/     # POST: seguir/dejar de seguir
 │       ├── meetings/upcoming/            # GET: próximas reuniones
 │       ├── meetings/[id]/races/          # GET: carreras de una reunión
+│       ├── programa/[meetingId]/         # GET: público — inscritos + preview forecasts
 │       ├── notifications/                # GET: notificaciones del usuario
 │       ├── notifications/read-all/       # POST: marcar todas como leídas
 │       ├── topup/                        # POST/GET: solicitudes de recarga
@@ -140,7 +142,9 @@ src/
 │   ├── ExchangeRate.ts                   # Tasa BCV manual (Bs/USD)
 │   └── Notification.ts                   # Notificaciones in-app (TTL 90 días)
 ├── services/
-│   ├── pdfProcessor.ts                   # Parser PDFs oficiales INH
+│   ├── pdfProcessor.ts                   # Parser PDFs INH + detector de fuente (INH/HINAVA)
+│   ├── parsers/
+│   │   └── hinava.ts                     # Parser PDFs HINAVA (Hipódromo Valencia)
 │   ├── ingestService.ts                  # Upsert idempotente en MongoDB
 │   ├── forecastAccessService.ts          # Lógica freemium + notifyGoldLow
 │   ├── forecastStatsService.ts           # Actualización automática stats handicapper
@@ -194,11 +198,28 @@ src/
 - [x] 16 bancos venezolanos con códigos BCV oficiales en constantes
 - [x] Fix: documentos legacy con `balance: 0` (número) migrados a `{golds:0, diamonds:0}`
 
-### Ingestión de Datos INH
+### Ingestión de Datos
 - [x] Parser PDF INH calibrado al formato real (11 carreras, ejemplares, jinetes, pesos)
+- [x] Parser PDF HINAVA (Hipódromo Valencia) con detección automática de fuente
+- [x] Fix IMPL_PATTERN: acepta `L.` solo (sin códigos adicionales) — corrige caballos con solo látigo
+- [x] Fix dorsal 1: strip de chars no-alfanuméricos antes de detectar inicio de entry
 - [x] Upsert idempotente — mismo PDF no duplica datos
 - [x] UI drag & drop con previsualización antes de confirmar ingestión
 - [x] Modo debug para inspeccionar texto extraído del PDF
+
+### Ruta Pública `/programa/[meetingId]`
+- [x] Muestra todos los inscritos (incluyendo raspados marcados visualmente)
+- [x] Preview borroso de pronósticos con CTA de registro para no-logueados
+- [x] Link desde homepage en cards de próximas reuniones
+- [x] SEO: metadata dinámica por reunión
+
+### UI/UX y SEO
+- [x] Favicon → logo DH (hexágono rojo/amarillo)
+- [x] Open Graph image (Banner dh.png) — miniatura al compartir en WhatsApp/Telegram/Twitter
+- [x] Twitter card `summary_large_image`
+- [x] Abreviaciones VLC/LRC en selector de reuniones de `/pronosticos`
+- [x] SEO metadata en `layout.tsx`: keywords La Rinconada, Valencia, INH, HINAVA
+- [x] Homepage reordenada: próximas reuniones arriba de previews de pronósticos
 
 ### Notificaciones In-App
 - [x] Modelo `Notification` con 12 tipos, TTL 90 días automático (MongoDB TTL index)
@@ -223,25 +244,20 @@ src/
 
 ## 🔜 Pendiente — Próximas Sesiones
 
-### Infraestructura (hacer primero)
-- [ ] **Comprar dominio** — `desafiohipico.com` o similar (Namecheap, Cloudflare Registrar)
-- [ ] **Verificar dominio en Resend** → [resend.com/domains](https://resend.com/domains) para activar magic links
-- [ ] **Deploy en Vercel** — conectar repo GitHub, configurar env vars, agregar callback URL en Google Cloud Console
-- [ ] **Actualizar `AUTH_URL`** a `https://tudominio.com` en producción
+### Alta prioridad
+- [ ] **Ingestor de texto libre con Gemini** — textarea en `/admin/ingest`, mega prompt estandarizado que entiende argot hípico venezolano (línea fija, opciones, combinaciones, descartes). Contexto: inyectar programación (Meeting+Races+Entries) para que el LLM resuelva dorsales/nombres. Preview JSON antes de confirmar ingesta.
+- [ ] **Notificación a seguidores** al publicar pronóstico externo (ghost handicapper)
 
-### Funcionalidades pendientes
+### Media prioridad
+- [ ] **Resultados oficiales INH** — ingestar PDF de resultados, evaluar pronósticos automáticamente, actualizar stats handicapper
+- [ ] **Módulo Pollas** — gestión de jugadas grupales (scope separado)
+
+### Baja prioridad
 - [ ] **Telegram Mini App** — validar `initData` con HMAC-SHA256 en backend (`TELEGRAM_BOT_TOKEN`)
-- [ ] **Resultados oficiales** — ingestar PDF de resultados INH, evaluar pronósticos automáticamente, actualizar stats
 - [ ] **Tasa BCV automática** — scraping diario de bcv.org.ve (actualmente manual)
-- [ ] **Notificaciones push** — Web Push API o Telegram Bot para notificaciones fuera de la app
-- [ ] **Plan VIP handicapper** — usuarios pagan Gold para ver pronósticos VIP de un handicapper específico
-- [ ] **Gaceta Hípica** — historial de ejemplares, estadísticas de caballos por pista
-
-### Futuro / Paralelo
-- [ ] **Módulo Pollas** — gestión de jugadas grupales con dinero real (scope separado, proyecto paralelo)
-- [ ] **AI Handicapper** — ingestión desde YouTube, redes sociales, OCR, audio (stubs listos en `aiHandicapperService.ts`)
-- [ ] **Dividendos** — cargar dividendos oficiales post-carrera
+- [ ] **Notificaciones push** — Web Push API o Telegram Bot
 - [ ] **PWA / App móvil** — instalable en Android/iOS
+- [ ] **AI Handicapper** — ingestión desde YouTube, OCR, audio (stubs en `aiHandicapperService.ts`)
 
 ---
 
