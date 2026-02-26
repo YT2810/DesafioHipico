@@ -251,7 +251,10 @@ export default function IntelligencePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al publicar.');
-      setPublished(true);
+      if (data.errors?.length > 0) {
+        setPublishError(`Publicado parcialmente (${data.savedCount} carreras). Errores: ${data.errors.join(' | ')}`);
+      }
+      setPublished(data.savedCount > 0);
     } catch (e: any) {
       setPublishError(e.message);
     } finally {

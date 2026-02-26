@@ -152,13 +152,19 @@ export async function POST(req: NextRequest) {
       });
 
       // Also upsert a real Forecast so it appears in /pronosticos
-      const forecastMarks = fc.marks.slice(0, 5).map(m => ({
-        preferenceOrder: m.preferenceOrder,
-        horseName: m.resolvedHorseName ?? m.rawName,
-        dorsalNumber: m.dorsalNumber ?? undefined,
-        label: (m.label as any) || '',
-        note: '',
-      }));
+      const forecastMarks = fc.marks.slice(0, 5)
+        .map(m => ({
+          preferenceOrder: m.preferenceOrder,
+          horseName: m.resolvedHorseName ?? m.rawName ?? (m.dorsalNumber ? `Dorsal ${m.dorsalNumber}` : null),
+          dorsalNumber: m.dorsalNumber ?? undefined,
+          label: (VALID_LABELS.includes(m.label as any) ? m.label : 'Casi Fijo') as any,
+          note: '',
+        }))
+        .filter(m => m.horseName);
+      if (forecastMarks.length === 0) {
+        errors.push(`Carrera ${fc.raceNumber}: no hay marcas con nombre o dorsal identificable.`);
+        continue;
+      }
 
       await Forecast.findOneAndUpdate(
         { handicapperId: ghostProfile._id, raceId: raceObjId },
