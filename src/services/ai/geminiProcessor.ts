@@ -24,6 +24,7 @@ export type InputType = 'youtube' | 'social_text' | 'image_ocr';
 
 export interface RawExtractedMark {
   preferenceOrder: number;
+  hasExplicitOrder?: boolean;
   rawName: string;
   dorsalNumber?: number;
   label: ForecastLabel;
@@ -51,7 +52,7 @@ export interface GeminiExtractionResult {
 function buildPrompt(content: string, raceEntries?: RaceEntriesContext[]): string {
   const labelsStr = FORECAST_LABELS.join(', ');
   const entriesContext = raceEntries && raceEntries.length > 0
-    ? `\n\nCONTEXTO DE CARRERAS EN DB (usa esto para mapear nombres):\n${
+    ? `\n\nCONTEXTO DE CARRERAS EN DB (usa esto para mapear nombres y dorsales):\n${
         raceEntries.map(r =>
           `Carrera ${r.raceNumber}: ${r.entries.map(e => `#${e.dorsal} ${e.horseName}`).join(', ')}`
         ).join('\n')
@@ -60,35 +61,47 @@ function buildPrompt(content: string, raceEntries?: RaceEntriesContext[]): strin
 
   return `Eres un experto en pronósticos hípicos venezolanos. Analiza el siguiente contenido y extrae TODOS los pronósticos mencionados.
 
-REGLAS ESTRICTAS:
-1. Extrae la fecha o número de reunión si se menciona (formato YYYY-MM-DD o número entero).
-2. Para cada carrera mencionada, extrae hasta 5 ejemplares en orden de preferencia.
-3. Asigna una etiqueta a cada ejemplar según el lenguaje usado:
-   - "Línea" = favorito claro, seguro, fijo, el que va
-   - "Casi Fijo" = casi seguro, muy probable, casi fija
-   - "Súper Especial" = especial, super especial, destacado
-   - "Buen Dividendo" = dividendo, paga bien, sorpresa controlada
-   - "Batacazo" = batacazo, longshot, sorpresón, paga mucho
-   Etiquetas válidas: ${labelsStr}
-4. Si hay múltiples pronosticadores en el contenido, identifica a cada uno por nombre y agrupa sus pronósticos.
-5. Extrae el número de dorsal si se menciona explícitamente.
-6. Si el nombre del ejemplar es parcial o abreviado, devuélvelo tal cual (rawName).${entriesContext}
+━━━ REGLAS DE ETIQUETAS ━━━
+Asigna EXACTAMENTE la etiqueta que corresponda al lenguaje usado. NO uses "Línea" por defecto.
 
-FORMATO DE RESPUESTA (JSON puro, sin markdown):
+• "Línea" → UN SOLO caballo que el handicapper da como fijo/seguro/ganador. Palabras clave: "fijo", "línea fija", "el que va", "seguro", "ganador". SOLO se aplica a 1 caballo por carrera.
+• "Casi Fijo" → muy probable pero no 100% seguro. Palabras: "casi fijo", "casi seguro", "muy probable", "casi".
+• "Súper Especial" → destacado con énfasis especial. Palabras: "súper especial", "super especial", "especial", "destacado".
+• "Buen Dividendo" → paga bien, sorpresa controlada. Palabras: "buen dividendo", "dividendo", "paga bien", "opción pagadora".
+• "Batacazo" → sorpresa grande, cotización alta. Palabras: "batacazo", "sorpresón", "longshot", "paga muchísimo".
+
+Si el handicapper menciona VARIOS caballos sin calificar ninguno como fijo (ej: "opciones: A, B, C" o una lista sin jerarquía), asigna a TODOS la misma etiqueta "Casi Fijo" — NO "Línea".
+Si menciona "descartes", NO incluyas esos caballos en marks.
+
+━━━ REGLAS DE ORDEN DE PREFERENCIA ━━━
+• preferenceOrder: número del 1 al 5 (1 = mayor preferencia).
+• hasExplicitOrder: true si el texto menciona orden explícito ("primero", "1ro", "antes que", "luego", numeración, etc.). false si el orden es inferido por posición en el texto.
+• Si no hay orden explícito y son "opciones" equivalentes, asigna hasExplicitOrder: false y ordénalos tal como aparecen en el texto (1, 2, 3...).
+• El caballo "Línea" siempre va con preferenceOrder: 1 y hasExplicitOrder: true.
+
+━━━ OTRAS REGLAS ━━━
+1. Extrae la fecha o número de reunión si se menciona.
+2. Extrae el dorsal si se menciona explícitamente (ej: "#5", "el 5", "dorsal 5").
+3. Si hay múltiples pronosticadores, identifica cada uno por nombre.
+4. Devuelve rawName tal como aparece en el texto original (sin corregir).
+5. Máximo 5 marcas por carrera.${entriesContext}
+
+━━━ FORMATO DE RESPUESTA (JSON puro, sin markdown, sin texto extra) ━━━
 {
   "meetingDate": "YYYY-MM-DD o null",
   "meetingNumber": número o null,
   "forecasts": [
     {
       "raceNumber": 1,
-      "expertName": "nombre del pronosticador o null",
+      "expertName": "nombre o null",
       "marks": [
         {
           "preferenceOrder": 1,
-          "rawName": "NOMBRE DEL EJEMPLAR",
+          "hasExplicitOrder": true,
+          "rawName": "NOMBRE TAL COMO APARECE",
           "dorsalNumber": 5,
           "label": "Línea",
-          "note": "comentario opcional"
+          "note": "comentario opcional o null"
         }
       ]
     }
