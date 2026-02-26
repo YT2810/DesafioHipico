@@ -23,7 +23,7 @@ export type InputType = 'youtube' | 'social_text' | 'image_ocr';
 
 export interface RawExtractedMark {
   preferenceOrder: number;
-  rawName: string;
+  rawName?: string;
   rawLabel?: string;
   dorsalNumber?: number;
 }
@@ -261,11 +261,12 @@ function parseGeminiResponse(
   rawTranscript?: string
 ): GeminiExtractionResult {
   try {
+    console.log('[Gemini raw response]', rawText.slice(0, 500));
     const wasTruncated = rawText.includes('__TRUNCATED__');
     // Strip sentinel and markdown code fences
     const cleaned = rawText
       .replace('__TRUNCATED__', '')
-      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/^\s*```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/i, '')
       .trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -319,10 +320,10 @@ function parseGeminiResponse(
       expertName: f.expertName ?? null,
       marks: (f.marks ?? []).slice(0, 5).map((m: any, idx: number) => ({
         preferenceOrder: m.preferenceOrder ?? idx + 1,
-        rawName: String(m.rawName ?? '').trim().toUpperCase(),
+        rawName: m.rawName ? String(m.rawName).trim().toUpperCase() : undefined,
         rawLabel: m.rawLabel ?? undefined,
         dorsalNumber: m.dorsalNumber ? Number(m.dorsalNumber) : undefined,
-      })).filter((m: RawExtractedMark) => m.rawName.length > 0),
+      })).filter((m: any) => (m.rawName && m.rawName.length > 0) || m.dorsalNumber),
       hasOrder: f.hasOrder === true,
     })).filter((f: RawExtractedForecast) => f.raceNumber > 0 && f.marks.length > 0);
 

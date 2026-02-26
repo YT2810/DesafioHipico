@@ -9,7 +9,7 @@ type InputType = 'youtube' | 'social_text' | 'image_ocr';
 
 interface ResolvedMark {
   preferenceOrder: number;
-  rawName: string;
+  rawName?: string;
   rawLabel?: string | null;
   resolvedHorseName: string | null;
   resolvedEntryId: string | null;
@@ -452,9 +452,11 @@ export default function IntelligencePage() {
                             <span className="w-5 h-5 rounded-full bg-gray-700 text-xs flex items-center justify-center font-bold text-gray-300">
                               {mark.preferenceOrder}
                             </span>
-                            <span className="text-sm text-white font-medium">{mark.rawName}</span>
                             {mark.dorsalNumber && (
-                              <span className="text-xs text-gray-500">#{mark.dorsalNumber}</span>
+                              <span className="text-xs font-mono bg-gray-700 text-gray-200 rounded px-1.5 py-0.5">#{mark.dorsalNumber}</span>
+                            )}
+                            {mark.rawName && (
+                              <span className="text-sm text-white font-medium">{mark.rawName}</span>
                             )}
                             {mark.rawLabel && (
                               <span className="text-xs text-purple-400 border border-purple-800 rounded px-1 py-0.5 leading-none font-mono" title="Etiqueta original del pronosticador">{mark.rawLabel}</span>

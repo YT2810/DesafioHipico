@@ -126,8 +126,7 @@ export async function POST(req: NextRequest) {
       const VALID_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', 'Batacazo'];
       const expertMarks = fc.marks.slice(0, 5).map(m => ({
         preferenceOrder: m.preferenceOrder,
-        hasExplicitOrder: m.hasExplicitOrder ?? false,
-        rawName: m.rawName,
+        rawName: m.rawName ?? undefined,
         rawLabel: m.rawLabel ?? undefined,
         resolvedHorseName: m.resolvedHorseName ?? undefined,
         resolvedEntryId: m.resolvedEntryId ? new Types.ObjectId(m.resolvedEntryId) : undefined,
