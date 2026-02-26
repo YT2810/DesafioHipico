@@ -18,11 +18,13 @@ import { Types } from 'mongoose';
 
 interface PublishMark {
   preferenceOrder: number;
+  hasExplicitOrder?: boolean;
   rawName: string;
+  rawLabel?: string;
   resolvedHorseName?: string;
   resolvedEntryId?: string;
   dorsalNumber?: number;
-  label: string;
+  label: string | null;
   matchConfidence: number;
 }
 
@@ -121,13 +123,16 @@ export async function POST(req: NextRequest) {
         raceObjId = (race as any)._id;
       }
 
+      const VALID_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', 'Batacazo'];
       const expertMarks = fc.marks.slice(0, 5).map(m => ({
         preferenceOrder: m.preferenceOrder,
+        hasExplicitOrder: m.hasExplicitOrder ?? false,
         rawName: m.rawName,
+        rawLabel: m.rawLabel ?? undefined,
         resolvedHorseName: m.resolvedHorseName ?? undefined,
         resolvedEntryId: m.resolvedEntryId ? new Types.ObjectId(m.resolvedEntryId) : undefined,
         dorsalNumber: m.dorsalNumber ?? undefined,
-        label: m.label,
+        label: (m.label && VALID_LABELS.includes(m.label)) ? m.label : 'Casi Fijo',
         matchConfidence: m.matchConfidence ?? 1.0,
       }));
 

@@ -15,7 +15,7 @@ interface ResolvedMark {
   resolvedHorseName: string | null;
   resolvedEntryId: string | null;
   dorsalNumber?: number;
-  label: string;
+  label: string | null;
   matchConfidence: number;
 }
 
@@ -94,6 +94,8 @@ export default function IntelligencePage() {
   // Existing experts
   const [existingExperts, setExistingExperts] = useState<ExpertOption[]>([]);
   const [selectedExpertId, setSelectedExpertId] = useState<string>('__new__');
+
+  const [sourceUrl, setSourceUrl] = useState('');
 
   // Publish state
   const [publishing, setPublishing] = useState(false);
@@ -236,11 +238,11 @@ export default function IntelligencePage() {
           expertName: expertName.trim(),
           platform,
           handle: handle.trim() || undefined,
-          link: detectInputType(input) === 'youtube' ? input : undefined,
+          link: sourceUrl.trim() || (detectInputType(input) === 'youtube' ? input : undefined),
           isClaimable: platform !== 'Revista',
           meetingId: selectedMeetingId,
           sourceType: result.inputType,
-          sourceUrl: detectInputType(input) === 'youtube' ? input : undefined,
+          sourceUrl: sourceUrl.trim() || (detectInputType(input) === 'youtube' ? input : undefined),
           rawContent: result.rawTranscript ?? input.slice(0, 2000),
           contentHash: result.contentHash,
           forecasts: editableForecasts,
@@ -279,6 +281,18 @@ export default function IntelligencePage() {
         {/* ── Step 1: Input ── */}
         <section className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-sm font-bold text-white">1. Fuente de contenido</h2>
+
+          {/* Source URL */}
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">URL de la fuente (link del video, imagen, tweet, etc.)</label>
+            <input
+              type="text"
+              value={sourceUrl}
+              onChange={e => setSourceUrl(e.target.value)}
+              placeholder="https://x.com/... o https://youtube.com/... o https://instagram.com/..."
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+            />
+          </div>
 
           {/* Meeting selector */}
           <div>
@@ -437,10 +451,15 @@ export default function IntelligencePage() {
                             )}
                           </div>
                           <select
-                            value={mark.label}
-                            onChange={e => updateMark(fcIdx, markIdx, 'label', e.target.value)}
-                            className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-gray-300 focus:outline-none"
+                            value={mark.label ?? ''}
+                            onChange={e => updateMark(fcIdx, markIdx, 'label', e.target.value || null)}
+                            className={`text-xs bg-gray-800 border rounded-lg px-2 py-1 focus:outline-none ${
+                              mark.label === 'Línea' ? 'border-blue-700 text-blue-300' :
+                              mark.label ? 'border-gray-600 text-gray-300' :
+                              'border-gray-800 text-gray-600'
+                            }`}
                           >
+                            <option value="">— sin etiqueta —</option>
                             {FORECAST_LABELS.map(l => (
                               <option key={l} value={l}>{l}</option>
                             ))}

@@ -28,7 +28,7 @@ export interface RawExtractedMark {
   rawName: string;
   rawLabel?: string;
   dorsalNumber?: number;
-  label: ForecastLabel;
+  label?: ForecastLabel;
   note?: string;
 }
 
@@ -76,12 +76,12 @@ Este campo se asigna con las siguientes reglas ESTRICTAS:
 • "especial", "súper especial", "SE", "super" → "Súper Especial"
 • "dividendo", "BD", "buen dividendo", "paga" → "Buen Dividendo"
 • "batacazo", "bat", "sorpresa", "longshot" → "Batacazo"
-• Sin etiqueta o etiqueta ambigua → "Casi Fijo"
+• Sin etiqueta, lista plana sin calificación → null (dejar sin etiqueta, no asumas nada)
 Etiquetas válidas: ${labelsStr}
 
 ━━━ CAMPO preferenceOrder / hasExplicitOrder ━━━
-• preferenceOrder: 1 al 5 (1 = mayor preferencia). La "Línea" siempre es 1.
-• hasExplicitOrder: true si el texto indica orden explícito (numeración, "primero", "luego", etc.). false si es lista sin jerarquía.
+• preferenceOrder: 1 al 5 (1 = mayor preferencia). La "Línea" siempre es 1. Si no hay orden, usa el orden de aparición en el texto.
+• hasExplicitOrder: true si el texto indica orden explícito (numeración, "primero", "luego", etc.). false si es lista sin jerarquía explícita.
 
 ━━━ OTRAS REGLAS ━━━
 • Descartes: NO incluir en marks.
@@ -107,6 +107,15 @@ Etiquetas válidas: ${labelsStr}
           "dorsalNumber": 5,
           "label": "Línea",
           "note": "comentario opcional o null"
+        },
+        {
+          "preferenceOrder": 2,
+          "hasExplicitOrder": false,
+          "rawName": "OTRO CABALLO",
+          "rawLabel": null,
+          "dorsalNumber": null,
+          "label": null,
+          "note": null
         }
       ]
     }
@@ -305,19 +314,44 @@ function parseGeminiResponse(
     }
 
     let jsonStr = jsonMatch[0];
-    // Attempt to fix truncated JSON by closing open structures
     let parsed: any;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      // Try to salvage partial JSON by truncating at last complete object
-      const lastBrace = jsonStr.lastIndexOf('},');
-      if (lastBrace > 0) {
-        jsonStr = jsonStr.slice(0, lastBrace + 1) + ']}}'; // close marks array, forecast obj, forecasts array, root
-        try { parsed = JSON.parse(jsonStr); } catch { parsed = null; }
+      // Salvage truncated JSON: try progressively shorter cuts until parseable
+      let salvaged = false;
+      // Strategy 1: close at last complete mark object
+      const lastMarkEnd = jsonStr.lastIndexOf('"note"');
+      if (lastMarkEnd > 0) {
+        // find closing brace after last note value
+        const closeAfter = jsonStr.indexOf('}', lastMarkEnd);
+        if (closeAfter > 0) {
+          const candidate = jsonStr.slice(0, closeAfter + 1) + ']}]}';
+          try { parsed = JSON.parse(candidate); salvaged = true; } catch { /* next */ }
+        }
+      }
+      // Strategy 2: cut at last },  boundary
+      if (!salvaged) {
+        const lastBrace = jsonStr.lastIndexOf('},');
+        if (lastBrace > 0) {
+          const candidate = jsonStr.slice(0, lastBrace + 1) + ']}}'; 
+          try { parsed = JSON.parse(candidate); salvaged = true; } catch { /* next */ }
+        }
+      }
+      // Strategy 3: cut at last complete forecast
+      if (!salvaged) {
+        const lastForecast = jsonStr.lastIndexOf('"raceNumber"');
+        const prevForecast = jsonStr.lastIndexOf('"raceNumber"', lastForecast - 1);
+        if (prevForecast > 0) {
+          const cutAt = jsonStr.lastIndexOf('},', lastForecast);
+          if (cutAt > 0) {
+            const candidate = jsonStr.slice(0, cutAt + 1) + ']}}';
+            try { parsed = JSON.parse(candidate); salvaged = true; } catch { /* give up */ }
+          }
+        }
       }
       if (!parsed) {
-        return { success: false, inputType, forecasts: [], rawTranscript, error: `JSON truncado de Gemini. Intenta de nuevo o usa una imagen más pequeña.` };
+        return { success: false, inputType, forecasts: [], rawTranscript, error: `JSON truncado — el texto es demasiado largo. Divide el texto en partes más pequeñas (por ejemplo, por carrera) e inténtalo de nuevo.` };
       }
     }
     const forecasts: RawExtractedForecast[] = (parsed.forecasts ?? []).map((f: any) => ({
@@ -325,9 +359,11 @@ function parseGeminiResponse(
       expertName: f.expertName ?? null,
       marks: (f.marks ?? []).slice(0, 5).map((m: any, idx: number) => ({
         preferenceOrder: m.preferenceOrder ?? idx + 1,
+        hasExplicitOrder: m.hasExplicitOrder ?? false,
         rawName: String(m.rawName ?? '').trim().toUpperCase(),
+        rawLabel: m.rawLabel ?? undefined,
         dorsalNumber: m.dorsalNumber ? Number(m.dorsalNumber) : undefined,
-        label: FORECAST_LABELS.includes(m.label) ? m.label : 'Línea',
+        label: FORECAST_LABELS.includes(m.label) ? m.label as ForecastLabel : (m.label === null ? undefined : FORECAST_LABELS[1] as ForecastLabel),
         note: m.note ?? undefined,
       })).filter((m: RawExtractedMark) => m.rawName.length > 0),
     })).filter((f: RawExtractedForecast) => f.raceNumber > 0 && f.marks.length > 0);
