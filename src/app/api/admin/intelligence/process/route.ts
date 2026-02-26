@@ -133,7 +133,22 @@ export async function POST(req: NextRequest) {
       }
 
       const resolvedMarks = fc.marks.map(mark => {
-        const match = findBestMatch(mark.rawName, dbEntries.map(e => ({ dorsal: e.dorsal, horseName: e.horseName })));
+        // Priority 1: exact dorsal match
+        if (mark.dorsalNumber) {
+          const byDorsal = dbEntries.find(e => e.dorsal === mark.dorsalNumber);
+          if (byDorsal) {
+            return {
+              ...mark,
+              resolvedHorseName: byDorsal.horseName,
+              resolvedEntryId: byDorsal.entryId,
+              matchConfidence: 1.0,
+            };
+          }
+        }
+        // Priority 2: name similarity
+        const match = mark.rawName
+          ? findBestMatch(mark.rawName, dbEntries.map(e => ({ dorsal: e.dorsal, horseName: e.horseName })))
+          : null;
         return {
           ...mark,
           resolvedHorseName: match?.horseName ?? null,

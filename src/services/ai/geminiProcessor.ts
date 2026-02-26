@@ -48,20 +48,30 @@ export interface GeminiExtractionResult {
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
 function buildPrompt(content: string): string {
-  return `Eres un extractor de datos. Convierte este texto de pronósticos hípicos a JSON. Extrae SOLO lo que está escrito, sin interpretar ni agregar nada.
+  return `Eres un extractor de datos de pronósticos hípicos. Convierte el texto a JSON extrayendo SOLO lo escrito.
 
-CAMPOS:
-- raceNumber: número entero de la carrera. Convierte ordinales: "primera"=1, "segunda"=2, "quinta"=5, etc.
-- dorsalNumber: número de dorsal si está explícito ("el 4", "#7", "dorsal 3"). Si no hay, omite el campo.
-- rawName: nombre del caballo EXACTAMENTE como aparece en el texto.
-- rawLabel: etiqueta exacta del pronosticador ("SF", "F", "fijo", "opción", "bat", "CF", lo que sea). Si no hay etiqueta, omite el campo.
-- hasOrder: true si el texto indica jerarquía explícita entre los caballos de esa carrera (números, "primero"/"segundo", etc.). false si son opciones equivalentes sin orden.
-- preferenceOrder: 1 para el primero mencionado, 2 para el segundo, etc. Máximo 5 por carrera.
-- Excluir descartes del JSON.
-- meetingNumber: número de reunión si se menciona, si no null.
+FORMATOS POSIBLES (pueden mezclarse en el mismo texto):
+A) Solo dorsales con orden: "1) 3/2/1/4" → carrera 1, dorsales 3,2,1,4 en ese orden de preferencia.
+B) Dorsal con sufijo-etiqueta pegado: "8Oro", "1Fijo", "5SF", "3F" → dorsalNumber=8, rawLabel="Oro". Separar el número del sufijo.
+C) Nombre con etiqueta: "COSMOS (SF)" o "COSMOS fijo" → rawName="COSMOS", rawLabel="SF".
+D) Solo nombre sin etiqueta: "NEPTUNO" → rawName="NEPTUNO", sin rawLabel.
+E) Listas separadas por / o , o espacios.
+
+CAMPOS POR MARCA:
+- preferenceOrder: posición en la lista (1=primero, 2=segundo…). Máx 5.
+- dorsalNumber: número de dorsal si está explícito. Omitir si no hay.
+- rawName: nombre del caballo si aparece. Omitir si solo hay dorsal.
+- rawLabel: sufijo/etiqueta exacta del pronosticador ("Oro","SF","F","fijo","opción", etc.). Omitir si no hay.
+
+POR CARRERA:
+- raceNumber: entero. "1)" o "primera" = 1, etc.
+- hasOrder: true si el orden de la lista indica preferencia (listas con /, numeradas, "primero/segundo"). false si son equivalentes.
+- (VIP) u otras anotaciones de la carrera: ignorar, no afectan los campos.
+
+REGLA IMPORTANTE: Si una lista es "3/2/1/4" con orden explícito por posición → hasOrder: true.
 
 JSON puro sin markdown:
-{"meetingNumber":null,"forecasts":[{"raceNumber":1,"hasOrder":false,"marks":[{"preferenceOrder":1,"dorsalNumber":4,"rawName":"COSMOS","rawLabel":"SF"},{"preferenceOrder":2,"rawName":"NEPTUNO"}]}]}
+{"meetingNumber":null,"forecasts":[{"raceNumber":1,"hasOrder":true,"marks":[{"preferenceOrder":1,"dorsalNumber":3},{"preferenceOrder":2,"dorsalNumber":2},{"preferenceOrder":3,"dorsalNumber":1,"rawLabel":"Oro"},{"preferenceOrder":4,"dorsalNumber":4}]}]}
 
 TEXTO:
 ${content}`;
