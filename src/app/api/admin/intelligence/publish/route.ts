@@ -64,11 +64,8 @@ export async function POST(req: NextRequest) {
 
   await dbConnect();
 
-  // ── 1. Deduplication check ────────────────────────────────────────────────
-  const existing = await ExpertForecast.findOne({ contentHash: body.contentHash }).lean();
-  if (existing) {
-    return NextResponse.json({ error: 'Este contenido ya fue ingresado anteriormente.' }, { status: 409 });
-  }
+  // ── 1. Deduplication check (by source+meeting, not by hash) ───────────────
+  // Hash-based dedup is done in /process; here we allow re-publish to update.
 
   // ── 2. Upsert ExpertSource (ghost profile) ────────────────────────────────
   const platform = body.platform || 'Otro';
@@ -135,21 +132,24 @@ export async function POST(req: NextRequest) {
         matchConfidence: m.matchConfidence ?? 1.0,
       }));
 
-      // Save ExpertForecast for audit/history
-      const doc = await ExpertForecast.create({
-        expertSourceId: expertSource._id,
-        meetingId: meetingObjId,
-        raceId: raceObjId,
-        raceNumber: fc.raceNumber,
-        marks: expertMarks,
-        sourceUrl: body.sourceUrl ?? undefined,
-        sourceType: body.sourceType || 'social_text',
-        rawContent: body.rawContent ?? undefined,
-        contentHash: body.contentHash,
-        status: 'published',
-        publishedAt: new Date(),
-        reviewedBy: reviewerId,
-      });
+      // Upsert ExpertForecast — one per expert+meeting+race
+      await ExpertForecast.findOneAndUpdate(
+        { expertSourceId: expertSource._id, meetingId: meetingObjId, raceNumber: fc.raceNumber },
+        {
+          $set: {
+            raceId: raceObjId,
+            marks: expertMarks,
+            sourceUrl: body.sourceUrl ?? undefined,
+            sourceType: body.sourceType || 'social_text',
+            rawContent: body.rawContent ?? undefined,
+            contentHash: body.contentHash,
+            status: 'published',
+            publishedAt: new Date(),
+            reviewedBy: reviewerId,
+          },
+        },
+        { upsert: true, new: true }
+      );
 
       // Also upsert a real Forecast so it appears in /pronosticos
       const forecastMarks = fc.marks.slice(0, 5)
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
         { upsert: true, new: true }
       );
 
-      saved.push(doc._id.toString());
+      saved.push(`C${fc.raceNumber}`);
     } catch (e: any) {
       errors.push(`Carrera ${fc.raceNumber}: ${e.message}`);
     }

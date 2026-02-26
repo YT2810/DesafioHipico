@@ -394,7 +394,7 @@ export default function IntelligencePage() {
             )}
             {result.alreadyIngested && (
               <div className="bg-yellow-950/40 border border-yellow-800/50 rounded-xl px-4 py-3 text-sm text-yellow-400">
-                ⚠️ Este contenido ya fue ingresado anteriormente. Puedes revisarlo pero no se guardará duplicado.
+                ⚠️ Este contenido ya fue ingresado anteriormente. Si publicas, se actualizarán los pronósticos existentes.
               </div>
             )}
 
@@ -612,7 +612,7 @@ export default function IntelligencePage() {
 
               <button
                 onClick={handlePublish}
-                disabled={publishing || result.alreadyIngested || !expertName.trim() || !selectedMeetingId}
+                disabled={publishing || !expertName.trim() || !selectedMeetingId}
                 className="w-full py-3 rounded-xl text-sm font-bold text-black disabled:opacity-40 transition-opacity"
                 style={{ backgroundColor: GOLD }}
               >

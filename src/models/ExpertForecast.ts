@@ -93,8 +93,8 @@ const ExpertForecastSchema = new Schema<IExpertForecast>(
   { timestamps: true }
 );
 
-ExpertForecastSchema.index({ contentHash: 1 }, { unique: true });
-ExpertForecastSchema.index({ expertSourceId: 1, meetingId: 1 });
+ExpertForecastSchema.index({ expertSourceId: 1, raceNumber: 1, meetingId: 1 }, { unique: true });
+ExpertForecastSchema.index({ contentHash: 1 });
 ExpertForecastSchema.index({ meetingId: 1, status: 1 });
 
 export default mongoose.models.ExpertForecast ||
