@@ -3,7 +3,7 @@
 **Marketplace de pronósticos hípicos para Venezuela.**
 Plataforma freemium donde handicappers publican pronósticos y usuarios los consumen con un sistema de créditos (Golds). Pago vía Pago Móvil venezolano, aprobación manual por staff.
 
-> **Estado actual (Feb 2026):** En producción en Vercel + MongoDB Atlas. Parser INH + HINAVA operativo. Ruta pública `/programa/[meetingId]` activa.
+> **Estado actual (Feb 2026):** En producción en Vercel + MongoDB Atlas. Parser INH + HINAVA operativo. Ingestor Gemini operativo (`/admin/intelligence`). Ruta pública `/programa/[meetingId]` activa.
 > Para contexto completo de arquitectura y lógica → ver [`CONTEXT.md`](./CONTEXT.md)
 
 ---
@@ -207,6 +207,22 @@ src/
 - [x] UI drag & drop con previsualización antes de confirmar ingestión
 - [x] Modo debug para inspeccionar texto extraído del PDF
 
+### Ingestor Gemini (`/admin/intelligence`)
+- [x] Prompt mínimo: extrae solo `raceNumber`, `dorsalNumber`, `rawName`, `rawLabel`, `hasOrder` — sin interpretación, sin contexto de DB en el modelo
+- [x] Soporte de formato dorsal-only (`8Oro`, `3/5/7`) y listas con barra separadora
+- [x] Resolución de caballos: match exacto por dorsal (100% confianza) → fallback similitud de nombre
+- [x] Tabla de comparación: raw del pronosticador vs. nombre resuelto en DB con barra de confianza
+- [x] Corrección manual: selector de caballo si no resuelve automáticamente
+- [x] Badge `con orden` / `sin orden` por carrera
+- [x] Etiqueta raw del pronosticador como badge informativo (no se normaliza)
+- [x] Etiqueta (`label`) completamente opcional — solo relevante cuando es `Línea` (única elección)
+- [x] Deduplicación por `contentHash` en `/process` (aviso al admin, no bloquea re-publicar)
+- [x] Upsert por `(expertSourceId + raceNumber + meetingId)` — re-publicar actualiza, no duplica
+- [x] Ghost `HandicapperProfile` + `ExpertSource` creados automáticamente (el experto puede reclamarlo)
+- [x] Guarda `ExpertForecast` (historial/auditoría) + `Forecast` (visible en `/pronosticos`)
+- [x] Manejo de JSON truncado con salvage progresivo + sentinel `__TRUNCATED__`
+- [x] Fallback de nombre: si dorsal no resuelve a DB → `"Dorsal N"` (no falla la validación)
+
 ### Ruta Pública `/programa/[meetingId]`
 - [x] Muestra todos los inscritos (incluyendo raspados marcados visualmente)
 - [x] Preview borroso de pronósticos con CTA de registro para no-logueados
@@ -245,8 +261,10 @@ src/
 ## 🔜 Pendiente — Próximas Sesiones
 
 ### Alta prioridad
-- [ ] **Ingestor de texto libre con Gemini** — textarea en `/admin/ingest`, mega prompt estandarizado que entiende argot hípico venezolano (línea fija, opciones, combinaciones, descartes). Contexto: inyectar programación (Meeting+Races+Entries) para que el LLM resuelva dorsales/nombres. Preview JSON antes de confirmar ingesta.
+- [ ] **Manejo de retirados** — cuando un caballo se retira antes de la carrera, los pronósticos que lo incluyen deben marcarse y mostrarse de forma especial (no afectar las estadísticas del handicapper negativamente).
+- [ ] **Botón de compartir pronósticos** — para handicappers y usuarios. Compartir pronóstico propio o de otro. Incentivo: ganar monedas internas (Golds) por cada compartido que traiga un nuevo usuario, con un límite diario. Generar link/card visual para WhatsApp y Telegram.
 - [ ] **Notificación a seguidores** al publicar pronóstico externo (ghost handicapper)
+- [ ] **Envío en lote del ingestor Gemini** — opción de enviar todas las carreras de una sola pasada (texto completo) y también mantener el modo actual carrera a carrera. El admin elige el modo según la fuente.
 
 ### Media prioridad
 - [ ] **Resultados oficiales INH** — ingestar PDF de resultados, evaluar pronósticos automáticamente, actualizar stats handicapper
@@ -258,6 +276,33 @@ src/
 - [ ] **Notificaciones push** — Web Push API o Telegram Bot
 - [ ] **PWA / App móvil** — instalable en Android/iOS
 - [ ] **AI Handicapper** — ingestión desde YouTube, OCR, audio (stubs en `aiHandicapperService.ts`)
+
+---
+
+## 🤔 Preguntas Abiertas / Decisiones de Diseño
+
+### Ingestor Gemini — Estrategia de fuentes
+
+El prompt actual funciona bien para **texto pegado directamente** (redes sociales, WhatsApp, imagen transcrita a mano). Las preguntas abiertas son:
+
+1. **¿Sirve para transcripciones largas de YouTube?**
+   - El prompt actual es minimalista (extrae solo dorsal/nombre/etiqueta). Para transcripciones largas (10-30 min) el riesgo es truncación aunque `max_tokens` está en 8192.
+   - Opciones: (a) el staff copia solo la parte relevante, (b) dividir por carrera antes de enviar, (c) usar modelo con ventana más grande.
+
+2. **¿Link de noticia / URL como fuente?**
+   - Alternativa: el staff pega una URL y el modelo lee el contenido via OpenRouter (algunos modelos en OpenRouter soportan URLs directas).
+   - Ventaja: menos trabajo manual. Desventaja: contenido externo puede cambiar/eliminarse, y agrega latencia.
+   - Ideal: ofrecer ambas opciones (texto pegado + URL directa) en la misma UI.
+
+3. **¿Estrategia multi-modal?**
+   - **Texto pegado** (actual) → más barato y rápido.
+   - **URL** → más cómodo para el staff, más caro (el modelo lee la página completa).
+   - **Imagen/OCR** → para imágenes de WhatsApp sin transcribir manualmente.
+   - **YouTube link** → transcripción automática via YouTube API o Whisper, luego el prompt procesa el texto.
+
+4. **¿Cuándo es problemática la fecha incorrecta?**
+   - Si el staff no lee la fecha y asigna la data a la reunión equivocada, los pronósticos quedan en la carrera incorrecta.
+   - Mitigación posible: mostrar en la UI la fecha de la reunión seleccionada en grande + advertencia si el texto menciona una fecha diferente.
 
 ---
 
