@@ -27,6 +27,8 @@ export interface IForecast extends Document {
   marks: IForecastMark[];
   source: ForecastSource;
   sourceRef?: string;
+  uploadedByUserId?: Types.ObjectId;  // User who actually submitted (staff/admin when ghost)
+  uploadedByRole?: 'handicapper' | 'staff' | 'admin'; // 'handicapper' = own upload, overrides ghost
   isPublished: boolean;
   isExclusive: boolean;
   isVip: boolean;
@@ -72,6 +74,8 @@ const ForecastSchema = new Schema<IForecast>(
       default: 'manual',
     },
     sourceRef: { type: String, trim: true },
+    uploadedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+    uploadedByRole: { type: String, enum: ['handicapper', 'staff', 'admin'] },
     isPublished: { type: Boolean, default: false },
     isExclusive: { type: Boolean, default: false },
     isVip: { type: Boolean, default: false },
