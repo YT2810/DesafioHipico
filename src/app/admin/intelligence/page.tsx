@@ -380,9 +380,30 @@ export default function IntelligencePage() {
             {processing ? '⏳ Procesando con Gemini...' : '🧠 Analizar con IA'}
           </button>
 
-          {error && (
+          {error && !error.startsWith('YOUTUBE_NO_TRANSCRIPT:') && (
             <div className="bg-red-950/40 border border-red-800/50 rounded-xl px-4 py-3 text-sm text-red-400">
               {error}
+            </div>
+          )}
+          {error?.startsWith('YOUTUBE_NO_TRANSCRIPT:') && (
+            <div className="bg-yellow-950/40 border border-yellow-700/50 rounded-xl px-4 py-3 space-y-2">
+              <p className="text-sm font-bold text-yellow-400">📋 Este video no tiene transcripción automática</p>
+              <p className="text-xs text-yellow-300">Sigue estos pasos para obtenerla manualmente:</p>
+              <ol className="text-xs text-yellow-200 space-y-1 list-decimal list-inside">
+                <li>Abre el video en YouTube</li>
+                <li>Haz clic en los <strong>tres puntos (···)</strong> debajo del video</li>
+                <li>Selecciona <strong>"Mostrar transcripción"</strong></li>
+                <li>Selecciona todo el texto y cópialo</li>
+                <li>Pégalo aquí en el campo de texto (cambia el tipo a "Texto")</li>
+              </ol>
+              <a
+                href={error.replace('YOUTUBE_NO_TRANSCRIPT:', '')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-xs text-yellow-400 underline mt-1"
+              >
+                Abrir video en YouTube →
+              </a>
             </div>
           )}
         </section>

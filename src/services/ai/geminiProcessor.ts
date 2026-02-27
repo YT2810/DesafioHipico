@@ -322,32 +322,20 @@ export async function processYouTube(
     return { success: false, inputType: 'youtube', forecasts: [], error: 'URL de YouTube inválida.' };
   }
 
-  // Strategy 1: send YouTube URL directly to Gemini (no transcript needed)
-  const prompt = buildPrompt('(analiza el video de YouTube adjunto y extrae los pronósticos hípicos)');
-  try {
-    const rawText = await callLLMVideo(prompt, url);
-    const result = parseGeminiResponse(rawText, 'youtube', url);
-    if (result.success) {
-      console.log(`[YouTube video] direct extraction OK — ${result.forecasts.length} carreras`);
-      return result;
-    }
-    console.log(`[YouTube video] direct failed: ${result.error} — falling back to transcript`);
-  } catch (e) {
-    console.log(`[YouTube video] callLLMVideo threw: ${e instanceof Error ? e.message : e} — falling back to transcript`);
+  // Try automatic captions transcript first
+  const transcript = await fetchYouTubeTranscript(videoId);
+  if (transcript) {
+    const prompt = buildPrompt(`TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`);
+    return processTextDirect(prompt, 'youtube', transcript);
   }
 
-  // Strategy 2 (fallback): fetch transcript and process as text
-  const transcript = await fetchYouTubeTranscript(videoId);
-  if (!transcript) {
-    return {
-      success: false,
-      inputType: 'youtube',
-      forecasts: [],
-      error: 'No se pudo procesar el video ni obtener transcripción automática. Copia el texto desde YouTube → "Mostrar transcripción" y pégalo en el campo de texto.',
-    };
-  }
-  const transcriptPrompt = buildPrompt(`TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`);
-  return processTextDirect(transcriptPrompt, 'youtube', transcript);
+  // No captions available — return actionable instructions for staff
+  return {
+    success: false,
+    inputType: 'youtube',
+    forecasts: [],
+    error: `YOUTUBE_NO_TRANSCRIPT:${url}`,
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
