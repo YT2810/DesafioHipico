@@ -164,39 +164,40 @@ export default function SourcesPage() {
                     : 'bg-gray-900 border-gray-800'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${uploaded ? 'bg-green-500' : 'bg-gray-600'}`} />
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-white">{k.name}</span>
-                      <span className={`text-xs border rounded px-1.5 py-0.5 leading-none ${PRIORITY_COLORS[k.priority]}`}>
+                      <span className={`text-xs border rounded px-1.5 py-0.5 leading-none flex-shrink-0 ${PRIORITY_COLORS[k.priority]}`}>
                         {k.priority}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs text-gray-500">{k.platform}</span>
                       {k.handle && (
                         <a
                           href={`https://x.com/${k.handle}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-400 hover:text-blue-300"
+                          className="inline-flex items-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-sky-400 hover:text-sky-300 px-2 py-0.5 rounded-lg transition-colors font-medium"
                         >
-                          @{k.handle}
+                          𝕏 @{k.handle}
                         </a>
                       )}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {uploaded ? (
                     <span className="text-xs text-green-400 font-medium">✓ {count} carreras</span>
                   ) : (
                     <Link
                       href="/admin/intelligence"
-                      className="text-xs text-yellow-400 hover:text-yellow-300 font-medium"
+                      className="text-xs font-bold text-black px-3 py-1.5 rounded-lg flex-shrink-0"
+                      style={{ backgroundColor: GOLD }}
                     >
-                      Subir →
+                      Subir
                     </Link>
                   )}
                 </div>
