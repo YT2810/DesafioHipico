@@ -8,6 +8,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 import dbConnect from '@/lib/mongodb';
 import ExpertSource from '@/models/ExpertSource';
 import ExpertForecast from '@/models/ExpertForecast';

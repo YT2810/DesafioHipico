@@ -320,7 +320,11 @@ export default function IntelligencePage() {
           forecasts: editableForecasts,
         }),
       });
-      const data = await res.json();
+      const pubText = await res.text();
+      let data: any;
+      try { data = JSON.parse(pubText); } catch {
+        throw new Error(`Error del servidor (${res.status}): ${pubText.slice(0, 300) || '(respuesta vacía)'}`);
+      }
       if (!res.ok) throw new Error(data.error ?? 'Error al publicar.');
       if (data.errors?.length > 0) {
         setPublishError(`Publicado parcialmente (${data.savedCount} carreras). Errores: ${data.errors.join(' | ')}`);
