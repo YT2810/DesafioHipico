@@ -574,6 +574,7 @@ export default function IntelligencePage() {
                                     if (entry) {
                                       updateMark(fcIdx, markIdx, 'resolvedHorseName', entry.horseName);
                                       updateMark(fcIdx, markIdx, 'resolvedEntryId', entry.entryId);
+                                      updateMark(fcIdx, markIdx, 'dorsalNumber', entry.dorsal);
                                       updateMark(fcIdx, markIdx, 'matchConfidence', 1.0);
                                     }
                                   }}

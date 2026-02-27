@@ -160,10 +160,12 @@ export async function POST(req: NextRequest) {
         const match = mark.rawName
           ? findBestMatch(mark.rawName, dbEntries.map(e => ({ dorsal: e.dorsal, horseName: e.horseName })))
           : null;
+        const matchedEntry = match ? dbEntries[match.entryIdx] : null;
         return {
           ...mark,
           resolvedHorseName: match?.horseName ?? null,
-          resolvedEntryId: match ? dbEntries[match.entryIdx]?.entryId : null,
+          resolvedEntryId: matchedEntry?.entryId ?? null,
+          dorsalNumber: mark.dorsalNumber ?? matchedEntry?.dorsal ?? undefined,
           matchConfidence: match?.confidence ?? 0,
         };
       });
