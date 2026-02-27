@@ -10,6 +10,7 @@ const GOLD = '#D4AF37';
 
 interface PreviewForecast {
   pseudonym: string;
+  raceLabel?: string;
   marks: { dorsalNumber?: number; horseName: string; label: string }[];
 }
 
@@ -198,8 +199,11 @@ export default function HomePage() {
                     style={{backgroundColor:'rgba(212,175,55,0.15)',color:GOLD,border:'1.5px solid rgba(212,175,55,0.25)'}}>
                     {exp.pseudonym[0].toUpperCase()}
                   </span>
-                  <span className="text-sm font-bold text-white">{exp.pseudonym}</span>
-                  <span className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded" style={{color:GOLD,backgroundColor:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.2)'}}>VIP 🎁</span>
+                  <span className="text-sm font-bold text-white flex-1 truncate">{exp.pseudonym}</span>
+                  {exp.raceLabel && (
+                    <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 shrink-0">{exp.raceLabel}</span>
+                  )}
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0" style={{color:GOLD,backgroundColor:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.2)'}}>VIP 🎁</span>
                 </div>
                 <div className="space-y-1.5">
                   {exp.marks.slice(0,3).map((m, mi) => (
