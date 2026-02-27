@@ -104,27 +104,23 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── 4. Save each forecast ─────────────────────────────────────────────────
+  // ── 4. Save each forecast (parallel) ─────────────────────────────────────
   const meetingObjId = new Types.ObjectId(body.meetingId);
   const reviewerId = new Types.ObjectId(token.userId as string);
-  const saved: string[] = [];
-  const errors: string[] = [];
+  const VALID_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', 'Batacazo'];
 
-  for (const fc of body.forecasts) {
+  // Pre-fetch all races for this meeting in one query
+  const allRaces = await Race.find({ meetingId: meetingObjId }, { raceNumber: 1 }).lean();
+  const raceMap = new Map<number, Types.ObjectId>(
+    allRaces.map((r: any) => [r.raceNumber as number, r._id as Types.ObjectId])
+  );
+
+  const results = await Promise.all(body.forecasts.map(async (fc) => {
     try {
-      let raceObjId: Types.ObjectId;
-      if (fc.raceId) {
-        raceObjId = new Types.ObjectId(fc.raceId);
-      } else {
-        const race = await Race.findOne({ meetingId: meetingObjId, raceNumber: fc.raceNumber }).lean();
-        if (!race) {
-          errors.push(`Carrera ${fc.raceNumber}: no encontrada en DB.`);
-          continue;
-        }
-        raceObjId = (race as any)._id;
-      }
+      const raceObjId: Types.ObjectId = fc.raceId
+        ? new Types.ObjectId(fc.raceId)
+        : raceMap.get(fc.raceNumber) ?? (() => { throw new Error(`Carrera ${fc.raceNumber}: no encontrada en DB.`); })();
 
-      const VALID_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', 'Batacazo'];
       const expertMarks = fc.marks.slice(0, 5).map(m => ({
         preferenceOrder: m.preferenceOrder,
         rawName: m.rawName ?? undefined,
@@ -136,26 +132,6 @@ export async function POST(req: NextRequest) {
         matchConfidence: m.matchConfidence ?? 1.0,
       }));
 
-      // Upsert ExpertForecast — one per expert+meeting+race
-      await ExpertForecast.findOneAndUpdate(
-        { expertSourceId: expertSource._id, meetingId: meetingObjId, raceNumber: fc.raceNumber },
-        {
-          $set: {
-            raceId: raceObjId,
-            marks: expertMarks,
-            sourceUrl: body.sourceUrl ?? undefined,
-            sourceType: body.sourceType || 'social_text',
-            rawContent: body.rawContent ?? undefined,
-            contentHash: body.contentHash,
-            status: 'published',
-            publishedAt: new Date(),
-            reviewedBy: reviewerId,
-          },
-        },
-        { upsert: true, new: true }
-      );
-
-      // Also upsert a real Forecast so it appears in /pronosticos
       const forecastMarks = fc.marks.slice(0, 5)
         .map(m => ({
           preferenceOrder: m.preferenceOrder,
@@ -165,32 +141,45 @@ export async function POST(req: NextRequest) {
           note: '',
         }))
         .filter(m => m.horseName);
+
       if (forecastMarks.length === 0) {
-        errors.push(`Carrera ${fc.raceNumber}: no hay marcas con nombre o dorsal identificable.`);
-        continue;
+        return { ok: false, label: `C${fc.raceNumber}`, error: `Carrera ${fc.raceNumber}: no hay marcas identificables.` };
       }
 
-      await Forecast.findOneAndUpdate(
-        { handicapperId: ghostProfile._id, raceId: raceObjId },
-        {
-          $set: {
-            meetingId: meetingObjId,
-            marks: forecastMarks,
-            isVip: false,
-            isPublished: true,
-            publishedAt: new Date(),
+      // Both upserts in parallel
+      await Promise.all([
+        ExpertForecast.findOneAndUpdate(
+          { expertSourceId: expertSource._id, meetingId: meetingObjId, raceNumber: fc.raceNumber },
+          { $set: {
+            raceId: raceObjId, marks: expertMarks,
+            sourceUrl: body.sourceUrl ?? undefined,
+            sourceType: body.sourceType || 'social_text',
+            rawContent: body.rawContent ?? undefined,
+            contentHash: body.contentHash,
+            status: 'published', publishedAt: new Date(), reviewedBy: reviewerId,
+          }},
+          { upsert: true, new: true }
+        ),
+        Forecast.findOneAndUpdate(
+          { handicapperId: ghostProfile._id, raceId: raceObjId },
+          { $set: {
+            meetingId: meetingObjId, marks: forecastMarks,
+            isVip: false, isPublished: true, publishedAt: new Date(),
             source: body.sourceType || 'social_text',
             sourceRef: body.sourceUrl ?? '',
-          },
-        },
-        { upsert: true, new: true }
-      );
+          }},
+          { upsert: true, new: true }
+        ),
+      ]);
 
-      saved.push(`C${fc.raceNumber}`);
+      return { ok: true, label: `C${fc.raceNumber}` };
     } catch (e: any) {
-      errors.push(`Carrera ${fc.raceNumber}: ${e.message}`);
+      return { ok: false, label: `C${fc.raceNumber}`, error: e.message };
     }
-  }
+  }));
+
+  const saved = results.filter(r => r.ok).map(r => r.label);
+  const errors = results.filter(r => !r.ok).map(r => r.error!);
 
   // ── 5. Update expert stats ────────────────────────────────────────────────
   await ExpertSource.findByIdAndUpdate(expertSource._id, {
