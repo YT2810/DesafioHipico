@@ -3,6 +3,7 @@ import { getToken } from 'next-auth/jwt';
 
 const PROTECTED_ROUTES: Record<string, string[]> = {
   '/admin':      ['admin', 'staff'],
+  '/staff':      ['admin', 'staff'],
   '/handicapper': ['handicapper', 'admin'],
 };
 
@@ -39,5 +40,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/handicapper/:path*'],
+  matcher: ['/admin/:path*', '/staff/:path*', '/handicapper/:path*'],
 };

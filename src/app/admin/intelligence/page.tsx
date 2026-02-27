@@ -277,7 +277,7 @@ export default function IntelligencePage() {
             <h1 className="text-base font-bold text-white">🧠 Inteligencia Hípica</h1>
             <p className="text-xs text-gray-500">Ingesta de pronósticos externos con IA</p>
           </div>
-          <Link href="/admin/sources" className="text-xs text-gray-400 hover:text-yellow-400 font-medium shrink-0 transition-colors">
+          <Link href="/staff/fuentes" className="text-xs text-gray-400 hover:text-yellow-400 font-medium shrink-0 transition-colors">
             📋 Fuentes
           </Link>
         </div>

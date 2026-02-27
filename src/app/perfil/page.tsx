@@ -314,6 +314,11 @@ export default function PerfilPage() {
               <span className="text-sm text-white">🧠 Inteligencia Hípica</span>
               <span className="text-gray-500 text-sm">›</span>
             </Link>
+            <Link href="/staff/fuentes"
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
+              <span className="text-sm text-white">📋 Catálogo de Fuentes</span>
+              <span className="text-gray-500 text-sm">›</span>
+            </Link>
             <Link href="/admin/forecast"
               className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
               <span className="text-sm text-white">📋 Pronósticos por lote</span>

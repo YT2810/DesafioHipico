@@ -93,7 +93,7 @@ export default function SourcesPage() {
     <div className="min-h-screen bg-gray-950 text-white p-4 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/admin/intelligence" className="text-xs text-gray-500 hover:text-gray-300">← Ingestor</Link>
+          <Link href="/admin/intelligence" className="text-xs text-gray-500 hover:text-gray-300">← Ingestor IA</Link>
           <h1 className="text-xl font-bold text-white mt-1">Catálogo de Fuentes</h1>
           <p className="text-xs text-gray-500 mt-0.5">Estado de ingesta por reunión</p>
         </div>
