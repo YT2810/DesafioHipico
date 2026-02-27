@@ -34,9 +34,11 @@ export default function HomePage() {
       .then(d => {
         const ms: MeetingItem[] = d.meetings ?? [];
         setMeetings(ms);
-        // Load preview forecasts from first meeting
-        if (ms[0]?.id) {
-          fetch(`/api/forecasts/preview?meetingId=${ms[0].id}`)
+        // Prefer La Rinconada meeting for preview; fall back to first
+        const lrc = ms.find(m => !m.trackName.toLowerCase().includes('valencia'));
+        const previewMeeting = lrc ?? ms[0];
+        if (previewMeeting?.id) {
+          fetch(`/api/forecasts/preview?meetingId=${previewMeeting.id}`)
             .then(r => r.json())
             .then(d => setPreviewForecasts(d.forecasts ?? []))
             .catch(() => {});
@@ -183,8 +185,8 @@ export default function HomePage() {
               <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{color:GOLD,backgroundColor:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.2)'}}>Gratis hoy</span>
             </div>
 
-            {/* Show 2 real or placeholder experts */}
-            {(previewForecasts.length > 0 ? previewForecasts.slice(0,2) : [
+            {/* Show all real forecasters or placeholder */}
+            {(previewForecasts.length > 0 ? previewForecasts : [
               {pseudonym:'El Profeta',marks:[{horseName:'RELÁMPAGO',dorsalNumber:3,label:'Línea'},{horseName:'SOL NACIENTE',dorsalNumber:7,label:'Casi Fijo'},{horseName:'VIENTO NORTE',dorsalNumber:1,label:'Buen Dividendo'}]},
               {pseudonym:'La Cátedra',marks:[{horseName:'LUNA LLENA',dorsalNumber:5,label:'Línea'},{horseName:'TRUENO REAL',dorsalNumber:2,label:'Casi Fijo'}]},
             ] as PreviewForecast[]).map((exp, ei) => (

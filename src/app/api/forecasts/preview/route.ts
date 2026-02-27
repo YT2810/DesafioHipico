@@ -1,6 +1,6 @@
 /**
  * GET /api/forecasts/preview?meetingId=
- * Public endpoint — returns up to 2 published forecasters (first race only)
+ * Public endpoint — returns all published forecasters (first race only)
  * for the home page preview. No auth required.
  */
 
@@ -29,13 +29,13 @@ export async function GET(req: NextRequest) {
       isPublished: true,
     })
       .populate('handicapperId', 'pseudonym')
-      .limit(2)
       .lean();
 
+    const toTitle = (s: string) => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
     const result = forecasts.map(f => ({
       pseudonym: (f.handicapperId as any)?.pseudonym ?? 'Experto',
       marks: (f.marks ?? []).slice(0, 3).map((m: any) => ({
-        horseName: m.horseName,
+        horseName: toTitle(m.horseName ?? ''),
         dorsalNumber: m.dorsalNumber,
         label: m.label,
       })),

@@ -28,9 +28,10 @@ function calcFactors(forecasts: ForecastItem[]): HorseFactor[] {
       map.set(key, { points: (prev?.points ?? 0) + pts, dorsalNumber: prev?.dorsalNumber ?? m.dorsalNumber });
     }
   }
+  const toTitle = (s: string) => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   return [...map.entries()]
-    .map(([horseName, { points, dorsalNumber }]) => ({ horseName, dorsalNumber, points, factor: maxTotal > 0 ? points / maxTotal : 0 }))
-    .sort((a, b) => b.factor - a.factor);
+    .map(([horseName, { points, dorsalNumber }]) => ({ horseName: toTitle(horseName), dorsalNumber, points, factor: maxTotal > 0 ? points / maxTotal : 0 }))
+    .sort((a, b) => b.factor - a.factor || (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999));
 }
 
 const LABEL_CFG: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
@@ -55,10 +56,29 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: ForecastItem; isFollowed: boolean; onFollow: () => void }) {
+function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted }: {
+  forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
+  isPrivileged?: boolean; raceId?: string; onDeleted?: () => void;
+}) {
   const { handicapper, marks, isVip } = forecast;
   const _locked = false; // Launch mode: all content is open
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!raceId || !window.confirm(`¿Eliminar pronóstico de ${handicapper.pseudonym} para esta carrera?`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/admin/intelligence/forecast', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handicapperId: handicapper.id, raceId }),
+      });
+      if (res.ok) onDeleted?.();
+      else alert('Error al eliminar');
+    } catch { alert('Error al eliminar'); }
+    setDeleting(false);
+  }
 
   const sortedMarks = [...marks].sort((a, b) => a.preferenceOrder - b.preferenceOrder);
 
@@ -120,7 +140,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
           <span className="text-xs shrink-0" style={{color:'#D4AF37'}}>🎁 Liberado</span>
         )}
 
-        {/* Follow + chevron */}
+        {/* Follow + admin controls */}
         <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
           {handicapper.contactNumber && (
             <a
@@ -142,6 +162,16 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
           >
             {isFollowed ? '✓' : '+ Seguir'}
           </button>
+          {isPrivileged && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="w-6 h-6 rounded flex items-center justify-center text-gray-700 hover:text-red-400 hover:bg-red-950/40 transition-colors border border-transparent hover:border-red-800/40 text-xs"
+              title="Eliminar pronóstico"
+            >
+              {deleting ? '…' : '🗑'}
+            </button>
+          )}
         </div>
         <span className="text-gray-700 text-xs shrink-0 ml-1">{open ? '▲' : '▼'}</span>
       </button>
@@ -196,8 +226,10 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow }: {
-  race: RaceItem; unlocked: boolean; goldBalance: number; followedIds: Set<string>; onUnlock: () => void; onFollow: (id: string) => void;
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh }: {
+  race: RaceItem; unlocked: boolean; goldBalance: number; followedIds: Set<string>;
+  onUnlock: () => void; onFollow: (id: string) => void;
+  isPrivileged?: boolean; onRefresh?: () => void;
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
@@ -255,7 +287,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           )}
           {race.forecasts.length === 0
             ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} />)}</div>
+            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} />)}</div>
           }
         </>
       )}
@@ -540,7 +572,8 @@ export default function PronosticosPage() {
         {/* Race detail */}
         {selectedRace ? (
           <RacePanel race={selectedRace} unlocked={selectedUnlocked} goldBalance={goldBalance} followedIds={followedIds}
-            onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow} />
+            onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow}
+            isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)} />
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>
