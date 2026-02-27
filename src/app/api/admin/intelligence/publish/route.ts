@@ -53,6 +53,7 @@ interface PublishBody {
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const secure = req.nextUrl.protocol === 'https:';
   const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
   const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   const body: PublishBody = await req.json().catch(() => null);
   if (!body?.meetingId || !body?.contentHash || !body?.forecasts?.length) {
-    return NextResponse.json({ error: 'Datos incompletos.' }, { status: 400 });
+    return NextResponse.json({ error: `Datos incompletos. meetingId=${body?.meetingId} hash=${body?.contentHash} forecasts=${body?.forecasts?.length}` }, { status: 400 });
   }
 
   await dbConnect();
@@ -106,7 +107,8 @@ export async function POST(req: NextRequest) {
 
   // ── 4. Save each forecast (parallel) ─────────────────────────────────────
   const meetingObjId = new Types.ObjectId(body.meetingId);
-  const reviewerId = new Types.ObjectId(token.userId as string);
+  const reviewerRaw = (token.userId ?? token.sub ?? '') as string;
+  const reviewerId = Types.ObjectId.isValid(reviewerRaw) ? new Types.ObjectId(reviewerRaw) : new Types.ObjectId();
   const VALID_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', 'Batacazo'];
 
   // Pre-fetch all races for this meeting in one query
@@ -192,4 +194,8 @@ export async function POST(req: NextRequest) {
     expertSourceId: expertSource._id.toString(),
     errors,
   });
+  } catch (err: any) {
+    console.error('[intelligence/publish] ERROR:', err?.message ?? err);
+    return NextResponse.json({ error: err?.message ?? 'Error interno del servidor' }, { status: 500 });
+  }
 }
