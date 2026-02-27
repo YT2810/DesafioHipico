@@ -240,7 +240,7 @@ export default function IntelligencePage() {
       const text = await res.text();
       let data: any;
       try { data = JSON.parse(text); } catch {
-        throw new Error(`Error del servidor (${res.status}). La imagen puede ser demasiado grande — intenta con una imagen más pequeña o recórtala.`);
+        throw new Error(`Error del servidor (${res.status}): ${text.slice(0, 300) || '(respuesta vacía)'}`);
       }
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar.');
 
