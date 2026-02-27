@@ -94,16 +94,18 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 3. Upsert ghost HandicapperProfile linked to ExpertSource ─────────────
-  let ghostProfile = await HandicapperProfile.findOne({ expertSourceId: expertSource._id });
-  if (!ghostProfile) {
-    ghostProfile = await HandicapperProfile.create({
+  let ghostProfile = await HandicapperProfile.findOneAndUpdate(
+    { expertSourceId: expertSource._id },
+    { $setOnInsert: {
       pseudonym: body.expertName.trim(),
       isGhost: true,
       isActive: true,
       isPublic: true,
       expertSourceId: expertSource._id,
-    });
-  }
+    }},
+    { upsert: true, new: true }
+  );
+  if (!ghostProfile) throw new Error('No se pudo crear el perfil ghost.');
 
   // ── 4. Save each forecast (parallel) ─────────────────────────────────────
   const meetingObjId = new Types.ObjectId(body.meetingId);

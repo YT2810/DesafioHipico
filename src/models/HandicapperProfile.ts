@@ -61,6 +61,7 @@ const HandicapperProfileSchema = new Schema<IHandicapperProfile>(
   { timestamps: true }
 );
 
+HandicapperProfileSchema.index({ userId: 1 }, { sparse: true, unique: true });
 HandicapperProfileSchema.index({ pseudonym: 1 });
 HandicapperProfileSchema.index({ isActive: 1, isPublic: 1 });
 
