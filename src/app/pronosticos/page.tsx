@@ -107,7 +107,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
                   style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'white' }}
                   title={m.horseName}
                 >
-                  {m.dorsalNumber ?? '?'}
+                  {m.dorsalNumber ?? m.horseName?.slice(0,3).toUpperCase() ?? '?'}
                 </span>
               );
             })}
@@ -165,7 +165,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
                     </span>
                     {/* Dorsal */}
                     <span className="shrink-0 w-7 h-7 rounded-lg bg-gray-800 flex items-center justify-center text-sm font-extrabold text-white">
-                      {mark.dorsalNumber ?? '—'}
+                      {mark.dorsalNumber ?? '?'}
                     </span>
                     {/* Label badge */}
                     <span className={`shrink-0 text-xs font-semibold ${cfg.color}`}>
@@ -176,8 +176,8 @@ function HandicapperBlock({ forecast, isFollowed, onFollow }: { forecast: Foreca
                         {FIJO_BONUS_POINTS}pts
                       </span>
                     )}
-                    {/* Horse name — subtle, secondary info */}
-                    <span className="flex-1 text-xs text-gray-500 truncate text-right">
+                    {/* Horse name */}
+                    <span className={`flex-1 truncate text-right text-xs ${mark.dorsalNumber ? 'text-gray-500' : 'text-white font-semibold'}`}>
                       {mark.horseName}
                     </span>
                     {mark.note && (

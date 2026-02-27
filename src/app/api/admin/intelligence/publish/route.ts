@@ -137,13 +137,20 @@ export async function POST(req: NextRequest) {
       }));
 
       const forecastMarks = fc.marks.slice(0, 5)
-        .map(m => ({
-          preferenceOrder: m.preferenceOrder,
-          horseName: m.resolvedHorseName ?? m.rawName ?? (m.dorsalNumber ? `Dorsal ${m.dorsalNumber}` : null),
-          dorsalNumber: m.dorsalNumber ?? undefined,
-          label: (VALID_LABELS.includes(m.label as any) ? m.label : undefined) as any,
-          note: '',
-        }))
+        .map(m => {
+          const horseName = (m.resolvedHorseName && m.resolvedHorseName.trim())
+            ? m.resolvedHorseName.trim()
+            : ((m as any).rawName && (m as any).rawName.trim())
+              ? (m as any).rawName.trim()
+              : m.dorsalNumber ? `Dorsal ${m.dorsalNumber}` : null;
+          return {
+            preferenceOrder: m.preferenceOrder,
+            horseName,
+            dorsalNumber: m.dorsalNumber ?? undefined,
+            label: (VALID_LABELS.includes(m.label as any) ? m.label : undefined) as any,
+            note: '',
+          };
+        })
         .filter(m => m.horseName);
 
       if (forecastMarks.length === 0) {
