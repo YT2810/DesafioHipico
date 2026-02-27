@@ -75,6 +75,76 @@ const LABEL_COLORS: Record<string, string> = {
 
 const FORECAST_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', 'Batacazo'];
 
+const YOUTUBE_PROMPT = `Eres un extractor de pronósticos hípicos venezolanos. Analiza este video y extrae ÚNICAMENTE los caballos que el pronosticador recomienda jugar en cada carrera.
+
+REGLAS:
+- Solo incluye caballos que el pronosticador DA como selección
+- Palabras de inclusión: "me gusta", "lo juego", "fijo", "línea", "lo acompaño", "trilogía", "fórmula", "calidad de lance", "la primera opción"
+- Palabras de exclusión: "no me gusta", "lo descarto", "está difícil", "su enemigo", "rival"
+- Si da una fórmula numérica (ej: "127") y menciona los nombres en orden, asigna los dorsales en ese orden
+- Si no sabes el dorsal con certeza, omítelo y pon solo el nombre
+- Si una carrera no tiene selección clara, omítela
+- Incluye etiquetas verbatim si las menciona: "Fijo", "Línea", "Línea atrevida", "lo acompaño"
+
+FORMATO DE SALIDA (una carrera por línea, sin explicaciones):
+1C) [dorsal] [nombre] / [dorsal] [nombre]
+2C) [dorsal] [nombre]
+1V) [dorsal] [nombre] Línea / [dorsal] [nombre]
+(donde C = carrera normal, V = válida del 5y6)
+
+Ejemplo de salida:
+1C) El Relámpago
+3C) 1 Nuestra Victoria / 2 Mi Catira Emma / 7 La Dama
+1V) 6 Celestia Línea atrevida
+
+Empieza el análisis ahora. Solo devuelve el formato de salida, sin explicaciones.`;
+
+function YouTubeManualPanel({ videoUrl }: { videoUrl: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(YOUTUBE_PROMPT).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="bg-yellow-950/40 border border-yellow-700/50 rounded-xl px-4 py-4 space-y-3">
+      <p className="text-sm font-bold text-yellow-400">📋 Este video no tiene transcripción automática</p>
+      <p className="text-xs text-yellow-200">Usa Google AI Studio para analizarlo directamente (gratis):</p>
+      <ol className="text-xs text-yellow-200 space-y-1.5 list-decimal list-inside">
+        <li>Abre <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer" className="text-yellow-400 underline">aistudio.google.com</a> con tu cuenta Google</li>
+        <li>Nuevo chat → modelo <strong>Gemini 2.0 Flash</strong> o <strong>2.5 Flash</strong></li>
+        <li>Clic en <strong>"+"</strong> → <strong>"YouTube URL"</strong> → pega el link del video</li>
+        <li>Copia el prompt de abajo y envíalo</li>
+        <li>Copia el resultado y pégalo aquí como texto</li>
+      </ol>
+      <div className="flex gap-2">
+        <a
+          href={videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-red-400 hover:text-red-300 bg-red-950/40 border border-red-800/40 px-3 py-1.5 rounded-lg"
+        >
+          ▶ Abrir video
+        </a>
+        <button
+          onClick={handleCopy}
+          className="text-xs font-bold text-black px-3 py-1.5 rounded-lg transition-colors"
+          style={{ backgroundColor: copied ? '#22c55e' : '#D4AF37' }}
+        >
+          {copied ? '✓ Copiado' : '📋 Copiar prompt'}
+        </button>
+      </div>
+      <details className="text-xs text-yellow-700">
+        <summary className="cursor-pointer hover:text-yellow-500 select-none">Ver prompt completo</summary>
+        <pre className="mt-2 whitespace-pre-wrap text-yellow-600 bg-black/20 rounded p-2 text-[10px] leading-relaxed">{YOUTUBE_PROMPT}</pre>
+      </details>
+    </div>
+  );
+}
+
 export default function IntelligencePage() {
   const [input, setInput] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -386,25 +456,7 @@ export default function IntelligencePage() {
             </div>
           )}
           {error?.startsWith('YOUTUBE_NO_TRANSCRIPT:') && (
-            <div className="bg-yellow-950/40 border border-yellow-700/50 rounded-xl px-4 py-3 space-y-2">
-              <p className="text-sm font-bold text-yellow-400">📋 Este video no tiene transcripción automática</p>
-              <p className="text-xs text-yellow-300">Sigue estos pasos para obtenerla manualmente:</p>
-              <ol className="text-xs text-yellow-200 space-y-1 list-decimal list-inside">
-                <li>Abre el video en YouTube</li>
-                <li>Haz clic en los <strong>tres puntos (···)</strong> debajo del video</li>
-                <li>Selecciona <strong>"Mostrar transcripción"</strong></li>
-                <li>Selecciona todo el texto y cópialo</li>
-                <li>Pégalo aquí en el campo de texto (cambia el tipo a "Texto")</li>
-              </ol>
-              <a
-                href={error.replace('YOUTUBE_NO_TRANSCRIPT:', '')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block text-xs text-yellow-400 underline mt-1"
-              >
-                Abrir video en YouTube →
-              </a>
-            </div>
+            <YouTubeManualPanel videoUrl={error.replace('YOUTUBE_NO_TRANSCRIPT:', '')} />
           )}
         </section>
 
