@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import { KNOWN_SOURCES } from '@/lib/knownSources';
 
 const GOLD = '#D4AF37';
 
@@ -314,7 +315,7 @@ export default function IntelligencePage() {
           meetingId: selectedMeetingId,
           sourceType: result.inputType,
           sourceUrl: sourceUrl.trim() || (detectInputType(input) === 'youtube' ? input : undefined),
-          rawContent: result.rawTranscript ?? input.slice(0, 2000),
+          rawContent: (result.rawTranscript ?? input).slice(0, 500),
           contentHash: result.contentHash,
           forecasts: editableForecasts,
         }),
@@ -642,10 +643,24 @@ export default function IntelligencePage() {
                   <label className="text-xs text-gray-400 mb-1 block">Nombre del experto *</label>
                   <input
                     value={expertName}
-                    onChange={e => setExpertName(e.target.value)}
-                    placeholder="Alfonso Rodríguez Vera"
+                    list="known-sources-list"
+                    onChange={e => {
+                      setExpertName(e.target.value);
+                      const known = KNOWN_SOURCES.find(k => k.name.toLowerCase() === e.target.value.toLowerCase());
+                      if (known) {
+                        setPlatform(known.platform as Platform);
+                        if (known.handle) setHandle(known.handle);
+                        else if (known.link) setHandle(known.link);
+                      }
+                    }}
+                    placeholder="Ej: Darío Piccinini"
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
                   />
+                  <datalist id="known-sources-list">
+                    {KNOWN_SOURCES.map((k, i) => (
+                      <option key={i} value={k.name}>{k.platform}{k.handle ? ` · @${k.handle}` : ''}</option>
+                    ))}
+                  </datalist>
                 </div>
                 )}
                 <div>
