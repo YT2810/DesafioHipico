@@ -30,6 +30,7 @@ export interface RawExtractedMark {
 
 export interface RawExtractedForecast {
   raceNumber: number;
+  raceType: 'carrera' | 'valida';
   hasOrder: boolean;
   expertName?: string;
   marks: RawExtractedMark[];
@@ -48,30 +49,60 @@ export interface GeminiExtractionResult {
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
 function buildPrompt(content: string): string {
-  return `Eres un extractor de datos de pronósticos hípicos. Convierte el texto a JSON extrayendo SOLO lo escrito.
+  return `Eres un extractor de datos de pronósticos hípicos venezolanos. Convierte el texto a JSON extrayendo SOLO lo que está escrito literalmente.
 
-FORMATOS POSIBLES (pueden mezclarse en el mismo texto):
-A) Solo dorsales con orden: "1) 3/2/1/4" → carrera 1, dorsales 3,2,1,4 en ese orden de preferencia.
-B) Dorsal con sufijo-etiqueta pegado: "8Oro", "1Fijo", "5SF", "3F" → dorsalNumber=8, rawLabel="Oro". Separar el número del sufijo.
-C) Nombre con etiqueta: "COSMOS (SF)" o "COSMOS fijo" → rawName="COSMOS", rawLabel="SF".
-D) Solo nombre sin etiqueta: "NEPTUNO" → rawName="NEPTUNO", sin rawLabel.
-E) Listas separadas por / o , o espacios.
+═══ IDENTIFICAR NÚMERO DE CARRERA ═══
+El número de carrera puede expresarse de muchas formas. Conviértelas todas a un entero (raceNumber) y un tipo (raceType):
 
-CAMPOS POR MARCA:
-- preferenceOrder: posición en la lista (1=primero, 2=segundo…). Máx 5.
-- dorsalNumber: número de dorsal si está explícito. Omitir si no hay.
+Formato "carrera normal":
+  "1)", "1-", "1.", "C1", "1C", "Carrera 1", "1ra Carrera", "2da Carrera", "PRIMERA", "SEGUNDA"... → raceType:"carrera"
+  Ordinales en español: PRIMERA=1, SEGUNDA=2, TERCERA=3, CUARTA=4, QUINTA=5, SEXTA=6, SÉPTIMA=7, OCTAVA=8, NOVENA=9, DÉCIMA=10, UNDÉCIMA=11, DUODÉCIMA=12
+
+Formato "válida" (últimas 6 carreras del programa venezolano, juego 5y6):
+  "1V", "V1", "1v", "Primera Válida", "1ra Válida" → raceType:"valida", raceNumber:1
+  "2V", "V2" → raceType:"valida", raceNumber:2  (hasta 6V máximo)
+
+Secciones de bloque: Si el texto tiene "NO VÁLIDAS" seguido de carreras y luego "VÁLIDAS" o "5 y 6" o "5y6", las carreras del primer bloque son raceType:"carrera" y las del segundo son raceType:"valida".
+
+═══ FORMATOS DE MARCAS ═══
+A) Solo dorsales: "1) 3/2/1/4" → dorsales 3,2,1,4 en orden de preferencia
+B) Dorsal+etiqueta pegada: "8Oro", "1Fijo", "5SF", "3F", "2L" → dorsalNumber + rawLabel separados
+C) Nombre+etiqueta: "COSMOS (SF)", "FLEET STREET Fija", "ROMPEPARADIGMAS (Línea del Gentío)" → rawName + rawLabel
+D) Solo nombre: "NEPTUNO" → rawName solamente
+E) Separadores válidos entre dorsales: / . , - espacios (todos equivalentes)
+F) Paréntesis alrededor de un dorsal o nombre: "(8)" o "(COSMOS)" → marca secundaria/apoyo, misma carrera
+G) "acompaño X" o "acompaño X.Y" después de la marca principal → dorsales adicionales de apoyo
+
+═══ ETIQUETAS VENEZOLANAS (rawLabel) ═══
+Captura verbatim. Ejemplos comunes (no exhaustivos):
+F, Fijo, Fija, (F) → fijo
+SF, SSF, ssf → súper fijo
+L, Linea, Línea → línea
+"Línea del Gentío", "Línea M-ROD", "Línea Brava Y Bien Brava" → etiqueta completa verbatim
+Martillazo, Encapillao, Garrotazo → etiquetas especiales, capturar verbatim
+"/" solo o "…" al final de lista → ignorar, no son etiquetas
+Menciones de personas con @ → ignorar, son etiquetas de Twitter no del caballo
+
+═══ CAMPOS POR MARCA ═══
+- preferenceOrder: posición en la lista (1=primero). Máx 5.
+- dorsalNumber: solo si hay número de dorsal explícito.
 - rawName: nombre del caballo si aparece. Omitir si solo hay dorsal.
-- rawLabel: sufijo/etiqueta exacta del pronosticador ("Oro","SF","F","fijo","opción", etc.). Omitir si no hay.
+- rawLabel: etiqueta exacta del pronosticador. Omitir si no hay.
 
-POR CARRERA:
-- raceNumber: entero. "1)" o "primera" = 1, etc.
-- hasOrder: true si el orden de la lista indica preferencia (listas con /, numeradas, "primero/segundo"). false si son equivalentes.
-- (VIP) u otras anotaciones de la carrera: ignorar, no afectan los campos.
+═══ CAMPOS POR CARRERA ═══
+- raceNumber: entero del número de carrera o válida
+- raceType: "carrera" o "valida"
+- hasOrder: true si el orden indica preferencia (listas con /, numeradas). false si son equivalentes.
 
-REGLA IMPORTANTE: Si una lista es "3/2/1/4" con orden explícito por posición → hasOrder: true.
+═══ CAMPOS GLOBALES ═══
+- meetingDate: fecha de la reunión si aparece en el texto (formato YYYY-MM-DD). null si no hay.
+- meetingNumber: número de reunión si aparece ("R09", "Reunión 9", etc.). null si no hay.
 
-JSON puro sin markdown:
-{"meetingNumber":null,"forecasts":[{"raceNumber":1,"hasOrder":true,"marks":[{"preferenceOrder":1,"dorsalNumber":3},{"preferenceOrder":2,"dorsalNumber":2},{"preferenceOrder":3,"dorsalNumber":1,"rawLabel":"Oro"},{"preferenceOrder":4,"dorsalNumber":4}]}]}
+═══ IGNORAR ═══
+- Hashtags (#5y6, #LaRinconada), menciones (@usuario), URLs, frases de saludo, costos, publicidad
+
+═══ JSON DE SALIDA (puro, sin markdown) ═══
+{"meetingDate":null,"meetingNumber":null,"forecasts":[{"raceNumber":1,"raceType":"carrera","hasOrder":true,"marks":[{"preferenceOrder":1,"dorsalNumber":3,"rawLabel":"F"},{"preferenceOrder":2,"dorsalNumber":7}]},{"raceNumber":1,"raceType":"valida","hasOrder":false,"marks":[{"preferenceOrder":1,"rawName":"ROMPEPARADIGMAS","dorsalNumber":1,"rawLabel":"Línea del Gentío"},{"preferenceOrder":2,"dorsalNumber":8}]}]}
 
 TEXTO:
 ${content}`;
@@ -317,6 +348,7 @@ function parseGeminiResponse(
     }
     const forecasts: RawExtractedForecast[] = (parsed.forecasts ?? []).map((f: any) => ({
       raceNumber: Number(f.raceNumber),
+      raceType: f.raceType === 'valida' ? 'valida' : 'carrera',
       expertName: f.expertName ?? null,
       marks: (f.marks ?? []).slice(0, 5).map((m: any, idx: number) => ({
         preferenceOrder: m.preferenceOrder ?? idx + 1,

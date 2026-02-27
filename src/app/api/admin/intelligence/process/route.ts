@@ -113,10 +113,21 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. Resolve horse names against DB entries ─────────────────────────────
+  // Pre-compute totalRaces for válida → absolute raceNumber conversion
+  const totalRaces = meeting
+    ? await Race.countDocuments({ meetingId: meeting._id })
+    : 0;
+
   const resolvedForecasts = await Promise.all(
     result.forecasts.map(async (fc) => {
+      // Convert "Nth válida" to absolute race number
+      // Válidas = last 6 races. 1V = totalRaces-5, 2V = totalRaces-4, ... 6V = totalRaces
+      const absoluteRaceNumber = (fc.raceType === 'valida' && totalRaces > 0)
+        ? (totalRaces - 6 + fc.raceNumber)
+        : fc.raceNumber;
+
       const race = meeting
-        ? await Race.findOne({ meetingId: meeting._id, raceNumber: fc.raceNumber }).lean()
+        ? await Race.findOne({ meetingId: meeting._id, raceNumber: absoluteRaceNumber }).lean()
         : null;
 
       let dbEntries: { dorsal: number; horseName: string; entryId: string }[] = [];
@@ -158,7 +169,8 @@ export async function POST(req: NextRequest) {
       });
 
       return {
-        raceNumber: fc.raceNumber,
+        raceNumber: absoluteRaceNumber,
+        raceType: fc.raceType,
         hasOrder: fc.hasOrder,
         expertName: fc.expertName ?? null,
         raceId: race ? (race as any)._id.toString() : null,
