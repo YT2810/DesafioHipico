@@ -226,6 +226,67 @@ async function callLLMVision(prompt: string, imageBase64: string, mimeType: stri
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
+// ─── Video URL caller (YouTube direct via OpenRouter) ───────────────────────
+
+async function callLLMVideo(prompt: string, youtubeUrl: string): Promise<string> {
+  if (!USE_OPENROUTER) {
+    // Google direct API supports YouTube URLs via fileData
+    if (!GOOGLE_AI_KEY) throw new Error('No AI key configured.');
+    const res = await fetch(GEMINI_TEXT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { file_data: { mime_type: 'video/mp4', file_uri: youtubeUrl } },
+          ],
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Gemini Video error: ${JSON.stringify(err)}`);
+    }
+    const data = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  }
+
+  // OpenRouter: video_url type (only supported on Google AI Studio provider)
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'https://desafiohipico.com',
+      'X-Title': 'Desafío Hípico',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'video_url', video_url: { url: youtubeUrl } },
+        ],
+      }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`OpenRouter video error: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json();
+  const choice = data?.choices?.[0];
+  const finishReason = choice?.finish_reason;
+  const content = choice?.message?.content ?? '';
+  if (finishReason === 'length') return content + '__TRUNCATED__';
+  return content;
+}
+
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processText(
@@ -261,13 +322,32 @@ export async function processYouTube(
     return { success: false, inputType: 'youtube', forecasts: [], error: 'URL de YouTube inválida.' };
   }
 
-  const transcript = await fetchYouTubeTranscript(videoId);
-  const content = transcript
-    ? `TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`
-    : `Video de YouTube: ${url}\n\nNo se pudo obtener transcripción automática.`;
+  // Strategy 1: send YouTube URL directly to Gemini (no transcript needed)
+  const prompt = buildPrompt('(analiza el video de YouTube adjunto y extrae los pronósticos hípicos)');
+  try {
+    const rawText = await callLLMVideo(prompt, url);
+    const result = parseGeminiResponse(rawText, 'youtube', url);
+    if (result.success) {
+      console.log(`[YouTube video] direct extraction OK — ${result.forecasts.length} carreras`);
+      return result;
+    }
+    console.log(`[YouTube video] direct failed: ${result.error} — falling back to transcript`);
+  } catch (e) {
+    console.log(`[YouTube video] callLLMVideo threw: ${e instanceof Error ? e.message : e} — falling back to transcript`);
+  }
 
-  const prompt = buildPrompt(content);
-  return processTextDirect(prompt, 'youtube', transcript ?? url);
+  // Strategy 2 (fallback): fetch transcript and process as text
+  const transcript = await fetchYouTubeTranscript(videoId);
+  if (!transcript) {
+    return {
+      success: false,
+      inputType: 'youtube',
+      forecasts: [],
+      error: 'No se pudo procesar el video ni obtener transcripción automática. Copia el texto desde YouTube → "Mostrar transcripción" y pégalo en el campo de texto.',
+    };
+  }
+  const transcriptPrompt = buildPrompt(`TRANSCRIPCIÓN DE VIDEO YOUTUBE (${url}):\n\n${transcript}`);
+  return processTextDirect(transcriptPrompt, 'youtube', transcript);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
