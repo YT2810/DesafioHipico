@@ -169,6 +169,51 @@ export default function IntelligencePage() {
 
   const [sourceUrl, setSourceUrl] = useState('');
 
+  // ── Scratch panel ──────────────────────────────────────────────────────────
+  interface ScratchEntry { entryId: string; dorsal: number; horseName: string; isScratched: boolean; scratchedBy?: string | null; }
+  const [scratchRaces, setScratchRaces] = useState<{ raceId: string; raceNumber: number }[]>([]);
+  const [scratchRaceId, setScratchRaceId] = useState('');
+  const [scratchEntries, setScratchEntries] = useState<ScratchEntry[]>([]);
+  const [scratchOpen, setScratchOpen] = useState(false);
+  const [scratchLoading, setScratchLoading] = useState(false);
+
+  async function loadScratchRaces(meetingId: string) {
+    if (!meetingId) return;
+    const r = await fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()).catch(() => ({ races: [] }));
+    setScratchRaces((r.races ?? []).map((x: any) => ({ raceId: x.id, raceNumber: x.raceNumber })));
+    setScratchRaceId('');
+    setScratchEntries([]);
+  }
+
+  async function loadScratchEntries(raceId: string) {
+    if (!raceId) return;
+    setScratchLoading(true);
+    const r = await fetch(`/api/admin/races/${raceId}/entries`).then(r => r.json()).catch(() => ({ entries: [] }));
+    setScratchEntries(r.entries ?? []);
+    setScratchLoading(false);
+  }
+
+  async function toggleScratch(entry: ScratchEntry) {
+    const action = entry.isScratched ? 'restore' : 'scratch';
+    const label = entry.isScratched ? 'restaurar' : 'RETIRAR';
+    const confirmed = window.confirm(
+      `⚠️ ¿Confirmas ${label} el ejemplar #${entry.dorsal} ${entry.horseName}?\n\nEsta acción quedará registrada con tu usuario.`
+    );
+    if (!confirmed) return;
+    const res = await fetch(`/api/admin/races/${scratchRaceId}/scratch`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entryId: entry.entryId, action }),
+    });
+    if (res.ok) {
+      setScratchEntries(prev => prev.map(e =>
+        e.entryId === entry.entryId ? { ...e, isScratched: !e.isScratched } : e
+      ));
+    } else {
+      alert('Error al actualizar el ejemplar.');
+    }
+  }
+
   // Publish state
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
@@ -187,6 +232,9 @@ export default function IntelligencePage() {
       .then(d => setExistingExperts(d.experts ?? []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => { if (selectedMeetingId) loadScratchRaces(selectedMeetingId); }, [selectedMeetingId]);
+  useEffect(() => { if (scratchRaceId) loadScratchEntries(scratchRaceId); }, [scratchRaceId]);
 
   const detectInputType = (val: string): InputType => {
     if (/youtube\.com|youtu\.be/.test(val)) return 'youtube';
@@ -721,6 +769,87 @@ export default function IntelligencePage() {
             </section>
           </>
         )}
+
+        {/* ── Scratch panel ── */}
+        <section className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+          <button
+            onClick={() => setScratchOpen(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-800/40 transition-colors"
+          >
+            <span className="text-sm font-bold text-white flex items-center gap-2">
+              🚫 <span>Gestión de Retirados</span>
+              {scratchEntries.some(e => e.isScratched) && (
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-red-900/50 text-red-400 border border-red-800/50">
+                  {scratchEntries.filter(e => e.isScratched).length} retirado{scratchEntries.filter(e => e.isScratched).length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </span>
+            <span className="text-gray-600 text-xs">{scratchOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {scratchOpen && (
+            <div className="px-5 pb-5 space-y-3 border-t border-gray-800">
+              <p className="text-xs text-gray-500 pt-3">
+                Selecciona la carrera para ver los inscritos. Click en un ejemplar para marcarlo como retirado o restaurarlo.
+              </p>
+
+              {!selectedMeetingId ? (
+                <p className="text-xs text-yellow-600">Selecciona primero una reunión en la sección de arriba.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {scratchRaces.map(r => (
+                    <button
+                      key={r.raceId}
+                      onClick={() => setScratchRaceId(r.raceId)}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
+                        scratchRaceId === r.raceId
+                          ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                      }`}
+                    >
+                      C{r.raceNumber}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {scratchRaceId && (
+                scratchLoading ? (
+                  <p className="text-xs text-gray-500">Cargando inscritos...</p>
+                ) : scratchEntries.length === 0 ? (
+                  <p className="text-xs text-gray-600">Sin inscritos registrados para esta carrera.</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {scratchEntries.map(entry => (
+                      <button
+                        key={entry.entryId}
+                        onClick={() => toggleScratch(entry)}
+                        title={entry.isScratched && entry.scratchedBy ? `Retirado por ${entry.scratchedBy}` : ''}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
+                          entry.isScratched
+                            ? 'bg-red-950/30 border-red-800/60 opacity-70'
+                            : 'bg-gray-800 border-gray-700 hover:border-gray-500'
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded flex items-center justify-center text-xs font-extrabold shrink-0 ${
+                          entry.isScratched ? 'bg-red-900/60 text-red-400' : 'bg-gray-700 text-white'
+                        }`}>
+                          {entry.dorsal}
+                        </span>
+                        <span className={`text-xs font-medium truncate flex-1 ${
+                          entry.isScratched ? 'line-through text-gray-600' : 'text-gray-300'
+                        }`}>
+                          {entry.horseName}
+                        </span>
+                        {entry.isScratched && <span className="text-red-500 text-xs shrink-0">🚫</span>}
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </section>
 
         {/* ── Success state ── */}
         {published && (

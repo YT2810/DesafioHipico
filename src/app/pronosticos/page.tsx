@@ -9,7 +9,7 @@ import NotificationBell from '@/components/NotificationBell';
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; }
 interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; sourceRef?: string; uploadedByRole?: 'handicapper' | 'staff' | 'admin'; }
-interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; }
+interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; scratchedDorsals: number[]; }
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
 interface HorseFactor { horseName: string; dorsalNumber?: number; points: number; factor: number; }
 
@@ -56,9 +56,9 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted }: {
+function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals }: {
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
-  isPrivileged?: boolean; raceId?: string; onDeleted?: () => void;
+  isPrivileged?: boolean; raceId?: string; onDeleted?: () => void; scratchedDorsals?: number[];
 }) {
   const { handicapper, marks, isVip, sourceRef, uploadedByRole } = forecast;
   const isGhost = handicapper.isGhost ?? false;
@@ -89,6 +89,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
     setDeleting(false);
   }
 
+  const scratched = scratchedDorsals ?? [];
   const sortedMarks = [...marks].sort((a, b) => a.preferenceOrder - b.preferenceOrder);
 
   return (
@@ -209,19 +210,24 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
               {sortedMarks.map(mark => {
                 const cfg = getLabelCfg(mark.label);
                 const isFijo = marks.length === 1 && mark.label === 'Línea';
+                const isMarkScratched = mark.dorsalNumber != null && scratched.includes(mark.dorsalNumber);
                 return (
                   <div
                     key={mark.preferenceOrder}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${cfg.bg} ${cfg.border}`}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isMarkScratched ? 'bg-red-950/20 border-red-900/40 opacity-60' : `${cfg.bg} ${cfg.border}`}`}
                   >
                     {/* Preference order */}
                     <span className="shrink-0 w-4 text-xs font-bold text-gray-500 text-center">
                       {mark.preferenceOrder}
                     </span>
-                    {/* Dorsal */}
-                    <span className="shrink-0 w-7 h-7 rounded-lg bg-gray-800 flex items-center justify-center text-sm font-extrabold text-white">
-                      {mark.dorsalNumber ?? '?'}
-                    </span>
+                    {mark.dorsalNumber != null && (
+                      <span className={`w-6 h-6 rounded flex items-center justify-center text-xs font-extrabold shrink-0 ${
+                        isMarkScratched ? 'bg-red-900/40 border border-red-800 text-red-400' : 'bg-gray-700 border border-gray-600 text-white'
+                      }`}>
+                        {mark.dorsalNumber}
+                      </span>
+                    )}
+                    {isMarkScratched && <span className="text-red-500 text-xs shrink-0" title="Retirado">🚫</span>}
                     {/* Label badge */}
                     <span className={`shrink-0 text-xs font-semibold ${cfg.color}`}>
                       {cfg.emoji} {mark.label}
@@ -232,7 +238,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
                       </span>
                     )}
                     {/* Horse name */}
-                    <span className={`flex-1 truncate text-right text-xs ${mark.dorsalNumber ? 'text-gray-500' : 'text-white font-semibold'}`}>
+                    <span className={`flex-1 truncate text-right text-xs ${mark.dorsalNumber ? 'text-gray-500' : 'text-white font-semibold'} ${isMarkScratched ? 'line-through' : ''}`}>
                       {mark.horseName}
                     </span>
                     {mark.note && (
@@ -252,9 +258,14 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
 }
 
 function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh }: {
-  race: RaceItem; unlocked: boolean; goldBalance: number; followedIds: Set<string>;
-  onUnlock: () => void; onFollow: (id: string) => void;
-  isPrivileged?: boolean; onRefresh?: () => void;
+  race: RaceItem; 
+  unlocked: boolean; 
+  goldBalance: number; 
+  followedIds: Set<string>;
+  onUnlock: () => void; 
+  onFollow: (id: string) => void;
+  isPrivileged?: boolean; 
+  onRefresh?: () => void;
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
@@ -298,7 +309,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
                   <div key={h.horseName} className="flex items-center gap-2">
                     <span className="shrink-0 w-4 text-xs text-gray-600 font-bold">{i+1}</span>
                     {h.dorsalNumber != null && <span className="shrink-0 w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-xs font-bold text-white">{h.dorsalNumber}</span>}
-                    <span className="flex-1 text-xs font-semibold text-white truncate">{h.horseName}</span>
+                    <span className={`flex-1 text-xs font-semibold truncate ${h.dorsalNumber != null && race.scratchedDorsals?.includes(h.dorsalNumber) ? 'line-through text-gray-600' : 'text-white'}`}>{h.horseName}</span>
                     <div className="w-20 h-2 rounded-full bg-gray-800 overflow-hidden shrink-0">
                       <div className="h-full rounded-full" style={{ width: `${h.factor*100}%`, backgroundColor: h.factor>=0.5?'#22c55e':h.factor>=0.25?GOLD:'#6b7280' }} />
                     </div>
@@ -312,7 +323,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           )}
           {race.forecasts.length === 0
             ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} />)}</div>
+            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} />)}</div>
           }
         </>
       )}
@@ -365,14 +376,14 @@ export default function PronosticosPage() {
       ]);
 
       const races: any[] = racesRes.races ?? [];
-      const forecastsByRace: Record<string, { access: any; forecasts: any[] }> = forecastsRes.races ?? {};
+      const forecastsByRace: Record<string, { access: any; forecasts: any[]; scratchedDorsals?: number[] }> = forecastsRes.races ?? {};
       setFreeRemaining(forecastsRes.freeRemaining ?? FREE_RACES_PER_MEETING);
 
       const apiMeeting = apiMeetings.find(m => m.id === meetingId);
       const meetingDate = apiMeeting ? new Date(apiMeeting.date).toLocaleDateString('es-VE') : '';
 
       const raceItems: RaceItem[] = races.map(r => {
-        const raceData = forecastsByRace[r.id] ?? { access: { unlocked: true, free: true }, forecasts: [] };
+        const raceData: any = forecastsByRace[r.id] ?? { access: { unlocked: true, free: true }, forecasts: [], scratchedDorsals: [] };
         const forecasts: ForecastItem[] = raceData.forecasts.map((f: any) => ({
           handicapper: {
             id: f.handicapperId?._id ?? f.handicapperId ?? '',
@@ -397,6 +408,7 @@ export default function PronosticosPage() {
           conditions: r.conditions,
           prizePool: r.prizePool,
           forecasts,
+          scratchedDorsals: raceData.scratchedDorsals ?? [],
           _access: raceData.access,
         } as RaceItem & { _access: any };
       });

@@ -7,8 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Forecast from '@/models/Forecast';
+import Entry from '@/models/Entry';
 import '@/models/HandicapperProfile';
 import { getMeetingAccessMap } from '@/services/forecastAccessService';
+import { Types } from 'mongoose';
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,6 +38,18 @@ export async function GET(req: NextRequest) {
 
     const raceIds = Object.keys(byRace);
 
+    // Load scratched dorsals per race
+    const scratchedEntries = await Entry.find({
+      raceId: { $in: raceIds.map(id => new Types.ObjectId(id)) },
+      status: 'scratched',
+    }).select('raceId dorsalNumber').lean();
+    const scratchedByRace: Record<string, number[]> = {};
+    for (const e of scratchedEntries as any[]) {
+      const key = e.raceId.toString();
+      if (!scratchedByRace[key]) scratchedByRace[key] = [];
+      scratchedByRace[key].push(e.dorsalNumber);
+    }
+
     // Access map — if no userId, treat as unauthenticated (no free slots)
     let accessMap: Record<string, { unlocked: boolean; free: boolean }> = {};
     let freeRemaining = 0;
@@ -59,7 +73,7 @@ export async function GET(req: NextRequest) {
           // Locked VIP: return teaser only
           return { ...f, marks: [], _locked: true };
         });
-        return [raceId, { access, forecasts: raceFcs }];
+        return [raceId, { access, forecasts: raceFcs, scratchedDorsals: scratchedByRace[raceId] ?? [] }];
       })
     );
 
