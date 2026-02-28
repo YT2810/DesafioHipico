@@ -8,7 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; }
-interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; sourceRef?: string; }
+interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; sourceRef?: string; uploadedByRole?: 'handicapper' | 'staff' | 'admin'; }
 interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; }
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
 interface HorseFactor { horseName: string; dorsalNumber?: number; points: number; factor: number; }
@@ -60,8 +60,16 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
   isPrivileged?: boolean; raceId?: string; onDeleted?: () => void;
 }) {
-  const { handicapper, marks, isVip, sourceRef } = forecast;
+  const { handicapper, marks, isVip, sourceRef, uploadedByRole } = forecast;
   const isGhost = handicapper.isGhost ?? false;
+  // Badge logic: what generated this specific forecast
+  const sourceBadge = uploadedByRole === 'handicapper'
+    ? { icon: '✅', label: 'Pronóstico directo del handicapper', cls: 'text-green-400' }
+    : isGhost
+      ? { icon: '🤖', label: 'Procesado con IA desde fuente pública', cls: 'text-blue-400' }
+      : uploadedByRole === 'staff' || uploadedByRole === 'admin'
+        ? { icon: '📋', label: 'Subido por staff en nombre del handicapper', cls: 'text-gray-400' }
+        : null;
   const _locked = false; // Launch mode: all content is open
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -143,6 +151,11 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
 
         {/* Follow + admin controls */}
         <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          {sourceBadge && (
+            <span title={sourceBadge.label} className={`text-sm shrink-0 cursor-help ${sourceBadge.cls}`}>
+              {sourceBadge.icon}
+            </span>
+          )}
           {handicapper.contactNumber && (
             <a
               href={`https://wa.me/${handicapper.contactNumber.replace(/\D/g, '')}`}
@@ -374,6 +387,7 @@ export default function PronosticosPage() {
           isVip: f.isVip ?? false,
           _locked: f._locked ?? false,
           sourceRef: f.sourceRef ?? undefined,
+          uploadedByRole: f.uploadedByRole ?? undefined,
         }));
         return {
           raceId: r.id,

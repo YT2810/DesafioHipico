@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
           isVip: !!isVip,
           source: source ?? 'manual',
           sourceRef: sourceRef ?? '',
+          uploadedByUserId: new Types.ObjectId(session.user.id),
+          uploadedByRole: isAdmin ? 'admin' : 'handicapper',
           ...(publish ? { isPublished: true, publishedAt: new Date() } : {}),
         },
       },

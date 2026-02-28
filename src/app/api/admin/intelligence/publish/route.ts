@@ -182,6 +182,8 @@ export async function POST(req: NextRequest) {
             isVip: false, isPublished: true, publishedAt: new Date(),
             source: body.sourceType || 'social_text',
             sourceRef: body.sourceUrl ?? '',
+            uploadedByUserId: reviewerId,
+            uploadedByRole: roles.includes('admin') ? 'admin' : 'staff',
           }},
           { upsert: true, new: true }
         ),
