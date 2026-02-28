@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
 
     const forecasts = await Forecast.find({ meetingId, isPublished: true })
-      .populate('handicapperId', 'pseudonym contactNumber stats isPublic')
+      .populate('handicapperId', 'pseudonym contactNumber stats isPublic isGhost expertSourceId')
       .lean();
 
     // Group by raceId

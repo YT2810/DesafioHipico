@@ -86,11 +86,15 @@ export async function POST(req: NextRequest) {
       name: body.expertName.trim(),
       platform,
       handle: body.handle ?? undefined,
-      link: body.link ?? undefined,
+      link: body.sourceUrl ?? body.link ?? undefined,
       isVerified: false,
       isClaimable,
       isGhost: true,
     });
+  } else if (body.sourceUrl) {
+    // Always update link if a new sourceUrl is provided
+    await ExpertSource.findByIdAndUpdate(expertSource._id, { $set: { link: body.sourceUrl } });
+    expertSource.link = body.sourceUrl;
   }
 
   // ── 3. Upsert ghost HandicapperProfile linked to ExpertSource ─────────────

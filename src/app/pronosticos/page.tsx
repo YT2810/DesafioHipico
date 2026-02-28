@@ -7,8 +7,8 @@ import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING }
 import NotificationBell from '@/components/NotificationBell';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
-interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; }
-interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; }
+interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; }
+interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; sourceRef?: string; }
 interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; }
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
 interface HorseFactor { horseName: string; dorsalNumber?: number; points: number; factor: number; }
@@ -60,7 +60,8 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
   isPrivileged?: boolean; raceId?: string; onDeleted?: () => void;
 }) {
-  const { handicapper, marks, isVip } = forecast;
+  const { handicapper, marks, isVip, sourceRef } = forecast;
+  const isGhost = handicapper.isGhost ?? false;
   const _locked = false; // Launch mode: all content is open
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -179,6 +180,17 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
       {/* ── Expanded marks ── */}
       {open && (
         <div className="pb-3 pt-1">
+          {isGhost && (
+            <div className="mb-2 mx-0 rounded-xl border border-yellow-800/40 bg-yellow-950/20 px-3 py-2 flex items-start gap-2">
+              <span className="text-yellow-500 text-xs mt-0.5 shrink-0">⚠️</span>
+              <p className="text-xs text-yellow-300/80 leading-relaxed">
+                Análisis procesado con IA a partir de contenido público. Puede contener inexactitudes.
+                {sourceRef ? (
+                  <> Verifica en la <a href={sourceRef} target="_blank" rel="noopener noreferrer" className="underline text-yellow-400 hover:text-yellow-300 ml-1">fuente original →</a></>
+                ) : ' Fuente no disponible.'}
+              </p>
+            </div>
+          )}
           {false ? null : (
             <div className="space-y-1.5">
               {sortedMarks.map(mark => {
@@ -356,10 +368,12 @@ export default function PronosticosPage() {
             pct2nd: f.handicapperId?.stats?.pct2nd ?? 0,
             pctGeneral: f.handicapperId?.stats?.pctGeneral ?? 0,
             contactNumber: f.handicapperId?.contactNumber,
+            isGhost: f.handicapperId?.isGhost ?? false,
           },
           marks: f.marks ?? [],
           isVip: f.isVip ?? false,
           _locked: f._locked ?? false,
+          sourceRef: f.sourceRef ?? undefined,
         }));
         return {
           raceId: r.id,

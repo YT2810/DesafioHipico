@@ -298,6 +298,10 @@ export default function IntelligencePage() {
       setPublishError('Selecciona la reunión antes de publicar.');
       return;
     }
+    if (!sourceUrl.trim() && !input.trim().startsWith('http')) {
+      const ok = window.confirm('⚠️ No ingresaste URL de fuente. Se publicará sin enlace de verificación. ¿Continuar de todas formas?');
+      if (!ok) return;
+    }
 
     setPublishing(true);
     setPublishError('');
