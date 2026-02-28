@@ -56,9 +56,30 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals }: {
+interface ShareContext { raceNumber: number; trackName: string; meetingNumber: number; }
+
+function buildShareUrl(forecast: ForecastItem, ctx: ShareContext): string {
+  const base = window.location.origin;
+  const marksPayload = forecast.marks
+    .sort((a, b) => a.preferenceOrder - b.preferenceOrder)
+    .map(m => ({ dorsal: m.dorsalNumber, name: m.horseName, label: m.label }));
+  const badge = forecast.uploadedByRole === 'handicapper' ? '✅'
+    : forecast.handicapper.isGhost ? '🤖' : '📋';
+  const params = new URLSearchParams({
+    handicapper: forecast.handicapper.pseudonym,
+    badge,
+    track: ctx.trackName,
+    meeting: String(ctx.meetingNumber),
+    race: String(ctx.raceNumber),
+    marks: JSON.stringify(marksPayload),
+  });
+  return `${base}/api/og/forecast?${params.toString()}`;
+}
+
+function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals, shareContext }: {
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
   isPrivileged?: boolean; raceId?: string; onDeleted?: () => void; scratchedDorsals?: number[];
+  shareContext?: ShareContext;
 }) {
   const { handicapper, marks, isVip, sourceRef, uploadedByRole } = forecast;
   const isGhost = handicapper.isGhost ?? false;
@@ -87,6 +108,31 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
       else alert('Error al eliminar');
     } catch { alert('Error al eliminar'); }
     setDeleting(false);
+  }
+
+  const [copying, setCopying] = useState(false);
+
+  async function handleShare() {
+    if (!shareContext) return;
+    const url = buildShareUrl(forecast, shareContext);
+    // Try native share first (mobile), fallback to open in new tab
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Pronóstico de ${handicapper.pseudonym}`, url });
+        return;
+      } catch { /* cancelled */ }
+    }
+    window.open(url, '_blank');
+  }
+
+  async function handleCopyLink() {
+    if (!shareContext) return;
+    const url = buildShareUrl(forecast, shareContext);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopying(true);
+      setTimeout(() => setCopying(false), 2000);
+    } catch { window.open(url, '_blank'); }
   }
 
   const scratched = scratchedDorsals ?? [];
@@ -205,6 +251,22 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
               </p>
             </div>
           )}
+          {shareContext && marks.length > 0 && (
+            <div className="flex gap-2 mb-2">
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
+              >
+                📤 Compartir
+              </button>
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
+              >
+                {copying ? '✓ Copiado' : '🔗 Copiar link'}
+              </button>
+            </div>
+          )}
           {false ? null : (
             <div className="space-y-1.5">
               {sortedMarks.map(mark => {
@@ -257,7 +319,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh }: {
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo }: {
   race: RaceItem; 
   unlocked: boolean; 
   goldBalance: number; 
@@ -266,6 +328,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   onFollow: (id: string) => void;
   isPrivileged?: boolean; 
   onRefresh?: () => void;
+  meetingInfo?: { trackName: string; meetingNumber: number };
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
@@ -323,7 +386,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           )}
           {race.forecasts.length === 0
             ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} />)}</div>
+            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} shareContext={{ raceNumber: race.raceNumber, trackName: meetingInfo?.trackName ?? '', meetingNumber: meetingInfo?.meetingNumber ?? 0 }} />)}</div>
           }
         </>
       )}
@@ -613,7 +676,8 @@ export default function PronosticosPage() {
         {selectedRace ? (
           <RacePanel race={selectedRace} unlocked={selectedUnlocked} goldBalance={goldBalance} followedIds={followedIds}
             onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow}
-            isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)} />
+            isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)}
+            meetingInfo={meeting ? { trackName: meeting.trackName, meetingNumber: meeting.meetingNumber } : undefined} />
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>
