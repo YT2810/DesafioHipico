@@ -19,6 +19,7 @@ import HandicapperProfile from '@/models/HandicapperProfile';
 import Forecast from '@/models/Forecast';
 import Race from '@/models/Race';
 import { Types } from 'mongoose';
+import { notifyFollowers } from '@/services/followService';
 
 interface PublishMark {
   preferenceOrder: number;
@@ -195,13 +196,29 @@ export async function POST(req: NextRequest) {
     }
   }));
 
-  const saved = results.filter(r => r.ok).map(r => r.label);
+  const saved = results.filter(r => r.ok);
   const errors = results.filter(r => !r.ok).map(r => r.error!);
 
   // ── 5. Update expert stats ────────────────────────────────────────────────
   await ExpertSource.findByIdAndUpdate(expertSource._id, {
     $inc: { totalForecasts: saved.length },
   });
+
+  // ── 6. Notify followers for each saved race ───────────────────────────────
+  const meeting = await (await import('@/models/Meeting')).default
+    .findById(meetingObjId).select('meetingNumber').lean() as any;
+  if (meeting) {
+    await Promise.all(
+      body.forecasts
+        .filter(fc => saved.some(s => s.label === `C${fc.raceNumber}`))
+        .map(fc => notifyFollowers(
+          ghostProfile._id.toString(),
+          meeting.meetingNumber,
+          fc.raceNumber,
+          false,
+        ).catch(() => 0))
+    );
+  }
 
   return NextResponse.json({
     success: saved.length > 0,
