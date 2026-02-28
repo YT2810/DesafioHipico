@@ -39,6 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `Inscritos Reunión ${m.meetingNumber} — ${m.trackName} ${dateShort}`;
   const description = `Programa oficial e inscritos para la Reunión ${m.meetingNumber} del ${m.trackName}${m.trackLocation ? ` (${m.trackLocation})` : ''}, ${dateStr}. ${raceCount} carrera${raceCount !== 1 ? 's' : ''} con dorsales, jinetes y entrenadores. INH · HINAVA.`;
 
+  const ogImg = `${base}/api/og?title=${encodeURIComponent(`Inscritos ${m.trackName}`)}&subtitle=${encodeURIComponent(`Reunión ${m.meetingNumber} · ${dateShort}`)}`;
   return {
     title,
     description,
@@ -57,6 +58,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       type: 'website',
       locale: 'es_VE',
+      images: [{ url: ogImg, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: 'summary_large_image' as const,
+      images: [ogImg],
     },
     alternates: {
       canonical: `${base}/programa/${meetingId}`,
@@ -105,12 +111,28 @@ export default async function ProgramaPage({ params }: Props) {
       }))
     : [];
 
+  const breadcrumb = m ? {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Desafío Hípico', item: base },
+      { '@type': 'ListItem', position: 2, name: 'Programa', item: `${base}/programa` },
+      { '@type': 'ListItem', position: 3, name: m.trackName, item: `${base}/programa/${meetingId}` },
+    ],
+  } : null;
+
   return (
     <>
       {sportsEvents.length > 0 && (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(sportsEvents) }}
+        />
+      )}
+      {breadcrumb && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
         />
       )}
       <ProgramaClient meetingId={meetingId} />

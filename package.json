@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
+    "@vercel/og": "^0.9.0",
     "mongoose": "^9.2.1",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",

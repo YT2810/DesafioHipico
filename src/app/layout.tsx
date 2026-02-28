@@ -80,12 +80,19 @@ export const metadata: Metadata = {
     siteName: 'Desafío Hípico',
     locale: 'es_VE',
     type: 'website',
+    images: [{
+      url: `${BASE_URL}/api/og`,
+      width: 1200,
+      height: 630,
+      alt: 'Desafío Hípico · Inscritos, Pronósticos y Retirados Venezuela',
+    }],
   },
   twitter: {
     card: 'summary_large_image',
     site: '@DesafioHipico',
     title: 'Desafío Hípico · Inscritos La Rinconada y Valencia',
     description: 'Inscritos, pronósticos, retirados y resultados hípicos de Venezuela en tiempo real.',
+    images: [`${BASE_URL}/api/og`],
   },
   alternates: {
     canonical: BASE_URL,
@@ -102,7 +109,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="es-VE">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-950 text-gray-100`}>
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
@@ -116,6 +123,24 @@ export default function RootLayout({
             gtag('config', '${GA_ID}');
           `}
         </Script>
+        {/* JSON-LD: WebSite SearchAction */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: 'Desafío Hípico',
+            url: 'https://www.desafiohipico.com',
+            potentialAction: {
+              '@type': 'SearchAction',
+              target: {
+                '@type': 'EntryPoint',
+                urlTemplate: 'https://www.desafiohipico.com/pronosticos?q={search_term_string}',
+              },
+              'query-input': 'required name=search_term_string',
+            },
+          }) }}
+        />
         {/* JSON-LD: Organization */}
         <script
           type="application/ld+json"

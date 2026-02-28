@@ -38,6 +38,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
       ? `${total} ejemplar${total !== 1 ? 'es' : ''} retirado${total !== 1 ? 's' : ''} en la Reunión ${data.meetingNumber} del ${track}. ${dateStr}. Consulta qué caballos no corren hoy.`
       : `Sin retirados confirmados para la Reunión ${data.meetingNumber} del ${track}. ${dateStr}.`;
 
+    const ogImg = `${base}/api/og?type=retirados&title=${encodeURIComponent(`Retirados Reunión ${data.meetingNumber} — ${track}`)}&subtitle=${encodeURIComponent(dateStr)}`;
     return {
       title: `${title} | Desafío Hípico`,
       description,
@@ -54,6 +55,11 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
         description,
         type: 'website',
         locale: 'es_VE',
+        images: [{ url: ogImg, width: 1200, height: 630, alt: title }],
+      },
+      twitter: {
+        card: 'summary_large_image' as const,
+        images: [ogImg],
       },
       alternates: {
         canonical: `${base}/retirados?reunion=${reunion}`,

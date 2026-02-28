@@ -25,6 +25,16 @@ export const metadata: Metadata = {
       'Consulta las selecciones de los mejores handicappers venezolanos para cada carrera. La Rinconada · Valencia · Venezuela.',
     type: 'website',
     locale: 'es_VE',
+    images: [{
+      url: 'https://www.desafiohipico.com/api/og?type=pronosticos&title=Pron%C3%B3sticos%20de%20Expertos&subtitle=La%20Rinconada%20%C2%B7%20Valencia%20%C2%B7%20Venezuela',
+      width: 1200,
+      height: 630,
+      alt: 'Pronósticos hípicos Venezuela — Desafío Hípico',
+    }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['https://www.desafiohipico.com/api/og?type=pronosticos&title=Pron%C3%B3sticos%20de%20Expertos&subtitle=La%20Rinconada%20%C2%B7%20Valencia%20%C2%B7%20Venezuela'],
   },
   alternates: {
     canonical: 'https://www.desafiohipico.com/pronosticos',
