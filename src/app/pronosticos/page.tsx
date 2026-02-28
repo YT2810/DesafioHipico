@@ -110,29 +110,34 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
     setDeleting(false);
   }
 
-  const [copying, setCopying] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   async function handleShare() {
-    if (!shareContext) return;
-    const url = buildShareUrl(forecast, shareContext);
-    // Try native share first (mobile), fallback to open in new tab
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `Pronóstico de ${handicapper.pseudonym}`, url });
-        return;
-      } catch { /* cancelled */ }
-    }
-    window.open(url, '_blank');
-  }
-
-  async function handleCopyLink() {
-    if (!shareContext) return;
-    const url = buildShareUrl(forecast, shareContext);
+    if (!shareContext || sharing) return;
+    setSharing(true);
     try {
-      await navigator.clipboard.writeText(url);
-      setCopying(true);
-      setTimeout(() => setCopying(false), 2000);
-    } catch { window.open(url, '_blank'); }
+      const url = buildShareUrl(forecast, shareContext);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const filename = `pronostico-${handicapper.pseudonym.replace(/\s+/g, '-').toLowerCase()}-c${shareContext.raceNumber}.png`;
+      const file = new File([blob], filename, { type: 'image/png' });
+
+      // Mobile: share file directly (no link, just the image)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Pronóstico de ${handicapper.pseudonym} — Carrera ${shareContext.raceNumber}`,
+        });
+      } else {
+        // Desktop: trigger PNG download
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    } catch { /* user cancelled or fetch failed */ }
+    finally { setSharing(false); }
   }
 
   const scratched = scratchedDorsals ?? [];
@@ -255,15 +260,14 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
             <div className="flex gap-2 mb-2">
               <button
                 onClick={handleShare}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
+                disabled={sharing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white transition-colors disabled:opacity-50"
               >
-                📤 Compartir
-              </button>
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
-              >
-                {copying ? '✓ Copiado' : '🔗 Copiar link'}
+                {sharing ? (
+                  <><span className="w-3 h-3 rounded-full border border-gray-400 border-t-transparent animate-spin" />Generando...</>
+                ) : (
+                  <>📤 Compartir card</>
+                )}
               </button>
             </div>
           )}
