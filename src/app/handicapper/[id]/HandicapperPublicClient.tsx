@@ -16,7 +16,7 @@ function labelCls(label: string) { return LABEL_COLORS[label] ?? 'text-gray-400 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: string; }
 interface RaceData { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; isVip: boolean; uploadedByRole?: string; marks: Mark[]; }
 interface ProfileData {
-  profile: { id: string; pseudonym: string; bio: string | null; isGhost: boolean; stats: Record<string, number>; createdAt: string };
+  profile: { id: string; userId: string | null; pseudonym: string; bio: string | null; isGhost: boolean; stats: Record<string, number>; createdAt: string };
   meeting: { id: string; meetingNumber: number; date: string; trackName: string } | null;
   races: RaceData[];
 }
@@ -48,16 +48,10 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
   }
 
   const { profile, meeting, races } = data;
-  const isOwner = !!(session?.user as any)?.handicapperProfileId === undefined
-    ? false
-    : (session?.user as any)?.handicapperProfileId === id ||
-      (session?.user as any)?.id === profile.id;
-
-  // Check if logged-in user owns this profile via userId match
-  const sessionUserId = (session?.user as any)?.id;
-  // We'll show share button if they're admin/staff OR if this is their own profile
-  const sessionRole = (session?.user as any)?.role;
-  const canShare = sessionRole === 'admin' || sessionRole === 'staff' || isOwner;
+  const sessionUserId = (session?.user as any)?.id as string | undefined;
+  const sessionRoles: string[] = (session?.user as any)?.roles ?? [];
+  const isOwner = !!(sessionUserId && profile.userId && sessionUserId === profile.userId);
+  const canShare = sessionRoles.includes('admin') || sessionRoles.includes('staff') || isOwner;
 
   const publicRaces = races.filter(r => !r.isVip && r.marks.length > 0);
   const vipCount = races.filter(r => r.isVip).length;

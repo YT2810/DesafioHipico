@@ -62,6 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({
     profile: {
       id: profile._id.toString(),
+      userId: profile.userId?.toString() ?? null,
       pseudonym: profile.pseudonym,
       bio: profile.bio ?? null,
       isGhost: profile.isGhost,
