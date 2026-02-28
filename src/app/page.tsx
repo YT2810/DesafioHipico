@@ -200,7 +200,7 @@ export default function HomePage() {
               {pseudonym:'La Cátedra',marks:[{horseName:'LUNA LLENA',dorsalNumber:5,label:'Línea'},{horseName:'TRUENO REAL',dorsalNumber:2,label:'Casi Fijo'}]},
             ] as PreviewForecast[]).map((exp, ei) => (
               <div key={ei} className={`bg-gray-900 border border-gray-800 rounded-2xl p-4 text-left transition-all ${
-                !isLoggedIn && ei === 1 ? 'blur-sm pointer-events-none select-none opacity-50' : ''
+                !isLoggedIn && ei > 0 ? 'blur-sm pointer-events-none select-none opacity-50' : ''
               }`}>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0"
