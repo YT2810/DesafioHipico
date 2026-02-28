@@ -161,7 +161,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
         {/* Name + stats */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-white">{handicapper.pseudonym}</span>
+            <Link href={`/handicapper/${handicapper.id}`} onClick={e => e.stopPropagation()} className="text-sm font-bold text-white hover:text-yellow-400 transition-colors">{handicapper.pseudonym}</Link>
             {isVip && (
               <span className="text-xs font-bold px-1.5 py-0.5 rounded"
                 style={{ color: GOLD, backgroundColor: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)' }}>
