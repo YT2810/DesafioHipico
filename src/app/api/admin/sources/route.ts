@@ -12,6 +12,8 @@ import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import ExpertSource from '@/models/ExpertSource';
 import ExpertForecast from '@/models/ExpertForecast';
+import HandicapperProfile from '@/models/HandicapperProfile';
+import Forecast from '@/models/Forecast';
 import { Types } from 'mongoose';
 
 export const dynamic = 'force-dynamic';
@@ -44,11 +46,23 @@ export async function GET(req: NextRequest) {
       let forecastCountForMeeting = 0;
       if (meetingId) {
         const meetingObjId = new Types.ObjectId(meetingId);
+        // Primary: count via ExpertForecast
         forecastCountForMeeting = await ExpertForecast.countDocuments({
           expertSourceId: s._id,
           meetingId: meetingObjId,
           status: 'published',
         });
+        // Fallback: count via ghost HandicapperProfile → Forecast (covers re-published without ExpertForecast)
+        if (forecastCountForMeeting === 0) {
+          const ghostProfile = await HandicapperProfile.findOne({ expertSourceId: s._id }).select('_id').lean();
+          if (ghostProfile) {
+            forecastCountForMeeting = await Forecast.countDocuments({
+              handicapperId: ghostProfile._id,
+              meetingId: meetingObjId,
+              isPublished: true,
+            });
+          }
+        }
         hasForecastForMeeting = forecastCountForMeeting > 0;
       }
 

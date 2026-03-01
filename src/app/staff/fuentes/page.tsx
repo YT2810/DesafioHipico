@@ -140,75 +140,79 @@ export default function SourcesPage() {
 
       {/* Known sources list */}
       <div className="space-y-2">
-        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Fuentes conocidas</h2>
-        {loading ? (
-          <div className="text-center py-8 text-gray-600 text-sm">Cargando...</div>
-        ) : (
-          knownWithStatus.map((k, i) => {
-            const uploaded = k.db?.hasForecastForMeeting ?? false;
-            const count = k.db?.forecastCountForMeeting ?? 0;
-            return (
-              <div
-                key={i}
-                className={`flex items-center justify-between rounded-xl px-4 py-3 border ${
-                  uploaded
-                    ? 'bg-green-950/20 border-green-800/40'
-                    : 'bg-gray-900 border-gray-800'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${uploaded ? 'bg-green-500' : 'bg-gray-600'}`} />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-white">{k.name}</span>
-                      <span className={`text-xs border rounded px-1.5 py-0.5 leading-none flex-shrink-0 ${PRIORITY_COLORS[k.priority]}`}>
-                        {k.priority}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {k.handle && (
-                        <a
-                          href={`https://x.com/${k.handle}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-sky-400 hover:text-sky-300 px-2 py-0.5 rounded-lg transition-colors font-medium"
-                        >
-                          𝕏 @{k.handle}
-                        </a>
-                      )}
-                      {k.link && (
-                        <a
-                          href={k.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs bg-red-950/40 hover:bg-red-900/40 border border-red-800/50 text-red-400 hover:text-red-300 px-2 py-0.5 rounded-lg transition-colors font-medium"
-                        >
-                          ▶ YouTube
-                        </a>
-                      )}
-                      {k.note && (
-                        <span className="text-xs text-gray-600 italic">{k.note}</span>
-                      )}
+        {/* Section: uploaded */}
+        {!loading && knownWithStatus.some(k => k.db?.hasForecastForMeeting) && (
+          <>
+            <h2 className="text-xs font-bold text-green-600 uppercase tracking-wide">✓ Ya subidas esta reunión</h2>
+            {knownWithStatus.filter(k => k.db?.hasForecastForMeeting).map((k, i) => {
+              const count = k.db!.forecastCountForMeeting;
+              return (
+                <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-green-950/25 border-green-700/50">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-lg leading-none">✅</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-white">{k.name}</span>
+                        <span className={`text-xs border rounded px-1.5 py-0.5 leading-none flex-shrink-0 ${PRIORITY_COLORS[k.priority]}`}>{k.priority}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {k.db?.name && k.db.name !== k.name && (
+                          <span className="text-xs text-green-600/70 italic">DB: "{k.db.name}"</span>
+                        )}
+                        {k.handle && <a href={`https://x.com/${k.handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:underline">𝕏 @{k.handle}</a>}
+                        {k.link && <a href={k.link} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 hover:underline">▶ YouTube</a>}
+                      </div>
                     </div>
                   </div>
+                  <span className="text-sm font-bold text-green-400 flex-shrink-0">{count} C</span>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {uploaded ? (
-                    <span className="text-xs text-green-400 font-medium">✓ {count} carreras</span>
-                  ) : (
-                    <Link
-                      href="/admin/intelligence"
-                      className="text-xs font-bold text-black px-3 py-1.5 rounded-lg flex-shrink-0"
-                      style={{ backgroundColor: GOLD }}
-                    >
-                      Subir
-                    </Link>
-                  )}
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </>
         )}
+
+        {/* Section: pending */}
+        {!loading && knownWithStatus.some(k => !k.db?.hasForecastForMeeting) && (
+          <>
+            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-4">Pendientes</h2>
+            {knownWithStatus.filter(k => !k.db?.hasForecastForMeeting).map((k, i) => {
+              const inDb = !!k.db; // ExpertSource exists in DB but no forecast yet
+              return (
+                <div key={i} className={`flex items-center justify-between rounded-xl px-4 py-3 border ${
+                  inDb ? 'bg-yellow-950/10 border-yellow-800/30' : 'bg-gray-900 border-gray-800'
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-base leading-none">{inDb ? '🟡' : '⚪'}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-white">{k.name}</span>
+                        <span className={`text-xs border rounded px-1.5 py-0.5 leading-none flex-shrink-0 ${PRIORITY_COLORS[k.priority]}`}>{k.priority}</span>
+                        {inDb && <span className="text-xs text-yellow-600/80 italic">en DB, sin pronóstico hoy</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {k.db?.name && k.db.name !== k.name && (
+                          <span className="text-xs text-gray-600 italic">DB: "{k.db.name}"</span>
+                        )}
+                        {k.handle && <a href={`https://x.com/${k.handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:underline">𝕏 @{k.handle}</a>}
+                        {k.link && <a href={k.link} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 hover:underline">▶ YouTube</a>}
+                        {k.note && <span className="text-xs text-gray-600 italic">{k.note}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <Link
+                    href="/admin/intelligence"
+                    className="text-xs font-bold text-black px-3 py-1.5 rounded-lg flex-shrink-0"
+                    style={{ backgroundColor: GOLD }}
+                  >
+                    Subir
+                  </Link>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {loading && <div className="text-center py-8 text-gray-600 text-sm">Cargando...</div>}
       </div>
 
       {/* Other sources in DB */}
