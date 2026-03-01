@@ -38,6 +38,7 @@ export default function SourcesPage() {
   const [selectedMeetingId, setSelectedMeetingId] = useState('');
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     fetch('/api/meetings/upcoming?limit=10')
@@ -58,7 +59,11 @@ export default function SourcesPage() {
       .finally(() => setLoading(false));
   }, [selectedMeetingId]);
 
-  // Match a DB source against a known source entry using name, aliases, handle, and link
+  // DB sources sorted: uploaded first, then pending
+  const uploadedSources = sources.filter(s => s.hasForecastForMeeting);
+  const pendingSources  = sources.filter(s => !s.hasForecastForMeeting);
+
+  // Known sources NOT yet in DB at all
   function matchesKnown(s: SourceStatus, k: (typeof KNOWN_SOURCES)[0]): boolean {
     const sName = s.name.toLowerCase();
     const allNames = [k.name, ...(k.aliases ?? [])].map(n => n.toLowerCase());
@@ -67,17 +72,7 @@ export default function SourcesPage() {
     if (k.link && s.link && s.link.toLowerCase().includes(k.link.toLowerCase().replace('https://www.youtube.com/@', ''))) return true;
     return false;
   }
-
-  // Merge known sources list with DB status
-  const knownWithStatus = KNOWN_SOURCES.map(k => {
-    const db = sources.find(s => matchesKnown(s, k));
-    return { ...k, db };
-  });
-
-  // DB sources not in known list
-  const unknownSources = sources.filter(s =>
-    !KNOWN_SOURCES.some(k => matchesKnown(s, k))
-  );
+  const neverIngestedKnown = KNOWN_SOURCES.filter(k => !sources.some(s => matchesKnown(s, k)));
 
   const selectedMeeting = meetings.find(m => m._id === selectedMeetingId);
 
@@ -118,130 +113,92 @@ export default function SourcesPage() {
       {selectedMeeting && !loading && (
         <div className="flex gap-3 text-xs">
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex-1 text-center">
-            <div className="text-2xl font-bold text-white">
-              {knownWithStatus.filter(k => k.db?.hasForecastForMeeting).length}
-            </div>
-            <div className="text-gray-500 mt-0.5">subidos</div>
+            <div className="text-2xl font-bold text-green-400">{uploadedSources.length}</div>
+            <div className="text-gray-500 mt-0.5">subidas hoy</div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex-1 text-center">
-            <div className="text-2xl font-bold text-yellow-400">
-              {knownWithStatus.filter(k => !k.db?.hasForecastForMeeting && k.priority === 'alta').length}
-            </div>
-            <div className="text-gray-500 mt-0.5">pendientes prioritarios</div>
+            <div className="text-2xl font-bold text-yellow-400">{pendingSources.length}</div>
+            <div className="text-gray-500 mt-0.5">en DB, sin subir hoy</div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex-1 text-center">
-            <div className="text-2xl font-bold text-gray-400">
-              {knownWithStatus.filter(k => !k.db?.hasForecastForMeeting && k.priority !== 'alta').length}
-            </div>
-            <div className="text-gray-500 mt-0.5">pendientes resto</div>
+            <div className="text-2xl font-bold text-gray-500">{neverIngestedKnown.length}</div>
+            <div className="text-gray-500 mt-0.5">nunca ingestadas</div>
           </div>
         </div>
       )}
 
-      {/* Known sources list */}
-      <div className="space-y-2">
-        {/* Section: uploaded */}
-        {!loading && knownWithStatus.some(k => k.db?.hasForecastForMeeting) && (
-          <>
-            <h2 className="text-xs font-bold text-green-600 uppercase tracking-wide">✓ Ya subidas esta reunión</h2>
-            {knownWithStatus.filter(k => k.db?.hasForecastForMeeting).map((k, i) => {
-              const count = k.db!.forecastCountForMeeting;
-              return (
-                <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-green-950/25 border-green-700/50">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-lg leading-none">✅</span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-white">{k.name}</span>
-                        <span className={`text-xs border rounded px-1.5 py-0.5 leading-none flex-shrink-0 ${PRIORITY_COLORS[k.priority]}`}>{k.priority}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {k.db?.name && k.db.name !== k.name && (
-                          <span className="text-xs text-green-600/70 italic">DB: "{k.db.name}"</span>
-                        )}
-                        {k.handle && <a href={`https://x.com/${k.handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:underline">𝕏 @{k.handle}</a>}
-                        {k.link && <a href={k.link} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 hover:underline">▶ YouTube</a>}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-sm font-bold text-green-400 flex-shrink-0">{count} C</span>
-                </div>
-              );
-            })}
-          </>
-        )}
+      {loading && <div className="text-center py-8 text-gray-600 text-sm">Cargando...</div>}
 
-        {/* Section: pending */}
-        {!loading && knownWithStatus.some(k => !k.db?.hasForecastForMeeting) && (
-          <>
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-4">Pendientes</h2>
-            {knownWithStatus.filter(k => !k.db?.hasForecastForMeeting).map((k, i) => {
-              const inDb = !!k.db; // ExpertSource exists in DB but no forecast yet
-              return (
-                <div key={i} className={`flex items-center justify-between rounded-xl px-4 py-3 border ${
-                  inDb ? 'bg-yellow-950/10 border-yellow-800/30' : 'bg-gray-900 border-gray-800'
-                }`}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-base leading-none">{inDb ? '🟡' : '⚪'}</span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-white">{k.name}</span>
-                        <span className={`text-xs border rounded px-1.5 py-0.5 leading-none flex-shrink-0 ${PRIORITY_COLORS[k.priority]}`}>{k.priority}</span>
-                        {inDb && <span className="text-xs text-yellow-600/80 italic">en DB, sin pronóstico hoy</span>}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {k.db?.name && k.db.name !== k.name && (
-                          <span className="text-xs text-gray-600 italic">DB: "{k.db.name}"</span>
-                        )}
-                        {k.handle && <a href={`https://x.com/${k.handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:underline">𝕏 @{k.handle}</a>}
-                        {k.link && <a href={k.link} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 hover:underline">▶ YouTube</a>}
-                        {k.note && <span className="text-xs text-gray-600 italic">{k.note}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <Link
-                    href="/admin/intelligence"
-                    className="text-xs font-bold text-black px-3 py-1.5 rounded-lg flex-shrink-0"
-                    style={{ backgroundColor: GOLD }}
-                  >
-                    Subir
-                  </Link>
-                </div>
-              );
-            })}
-          </>
-        )}
-
-        {loading && <div className="text-center py-8 text-gray-600 text-sm">Cargando...</div>}
-      </div>
-
-      {/* Other sources in DB */}
-      {unknownSources.length > 0 && (
+      {/* ── Section 1: Uploaded for this meeting ── */}
+      {!loading && uploadedSources.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Otras fuentes en DB</h2>
-          {unknownSources.map((s, i) => (
-            <div
-              key={i}
-              className={`flex items-center justify-between rounded-xl px-4 py-3 border ${
-                s.hasForecastForMeeting
-                  ? 'bg-green-950/20 border-green-800/40'
-                  : 'bg-gray-900 border-gray-800'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${s.hasForecastForMeeting ? 'bg-green-500' : 'bg-gray-600'}`} />
-                <div>
-                  <span className="text-sm font-medium text-white">{s.name}</span>
-                  <div className="flex items-center gap-2 mt-0.5">
+          <h2 className="text-xs font-bold text-green-500 uppercase tracking-wide">✅ Subidas esta reunión ({uploadedSources.length})</h2>
+          {uploadedSources.map((s, i) => (
+            <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-green-950/25 border-green-700/50">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-lg">✅</span>
+                <div className="min-w-0">
+                  <span className="text-sm font-semibold text-white">{s.name}</span>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span className="text-xs text-gray-500">{s.platform}</span>
-                    {s.handle && <span className="text-xs text-gray-600">@{s.handle}</span>}
-                    <span className="text-xs text-gray-600">{s.totalForecasts} total</span>
+                    {s.handle && <span className="text-xs text-sky-400">@{s.handle}</span>}
                   </div>
                 </div>
               </div>
-              {s.hasForecastForMeeting && (
-                <span className="text-xs text-green-400 font-medium">✓ {s.forecastCountForMeeting} carreras</span>
-              )}
+              <span className="text-sm font-bold text-green-400 shrink-0">{s.forecastCountForMeeting} C</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Section 2: In DB but no forecast for this meeting ── */}
+      {!loading && pendingSources.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xs font-bold text-yellow-600 uppercase tracking-wide mt-2">🟡 En DB — sin pronóstico hoy ({pendingSources.length})</h2>
+          {pendingSources.map((s, i) => (
+            <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-yellow-950/10 border-yellow-800/30">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-base">🟡</span>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-white">{s.name}</span>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-xs text-gray-500">{s.platform}</span>
+                    {s.handle && <span className="text-xs text-sky-400">@{s.handle}</span>}
+                    <span className="text-xs text-gray-600">{s.totalForecasts} pronóst. totales</span>
+                  </div>
+                </div>
+              </div>
+              <Link href="/admin/intelligence" className="text-xs font-bold text-black px-3 py-1.5 rounded-lg shrink-0" style={{ backgroundColor: GOLD }}>
+                Subir
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Section 3: Known sources never ingested at all ── */}
+      {!loading && neverIngestedKnown.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-2">⚪ Nunca ingestadas ({neverIngestedKnown.length})</h2>
+          {neverIngestedKnown.map((k, i) => (
+            <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-gray-900 border-gray-800">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-base">⚪</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-white">{k.name}</span>
+                    <span className={`text-xs border rounded px-1.5 py-0.5 leading-none shrink-0 ${PRIORITY_COLORS[k.priority]}`}>{k.priority}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {k.handle && <a href={`https://x.com/${k.handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:underline">𝕏 @{k.handle}</a>}
+                    {k.link && <a href={k.link} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 hover:underline">▶ YouTube</a>}
+                    {k.note && <span className="text-xs text-gray-600 italic">{k.note}</span>}
+                  </div>
+                </div>
+              </div>
+              <Link href="/admin/intelligence" className="text-xs font-bold text-black px-3 py-1.5 rounded-lg shrink-0" style={{ backgroundColor: GOLD }}>
+                Subir
+              </Link>
             </div>
           ))}
         </div>
