@@ -5,14 +5,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
+import '@/models/Track';
 import Race from '@/models/Race';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    const secure = req.nextUrl.protocol === 'https:';
+    const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
+    const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
+    const roles: string[] = (token?.roles as string[]) ?? [];
+    if (!token || !roles.some(r => ['admin', 'staff'].includes(r))) {
+      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+    }
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 50);
