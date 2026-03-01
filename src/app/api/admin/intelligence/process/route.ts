@@ -144,10 +144,43 @@ export async function POST(req: NextRequest) {
       }
 
       const resolvedMarks = fc.marks.map(mark => {
-        // Priority 1: exact dorsal match
-        if (mark.dorsalNumber) {
-          const byDorsal = dbEntries.find(e => e.dorsal === mark.dorsalNumber);
-          if (byDorsal) {
+        const byDorsal = mark.dorsalNumber
+          ? dbEntries.find(e => e.dorsal === mark.dorsalNumber)
+          : null;
+
+        const nameMatch = mark.rawName
+          ? findBestMatch(mark.rawName, dbEntries.map(e => ({ dorsal: e.dorsal, horseName: e.horseName })))
+          : null;
+        const nameMatchedEntry = nameMatch ? dbEntries[nameMatch.entryIdx] : null;
+
+        // Case A: dorsal only (no rawName) → trust DB name for that dorsal, 100%
+        if (mark.dorsalNumber && !mark.rawName && byDorsal) {
+          return {
+            ...mark,
+            resolvedHorseName: byDorsal.horseName,
+            resolvedEntryId: byDorsal.entryId,
+            matchConfidence: 1.0,
+          };
+        }
+
+        // Case B: name only (no dorsal) → resolve via similarity, dorsal from DB
+        if (!mark.dorsalNumber && nameMatchedEntry) {
+          return {
+            ...mark,
+            resolvedHorseName: nameMatchedEntry.horseName,
+            resolvedEntryId: nameMatchedEntry.entryId,
+            dorsalNumber: nameMatchedEntry.dorsal,
+            matchConfidence: nameMatch!.confidence,
+          };
+        }
+
+        // Case C: both dorsal AND name present
+        if (mark.dorsalNumber && mark.rawName && byDorsal) {
+          // Check if name similarity agrees with the given dorsal
+          const nameMatchesDorsal = nameMatchedEntry?.dorsal === mark.dorsalNumber;
+
+          if (nameMatchesDorsal) {
+            // Full agreement → 100%, use DB name
             return {
               ...mark,
               resolvedHorseName: byDorsal.horseName,
@@ -155,18 +188,24 @@ export async function POST(req: NextRequest) {
               matchConfidence: 1.0,
             };
           }
+
+          // Conflict: dorsal says one horse, name says another
+          // Keep dorsal but DROP confidence to force manual review in the table
+          return {
+            ...mark,
+            resolvedHorseName: byDorsal.horseName,
+            resolvedEntryId: byDorsal.entryId,
+            matchConfidence: 0.4, // intentionally low — user must verify in table
+          };
         }
-        // Priority 2: name similarity
-        const match = mark.rawName
-          ? findBestMatch(mark.rawName, dbEntries.map(e => ({ dorsal: e.dorsal, horseName: e.horseName })))
-          : null;
-        const matchedEntry = match ? dbEntries[match.entryIdx] : null;
+
+        // Fallback: no DB entry found
         return {
           ...mark,
-          resolvedHorseName: match?.horseName ?? null,
-          resolvedEntryId: matchedEntry?.entryId ?? null,
-          dorsalNumber: mark.dorsalNumber ?? matchedEntry?.dorsal ?? undefined,
-          matchConfidence: match?.confidence ?? 0,
+          resolvedHorseName: nameMatch?.horseName ?? null,
+          resolvedEntryId: nameMatchedEntry?.entryId ?? null,
+          dorsalNumber: mark.dorsalNumber ?? nameMatchedEntry?.dorsal ?? undefined,
+          matchConfidence: nameMatch?.confidence ?? 0,
         };
       });
 

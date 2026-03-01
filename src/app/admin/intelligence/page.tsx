@@ -605,16 +605,46 @@ export default function IntelligencePage() {
                           {mark.resolvedHorseName ? (
                             <>
                               <div className="flex-1">
-                                <p className="text-sm text-white">{mark.resolvedHorseName}</p>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <div className={`h-1.5 rounded-full ${
-                                    mark.matchConfidence >= 0.9 ? 'bg-green-500' :
-                                    mark.matchConfidence >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
-                                  }`} style={{ width: `${Math.round(mark.matchConfidence * 100)}%`, maxWidth: '80px' }} />
-                                  <span className="text-xs text-gray-500">
-                                    {Math.round(mark.matchConfidence * 100)}%
-                                  </span>
-                                </div>
+                                {/* Conflict warning: dorsal and name disagree */}
+                                {mark.matchConfidence <= 0.4 && mark.rawName && (
+                                  <div className="mb-1 text-xs text-orange-400 font-medium">
+                                    ⚠️ Conflicto: dorsal #{mark.dorsalNumber} ≠ "{mark.rawName}"
+                                  </div>
+                                )}
+                                {mark.matchConfidence <= 0.4 && fc.dbEntries.length > 0 ? (
+                                  <select
+                                    value={mark.resolvedEntryId ?? ''}
+                                    onChange={e => {
+                                      const entry = fc.dbEntries.find(d => d.entryId === e.target.value);
+                                      if (entry) {
+                                        updateMark(fcIdx, markIdx, 'resolvedHorseName', entry.horseName);
+                                        updateMark(fcIdx, markIdx, 'resolvedEntryId', entry.entryId);
+                                        updateMark(fcIdx, markIdx, 'dorsalNumber', entry.dorsal);
+                                        updateMark(fcIdx, markIdx, 'matchConfidence', 1.0);
+                                      }
+                                    }}
+                                    className="w-full text-xs bg-gray-800 border border-orange-700 rounded-lg px-2 py-1 text-gray-300 focus:outline-none"
+                                  >
+                                    {fc.dbEntries.map(e => (
+                                      <option key={e.entryId} value={e.entryId}>
+                                        #{e.dorsal} {e.horseName}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <>
+                                    <p className="text-sm text-white">{mark.resolvedHorseName}</p>
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <div className={`h-1.5 rounded-full ${
+                                        mark.matchConfidence >= 0.9 ? 'bg-green-500' :
+                                        mark.matchConfidence >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
+                                      }`} style={{ width: `${Math.round(mark.matchConfidence * 100)}%`, maxWidth: '80px' }} />
+                                      <span className="text-xs text-gray-500">
+                                        {Math.round(mark.matchConfidence * 100)}%
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             </>
                           ) : (
