@@ -56,30 +56,9 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-interface ShareContext { raceNumber: number; trackName: string; meetingNumber: number; }
-
-function buildShareUrl(forecast: ForecastItem, ctx: ShareContext): string {
-  const base = window.location.origin;
-  const marksPayload = forecast.marks
-    .sort((a, b) => a.preferenceOrder - b.preferenceOrder)
-    .map(m => ({ dorsal: m.dorsalNumber, name: m.horseName, label: m.label }));
-  const badge = forecast.uploadedByRole === 'handicapper' ? '✅'
-    : forecast.handicapper.isGhost ? '🤖' : '📋';
-  const params = new URLSearchParams({
-    handicapper: forecast.handicapper.pseudonym,
-    badge,
-    track: ctx.trackName,
-    meeting: String(ctx.meetingNumber),
-    race: String(ctx.raceNumber),
-    marks: JSON.stringify(marksPayload),
-  });
-  return `${base}/api/og/forecast?${params.toString()}`;
-}
-
-function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals, shareContext }: {
+function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals }: {
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
   isPrivileged?: boolean; raceId?: string; onDeleted?: () => void; scratchedDorsals?: number[];
-  shareContext?: ShareContext;
 }) {
   const { handicapper, marks, isVip, sourceRef, uploadedByRole } = forecast;
   const isGhost = handicapper.isGhost ?? false;
@@ -110,35 +89,6 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
     setDeleting(false);
   }
 
-  const [sharing, setSharing] = useState(false);
-
-  async function handleShare() {
-    if (!shareContext || sharing) return;
-    setSharing(true);
-    try {
-      const url = buildShareUrl(forecast, shareContext);
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const filename = `pronostico-${handicapper.pseudonym.replace(/\s+/g, '-').toLowerCase()}-c${shareContext.raceNumber}.png`;
-      const file = new File([blob], filename, { type: 'image/png' });
-
-      // Mobile: share file directly (no link, just the image)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Pronóstico de ${handicapper.pseudonym} — Carrera ${shareContext.raceNumber}`,
-        });
-      } else {
-        // Desktop: trigger PNG download
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
-    } catch { /* user cancelled or fetch failed */ }
-    finally { setSharing(false); }
-  }
 
   const scratched = scratchedDorsals ?? [];
   const sortedMarks = [...marks].sort((a, b) => a.preferenceOrder - b.preferenceOrder);
@@ -254,21 +204,6 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
                   <> Verifica en la <a href={sourceRef} target="_blank" rel="noopener noreferrer" className="underline text-yellow-400 hover:text-yellow-300 ml-1">fuente original →</a></>
                 ) : ' Fuente no disponible.'}
               </p>
-            </div>
-          )}
-          {shareContext && marks.length > 0 && (
-            <div className="flex gap-2 mb-2">
-              <button
-                onClick={handleShare}
-                disabled={sharing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white transition-colors disabled:opacity-50"
-              >
-                {sharing ? (
-                  <><span className="w-3 h-3 rounded-full border border-gray-400 border-t-transparent animate-spin" />Generando...</>
-                ) : (
-                  <>📤 Compartir card</>
-                )}
-              </button>
             </div>
           )}
           {false ? null : (
@@ -390,7 +325,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           )}
           {race.forecasts.length === 0
             ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} shareContext={{ raceNumber: race.raceNumber, trackName: meetingInfo?.trackName ?? '', meetingNumber: meetingInfo?.meetingNumber ?? 0 }} />)}</div>
+            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} />)}</div>
           }
         </>
       )}

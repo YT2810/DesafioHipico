@@ -58,21 +58,25 @@ export default function SourcesPage() {
       .finally(() => setLoading(false));
   }, [selectedMeetingId]);
 
+  // Match a DB source against a known source entry using name, aliases, handle, and link
+  function matchesKnown(s: SourceStatus, k: (typeof KNOWN_SOURCES)[0]): boolean {
+    const sName = s.name.toLowerCase();
+    const allNames = [k.name, ...(k.aliases ?? [])].map(n => n.toLowerCase());
+    if (allNames.some(n => sName === n || sName.includes(n) || n.includes(sName))) return true;
+    if (k.handle && s.handle?.toLowerCase() === k.handle.toLowerCase()) return true;
+    if (k.link && s.link && s.link.toLowerCase().includes(k.link.toLowerCase().replace('https://www.youtube.com/@', ''))) return true;
+    return false;
+  }
+
   // Merge known sources list with DB status
   const knownWithStatus = KNOWN_SOURCES.map(k => {
-    const db = sources.find(
-      s => s.name.toLowerCase().includes(k.name.split(' ')[0].toLowerCase()) ||
-           (k.handle && s.handle?.toLowerCase() === k.handle.toLowerCase())
-    );
+    const db = sources.find(s => matchesKnown(s, k));
     return { ...k, db };
   });
 
   // DB sources not in known list
   const unknownSources = sources.filter(s =>
-    !KNOWN_SOURCES.some(k =>
-      s.name.toLowerCase().includes(k.name.split(' ')[0].toLowerCase()) ||
-      (k.handle && s.handle?.toLowerCase() === k.handle.toLowerCase())
-    )
+    !KNOWN_SOURCES.some(k => matchesKnown(s, k))
   );
 
   const selectedMeeting = meetings.find(m => m._id === selectedMeetingId);
