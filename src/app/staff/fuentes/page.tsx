@@ -41,7 +41,8 @@ export default function SourcesPage() {
   const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
-    fetch('/api/meetings/upcoming?limit=10')
+    // Fetch recent meetings (past + upcoming) sorted newest first
+    fetch('/api/meetings/recent?limit=20')
       .then(r => r.json())
       .then(d => {
         const list = d.meetings ?? [];
@@ -114,11 +115,11 @@ export default function SourcesPage() {
         <div className="flex gap-3 text-xs">
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex-1 text-center">
             <div className="text-2xl font-bold text-green-400">{uploadedSources.length}</div>
-            <div className="text-gray-500 mt-0.5">subidas hoy</div>
+            <div className="text-gray-500 mt-0.5">con pronósticos</div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex-1 text-center">
             <div className="text-2xl font-bold text-yellow-400">{pendingSources.length}</div>
-            <div className="text-gray-500 mt-0.5">en DB, sin subir hoy</div>
+            <div className="text-gray-500 mt-0.5">en DB, sin subir</div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex-1 text-center">
             <div className="text-2xl font-bold text-gray-500">{neverIngestedKnown.length}</div>
@@ -132,7 +133,7 @@ export default function SourcesPage() {
       {/* ── Section 1: Uploaded for this meeting ── */}
       {!loading && uploadedSources.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xs font-bold text-green-500 uppercase tracking-wide">✅ Subidas esta reunión ({uploadedSources.length})</h2>
+          <h2 className="text-xs font-bold text-green-500 uppercase tracking-wide">✅ Con pronósticos esta reunión ({uploadedSources.length})</h2>
           {uploadedSources.map((s, i) => (
             <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-green-950/25 border-green-700/50">
               <div className="flex items-center gap-3 min-w-0">
@@ -154,7 +155,7 @@ export default function SourcesPage() {
       {/* ── Section 2: In DB but no forecast for this meeting ── */}
       {!loading && pendingSources.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xs font-bold text-yellow-600 uppercase tracking-wide mt-2">🟡 En DB — sin pronóstico hoy ({pendingSources.length})</h2>
+          <h2 className="text-xs font-bold text-yellow-600 uppercase tracking-wide mt-2">🟡 En DB — sin pronóstico esta reunión ({pendingSources.length})</h2>
           {pendingSources.map((s, i) => (
             <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-yellow-950/10 border-yellow-800/30">
               <div className="flex items-center gap-3 min-w-0">
