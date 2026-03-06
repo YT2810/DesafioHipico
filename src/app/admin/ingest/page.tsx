@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import type { ProcessedDocument } from '@/services/pdfProcessor';
 
@@ -292,6 +292,7 @@ interface FinishRow {
   dorsalNumber: number; horseName: string; finishPosition: number;
   distanceMargin: string; isDistanced: boolean; isScratched: boolean; scratchReason: string;
   estimatedTime: string;
+  accumulatedBodies: string; // total bodies from 1st place, formatted
 }
 
 // Returns exact bodies as decimal number. null = S/T (FC/Desc).
@@ -334,25 +335,48 @@ function fifthsToStr(totalFifths: number): string {
   return `${secs}.${f}`;
 }
 
+function fmtBodies(b: number): string {
+  if (b === 0) return '—';
+  const whole = Math.floor(b);
+  const frac = b - whole;
+  if (frac === 0) return `${whole}`;
+  if (Math.abs(frac - 0.25) < 0.01) return whole > 0 ? `${whole} 1/4` : '1/4';
+  if (Math.abs(frac - 0.5) < 0.01) return whole > 0 ? `${whole} 1/2` : '1/2';
+  if (Math.abs(frac - 0.75) < 0.01) return whole > 0 ? `${whole} 3/4` : '3/4';
+  return b.toFixed(1);
+}
+
 function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
   const baseFifths = parseOfficialTime(winnerTime);
-  if (baseFifths === null) return rows.map(r => ({ ...r, estimatedTime: r.isScratched ? 'S/T' : '' }));
+  if (baseFifths === null) return rows.map(r => ({ ...r, estimatedTime: r.isScratched ? 'S/T' : '', accumulatedBodies: r.finishPosition === 1 ? '—' : '' }));
   const sorted = [...rows]
     .filter(r => !r.isScratched)
     .sort((a, b) => a.finishPosition - b.finishPosition);
   const timeMap: Record<number, string> = {};
-  let accBodies = 0; // exact decimal bodies from 1st place, accumulated position by position
+  const bodiesMap: Record<number, string> = {};
+  let accBodies = 0;
   for (const row of sorted) {
-    if (row.finishPosition === 1) { timeMap[row.dorsalNumber] = winnerTime; continue; }
+    if (row.finishPosition === 1) {
+      timeMap[row.dorsalNumber] = winnerTime;
+      bodiesMap[row.dorsalNumber] = '—';
+      continue;
+    }
     const bodies = marginToBodies(row.distanceMargin);
-    if (bodies === null) { timeMap[row.dorsalNumber] = 'S/T'; accBodies = 0; continue; }
-    accBodies += bodies; // e.g. 8.5 + 2.5 = 11.0 exact
-    // 1 body = 1 fifth (0.2s) — round to nearest fifth
+    if (bodies === null) {
+      timeMap[row.dorsalNumber] = 'S/T';
+      bodiesMap[row.dorsalNumber] = 'FC';
+      accBodies = 0; continue;
+    }
+    accBodies += bodies;
+    bodiesMap[row.dorsalNumber] = fmtBodies(accBodies);
     const extraFifths = Math.round(accBodies);
     timeMap[row.dorsalNumber] = fifthsToStr(baseFifths + extraFifths);
   }
-  for (const row of rows.filter(r => r.isScratched)) timeMap[row.dorsalNumber] = 'S/T';
-  return rows.map(r => ({ ...r, estimatedTime: timeMap[r.dorsalNumber] ?? '' }));
+  for (const row of rows.filter(r => r.isScratched)) {
+    timeMap[row.dorsalNumber] = 'S/T';
+    bodiesMap[row.dorsalNumber] = 'S/T';
+  }
+  return rows.map(r => ({ ...r, estimatedTime: timeMap[r.dorsalNumber] ?? '', accumulatedBodies: bodiesMap[r.dorsalNumber] ?? '' }));
 }
 interface PayoutRow { combination: string; amount: string; }
 interface PayoutsEdit {
@@ -371,6 +395,8 @@ function ResultsTab() {
   const [meetings, setMeetings] = useState<{ _id: string; meetingNumber: number; date: string; trackName?: string }[]>([]);
   const [meetingId, setMeetingId] = useState('');
   const [raceNumber, setRaceNumber] = useState('');
+  const [raceDistance, setRaceDistance] = useState<number | null>(null);
+  const [races, setRaces] = useState<{ raceNumber: number; distance: number; status: string }[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -393,6 +419,21 @@ function ResultsTab() {
     });
   });
 
+  useEffect(() => {
+    if (!meetingId) return;
+    fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()).then(d => {
+      const list = (d.races ?? []).map((r: any) => ({ raceNumber: r.raceNumber, distance: r.distance, status: r.status }));
+      setRaces(list);
+      setRaceDistance(null);
+    });
+  }, [meetingId]);
+
+  useEffect(() => {
+    if (!raceNumber || !races.length) return;
+    const found = races.find(r => r.raceNumber === parseInt(raceNumber));
+    setRaceDistance(found?.distance ?? null);
+  }, [raceNumber, races]);
+
   function addImages(files: FileList | File[]) {
     const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
     setImages(prev => [...prev, ...arr].slice(0, 3));
@@ -409,12 +450,16 @@ function ResultsTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error extrayendo resultados');
       const r = data.result;
+      // Warn if Gemini detected a different race number
+      if (r.raceNumber && String(r.raceNumber) !== String(raceNumber)) {
+        setError(`⚠️ La IA detectó Carrera ${r.raceNumber} pero tienes seleccionada Carrera ${raceNumber}. Verifica las imágenes antes de guardar.`);
+      }
       const winTime: string = r.officialTime ?? '';
       const rawRows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
         dorsalNumber: e.dorsalNumber ?? 0, horseName: e.horseName ?? '',
         finishPosition: e.finishPosition ?? 0, distanceMargin: e.distanceMargin ?? '',
         isDistanced: e.isDistanced ?? false, isScratched: e.isScratched ?? false,
-        scratchReason: '', estimatedTime: '',
+        scratchReason: '', estimatedTime: '', accumulatedBodies: '',
       }));
       const rows = computeEntryTimes(rawRows, winTime);
       setFinishOrder(rows);
@@ -425,7 +470,6 @@ function ResultsTab() {
         if (Array.isArray(src)) p[key] = src.map((x: any) => ({ combination: String(x.combination ?? ''), amount: String(x.amount ?? '') }));
       }
       setPayouts(p);
-      // Always update race number from Gemini detection
       if (r.raceNumber) setRaceNumber(String(r.raceNumber));
       setExtracted(true);
       setTokensUsed(Math.round((images.reduce((s, f) => s + f.size, 0) / 1024) * 0.85 + 400));
@@ -451,6 +495,11 @@ function ResultsTab() {
 
   async function handleSave() {
     if (!meetingId || !raceNumber || !finishOrder.length) return;
+    // Overwrite protection: warn if race already has results
+    const raceInfo = races.find(r => r.raceNumber === parseInt(raceNumber));
+    if (raceInfo?.status === 'finished') {
+      if (!window.confirm(`⚠️ La Carrera ${raceNumber} ya tiene resultados guardados. ¿Sobreescribir?`)) return;
+    }
     setSaving(true); setError(''); setSavedOk(false);
     try {
       const payoutsPayload: Record<string, { combination: string; amount: number }[]> = {};
@@ -550,7 +599,7 @@ function ResultsTab() {
       {extracted && finishOrder.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <div className="px-5 py-3 bg-gray-800/60 border-b border-gray-700 flex items-center justify-between">
-            <p className="text-sm font-bold text-amber-400">📋 Orden de llegada — C{raceNumber} (editable)</p>
+            <p className="text-sm font-bold text-amber-400">📋 Orden de llegada — C{raceNumber}{raceDistance ? ` · ${raceDistance} mts` : ''} (editable)</p>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Tiempo oficial 1°:</span>
               <input value={officialTime} onChange={e => {
@@ -569,6 +618,7 @@ function ResultsTab() {
                   <th className="px-3 py-2 text-center">Dorsal</th>
                   <th className="px-3 py-2 text-left">Ejemplar</th>
                   <th className="px-3 py-2 text-center">Cuerpos</th>
+                  <th className="px-3 py-2 text-center" title="Cuerpos acumulados desde el 1er lugar">Total cpos.</th>
                   <th className="px-3 py-2 text-center" title="Distanciado">Dist.</th>
                   <th className="px-3 py-2 text-center" title="Retirado post-carrera">Ret.</th>
                   <th className="px-3 py-2 text-left">Motivo retiro</th>
@@ -595,6 +645,9 @@ function ResultsTab() {
                     <td className="px-3 py-2 text-center">
                       <input value={row.distanceMargin} onChange={e => updateRow(idx, 'distanceMargin', e.target.value)}
                         className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 focus:outline-none" placeholder="1 cpo" />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className="text-xs font-mono text-gray-400">{row.accumulatedBodies}</span>
                     </td>
                     <td className="px-3 py-2 text-center">
                       <input type="checkbox" checked={row.isDistanced} onChange={e => updateRow(idx, 'isDistanced', e.target.checked)} className="w-4 h-4 accent-orange-500" />
