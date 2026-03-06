@@ -18,7 +18,7 @@ export async function GET(
 
     const races = await Race.find({ meetingId: new Types.ObjectId(id) })
       .sort({ raceNumber: 1 })
-      .select('raceNumber distance status scheduledTime conditions prizePool')
+      .select('raceNumber distance status games scheduledTime conditions prizePool')
       .lean();
 
     return NextResponse.json({
@@ -27,6 +27,7 @@ export async function GET(
         raceNumber: r.raceNumber,
         distance: r.distance ?? null,
         status: r.status ?? 'scheduled',
+        games: r.games ?? [],
         scheduledTime: r.scheduledTime ?? '',
         conditions: r.conditions ?? '',
         prizePool: r.prizePool ?? 0,

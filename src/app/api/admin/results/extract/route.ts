@@ -19,15 +19,18 @@ Extrae cada puesto con:
 IMPORTANTE sobre distanciados: el orden en la imagen es el orden de cruce de meta. Si hay un distanciado, su posición OFICIAL cambia pero los dividendos ya son los oficiales. Marca isDistanced:true en el ejemplar distanciado.
 
 ═══ DIVIDENDOS OFICIALES ═══
-Extrae los pagos para cada tipo de apuesta:
-- winner: ganador — array de {combination: "dorsal", amount: número en bolívares}
-- exacta: exacta — {combination: "D1-D2", amount}
-- trifecta: trifecta — {combination: "D1-D2-D3", amount}
-- superfecta: superfecta — {combination: "D1-D2-D3-D4", amount}
-- quinela: quiniela — {combination: "D1-D2", amount}
-- dobleSeleccion: doble selección/doble perfecta — {combination: "D1-D2", amount}
+Extrae los pagos para cada tipo de apuesta del INH venezolano:
+- winner: GANADOR — array de {combination: "dorsal", amount: número en bolívares}
+- place: PLACE — array de {combination: "dorsal", amount} (puede haber 2 o más entradas, una por cada dorsal)
+- exacta: EXACTA — {combination: "D1-D2", amount}
+- trifecta: TRIFECTA — {combination: "D1-D2-D3", amount}
+- superfecta: SUPERFECTA — {combination: "D1-D2-D3-D4", amount}
+- tripleApuesta: TRIPLE APUESTA — {combination: "D1-D2-D3", amount}
+- poolDe4: POOL DE 4 — {combination: "D1-D2-D3-D4", amount}
+- cincoYSeis: 5 Y 6 / CINCO Y SEIS — {combination: "D1-D2-D3-D4-D5-D6", amount}
+- lotoHipico: LOTO HÍPICO — {combination: string, amount}
 
-Los montos pueden ser "Bs. 1.234,56" → extrae 1234.56 como número.
+Los montos pueden ser "Bs. 1.234,56" → extrae 1234.56 como número. Si un tipo no aparece en la imagen, usa array vacío [].
 
 ═══ TIEMPOS ═══
 - officialTime: tiempo oficial del GANADOR en formato venezolano "segundos.quintos" (ej: "97.4", "108.2"). Si aparece en formato minutos como "1:37.4" conviértelo a segundos: 1*60+37=97, quintos=4 → "97.4". null si no aparece.
@@ -46,12 +49,15 @@ Los montos pueden ser "Bs. 1.234,56" → extrae 1234.56 como número.
     {"finishPosition": 2, "dorsalNumber": 3, "horseName": "OTRO", "distanceMargin": "1 cpo", "isDistanced": false, "isScratched": false}
   ],
   "payouts": {
-    "winner": [{"combination": "5", "amount": 1500.00}],
-    "exacta": [{"combination": "5-3", "amount": 4200.00}],
-    "trifecta": null,
-    "superfecta": null,
-    "quinela": null,
-    "dobleSeleccion": null
+    "winner": [{"combination": "7", "amount": 192.28}],
+    "place": [{"combination": "7", "amount": 124.01}, {"combination": "4", "amount": 125.97}],
+    "exacta": [{"combination": "7-4", "amount": 461.29}],
+    "trifecta": [],
+    "superfecta": [],
+    "tripleApuesta": [],
+    "poolDe4": [],
+    "cincoYSeis": [],
+    "lotoHipico": []
   }
 }`;
 

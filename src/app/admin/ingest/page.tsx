@@ -380,15 +380,23 @@ function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
 }
 interface PayoutRow { combination: string; amount: string; }
 interface PayoutsEdit {
-  winner: PayoutRow[]; exacta: PayoutRow[]; trifecta: PayoutRow[];
-  superfecta: PayoutRow[]; quinela: PayoutRow[]; dobleSeleccion: PayoutRow[];
+  winner: PayoutRow[]; place: PayoutRow[]; exacta: PayoutRow[]; trifecta: PayoutRow[];
+  superfecta: PayoutRow[]; tripleApuesta: PayoutRow[]; poolDe4: PayoutRow[];
+  cincoYSeis: PayoutRow[]; lotoHipico: PayoutRow[];
 }
 const PAYOUT_LABELS: Record<string, string> = {
-  winner: 'Ganador', exacta: 'Exacta', trifecta: 'Trifecta',
-  superfecta: 'Superfecta', quinela: 'Quiniela', dobleSeleccion: 'Doble Selección',
+  winner: 'Ganador', place: 'Place', exacta: 'Exacta', trifecta: 'Trifecta',
+  superfecta: 'Superfecta', tripleApuesta: 'Triple Apuesta', poolDe4: 'Pool de 4',
+  cincoYSeis: '5 y 6', lotoHipico: 'Loto Hípico',
+};
+// Maps Race.games enum values to PayoutsEdit keys
+const GAME_TO_PAYOUT: Record<string, keyof PayoutsEdit> = {
+  GANADOR: 'winner', PLACE: 'place', EXACTA: 'exacta', TRIFECTA: 'trifecta',
+  SUPERFECTA: 'superfecta', TRIPLE_APUESTA: 'tripleApuesta', POOL_DE_4: 'poolDe4',
+  CINCO_Y_SEIS: 'cincoYSeis', LOTO_HIPICO: 'lotoHipico',
 };
 function emptyPayouts(): PayoutsEdit {
-  return { winner: [], exacta: [], trifecta: [], superfecta: [], quinela: [], dobleSeleccion: [] };
+  return { winner: [], place: [], exacta: [], trifecta: [], superfecta: [], tripleApuesta: [], poolDe4: [], cincoYSeis: [], lotoHipico: [] };
 }
 
 function ResultsTab() {
@@ -396,7 +404,7 @@ function ResultsTab() {
   const [meetingId, setMeetingId] = useState('');
   const [raceNumber, setRaceNumber] = useState('');
   const [raceDistance, setRaceDistance] = useState<number | null>(null);
-  const [races, setRaces] = useState<{ raceNumber: number; distance: number; status?: string }[]>([]);
+  const [races, setRaces] = useState<{ raceNumber: number; distance: number; status?: string; games?: string[] }[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -423,7 +431,7 @@ function ResultsTab() {
   useEffect(() => {
     if (!meetingId) return;
     fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()).then(d => {
-      const list = (d.races ?? []).map((r: any) => ({ raceNumber: r.raceNumber, distance: r.distance ?? null, status: r.status ?? '' }));
+      const list = (d.races ?? []).map((r: any) => ({ raceNumber: r.raceNumber, distance: r.distance ?? null, status: r.status ?? '', games: r.games ?? [] }));
       setRaces(list);
       setRaceDistance(null);
     });
@@ -686,33 +694,45 @@ function ResultsTab() {
             </table>
           </div>
 
-          {/* Payouts */}
-          <div className="p-5 border-t border-gray-800">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividendos Oficiales</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(Object.keys(payouts) as (keyof PayoutsEdit)[]).map(type => (
-                <div key={type} className="bg-gray-800/50 rounded-lg overflow-hidden">
-                  <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 uppercase">{PAYOUT_LABELS[type]}</span>
-                    <button onClick={() => addPayoutRow(type)} className="text-xs text-gray-500 hover:text-amber-400">+ añadir</button>
-                  </div>
-                  {payouts[type].length === 0
-                    ? <p className="px-3 py-2 text-xs text-gray-600 italic">Sin dividendo</p>
-                    : payouts[type].map((row, i) => (
-                      <div key={i} className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/50 last:border-0">
-                        <input value={row.combination} onChange={e => updatePayout(type, i, 'combination', e.target.value)}
-                          className="flex-1 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 font-mono focus:outline-none" placeholder="5-3" />
-                        <span className="text-xs text-gray-600">Bs.</span>
-                        <input value={row.amount} onChange={e => updatePayout(type, i, 'amount', e.target.value)}
-                          className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-green-400 font-mono focus:outline-none" placeholder="1500" />
-                        <button onClick={() => removePayoutRow(type, i)} className="text-gray-600 hover:text-red-400 text-xs px-1">×</button>
+          {/* Payouts — only show types that match race.games (fallback: all) */}
+          {(() => {
+            const raceInfo = races.find(r => r.raceNumber === parseInt(raceNumber));
+            const activeGames = raceInfo?.games ?? [];
+            const visibleTypes: (keyof PayoutsEdit)[] = activeGames.length > 0
+              ? (Object.keys(payouts) as (keyof PayoutsEdit)[]).filter(k => {
+                  const gameKey = Object.entries(GAME_TO_PAYOUT).find(([, v]) => v === k)?.[0];
+                  return gameKey ? activeGames.includes(gameKey) : false;
+                })
+              : (Object.keys(payouts) as (keyof PayoutsEdit)[]);
+            return (
+              <div className="p-5 border-t border-gray-800">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividendos Oficiales</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {visibleTypes.map(type => (
+                    <div key={type} className="bg-gray-800/50 rounded-lg overflow-hidden">
+                      <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-400 uppercase">{PAYOUT_LABELS[type]}</span>
+                        <button onClick={() => addPayoutRow(type)} className="text-xs text-gray-500 hover:text-amber-400">+ añadir</button>
                       </div>
-                    ))
-                  }
+                      {payouts[type].length === 0
+                        ? <p className="px-3 py-2 text-xs text-gray-600 italic">Sin dividendo</p>
+                        : payouts[type].map((row, i) => (
+                          <div key={i} className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/50 last:border-0">
+                            <input value={row.combination} onChange={e => updatePayout(type, i, 'combination', e.target.value)}
+                              className="flex-1 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 font-mono focus:outline-none" placeholder="5-3" />
+                            <span className="text-xs text-gray-600">Bs.</span>
+                            <input value={row.amount} onChange={e => updatePayout(type, i, 'amount', e.target.value)}
+                              className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-green-400 font-mono focus:outline-none" placeholder="1500" />
+                            <button onClick={() => removePayoutRow(type, i)} className="text-gray-600 hover:text-red-400 text-xs px-1">×</button>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            );
+          })()}
 
           {/* Save button */}
           <div className="px-5 py-4 border-t border-gray-800 flex items-center gap-4">

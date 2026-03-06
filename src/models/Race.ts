@@ -16,7 +16,7 @@ export interface IPrizeDistribution {
   breederBonus: number;
 }
 
-export type GameType = 'GANADOR' | 'PLACE' | 'EXACTA' | 'TRIFECTA' | 'SUPERFECTA' | 'QUINELA' | 'DOBLE_SELECCION';
+export type GameType = 'GANADOR' | 'PLACE' | 'EXACTA' | 'TRIFECTA' | 'SUPERFECTA' | 'TRIPLE_APUESTA' | 'POOL_DE_4' | 'CINCO_Y_SEIS' | 'LOTO_HIPICO';
 
 export interface IPayout {
   combination: string;
@@ -25,11 +25,14 @@ export interface IPayout {
 
 export interface IPayouts {
   winner?: IPayout[];
+  place?: IPayout[];
   exacta?: IPayout[];
   trifecta?: IPayout[];
   superfecta?: IPayout[];
-  quinela?: IPayout[];
-  dobleSeleccion?: IPayout[];
+  tripleApuesta?: IPayout[];
+  poolDe4?: IPayout[];
+  cincoYSeis?: IPayout[];
+  lotoHipico?: IPayout[];
 }
 
 export interface ITimeSplit {
@@ -87,14 +90,17 @@ const RaceSchema = new Schema<IRace>(
       fifth: { type: Number },
       breederBonus: { type: Number },
     },
-    games: [{ type: String, enum: ['GANADOR', 'PLACE', 'EXACTA', 'TRIFECTA', 'SUPERFECTA', 'QUINELA', 'DOBLE_SELECCION'] }],
+    games: [{ type: String, enum: ['GANADOR', 'PLACE', 'EXACTA', 'TRIFECTA', 'SUPERFECTA', 'TRIPLE_APUESTA', 'POOL_DE_4', 'CINCO_Y_SEIS', 'LOTO_HIPICO'] }],
     payouts: {
       winner: [{ combination: String, amount: Number }],
+      place: [{ combination: String, amount: Number }],
       exacta: [{ combination: String, amount: Number }],
       trifecta: [{ combination: String, amount: Number }],
       superfecta: [{ combination: String, amount: Number }],
-      quinela: [{ combination: String, amount: Number }],
-      dobleSeleccion: [{ combination: String, amount: Number }],
+      tripleApuesta: [{ combination: String, amount: Number }],
+      poolDe4: [{ combination: String, amount: Number }],
+      cincoYSeis: [{ combination: String, amount: Number }],
+      lotoHipico: [{ combination: String, amount: Number }],
     },
     timeSplits: [{ distance: Number, time: String }],
     officialTime: { type: String },

@@ -28,11 +28,14 @@ export interface SaveResultsPayload {
   finishOrder: ResultFinishEntry[];
   payouts?: {
     winner?: ResultPayoutRow[];
+    place?: ResultPayoutRow[];
     exacta?: ResultPayoutRow[];
     trifecta?: ResultPayoutRow[];
     superfecta?: ResultPayoutRow[];
-    quinela?: ResultPayoutRow[];
-    dobleSeleccion?: ResultPayoutRow[];
+    tripleApuesta?: ResultPayoutRow[];
+    poolDe4?: ResultPayoutRow[];
+    cincoYSeis?: ResultPayoutRow[];
+    lotoHipico?: ResultPayoutRow[];
   };
 }
 
@@ -68,11 +71,14 @@ export async function POST(req: NextRequest) {
     if (payouts) {
       race.payouts = {
         winner: payouts.winner ?? [],
+        place: payouts.place ?? [],
         exacta: payouts.exacta ?? [],
         trifecta: payouts.trifecta ?? [],
         superfecta: payouts.superfecta ?? [],
-        quinela: payouts.quinela ?? [],
-        dobleSeleccion: payouts.dobleSeleccion ?? [],
+        tripleApuesta: payouts.tripleApuesta ?? [],
+        poolDe4: payouts.poolDe4 ?? [],
+        cincoYSeis: payouts.cincoYSeis ?? [],
+        lotoHipico: payouts.lotoHipico ?? [],
       };
     }
     await race.save();
