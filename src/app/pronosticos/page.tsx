@@ -7,7 +7,7 @@ import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING }
 import NotificationBell from '@/components/NotificationBell';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
-interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; }
+interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; e1?: number | null; eGeneral?: number; }
 interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; sourceRef?: string; uploadedByRole?: 'handicapper' | 'staff' | 'admin'; }
 interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; scratchedDorsals: number[]; }
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
@@ -56,9 +56,10 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals }: {
+function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals, statsMap }: {
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
   isPrivileged?: boolean; raceId?: string; onDeleted?: () => void; scratchedDorsals?: number[];
+  statsMap?: Map<string, { e1: number | null; eGeneral: number }>;
 }) {
   const { handicapper, marks, isVip, sourceRef, uploadedByRole } = forecast;
   const isGhost = handicapper.isGhost ?? false;
@@ -120,9 +121,16 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
             )}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <StatPill label="1ra" value={`${handicapper.pct1st}%`} />
-            <StatPill label="2da" value={`${handicapper.pct2nd}%`} />
-            <StatPill label="Gral" value={`${handicapper.pctGeneral}%`} accent />
+            {(() => {
+              const s = statsMap?.get(handicapper.id);
+              if (s) return (
+                <>
+                  {s.e1 !== null && <StatPill label="E1" value={`${s.e1}%`} accent />}
+                  <StatPill label="Gral" value={`${s.eGeneral}%`} />
+                </>
+              );
+              return <span className="text-xs text-gray-700">calculando…</span>;
+            })()}
           </div>
         </div>
 
@@ -267,7 +275,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo }: {
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap }: {
   race: RaceItem; 
   unlocked: boolean; 
   goldBalance: number; 
@@ -277,6 +285,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   isPrivileged?: boolean; 
   onRefresh?: () => void;
   meetingInfo?: { trackName: string; meetingNumber: number };
+  statsMap?: Map<string, { e1: number | null; eGeneral: number }>;
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
@@ -334,7 +343,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           )}
           {race.forecasts.length === 0
             ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} />)}</div>
+            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} />)}</div>
           }
         </>
       )}
@@ -354,6 +363,7 @@ export default function PronosticosPage() {
   const [loadingMeetings, setLoadingMeetings] = useState(true);
   const [loadingMeeting, setLoadingMeeting] = useState(false);
   const [freeRemaining, setFreeRemaining] = useState(FREE_RACES_PER_MEETING);
+  const [statsMap, setStatsMap] = useState<Map<string, { e1: number | null; eGeneral: number }>>(new Map());
 
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
@@ -431,6 +441,18 @@ export default function PronosticosPage() {
         trackName: apiMeeting?.trackName ?? 'Hipódromo',
         races: raceItems,
       });
+
+      // Fetch live stats for all unique handicappers in parallel
+      const uniqueIds = [...new Set(raceItems.flatMap(r => r.forecasts.map(f => f.handicapper.id)).filter(Boolean))];
+      const entries = await Promise.all(
+        uniqueIds.map(hId =>
+          fetch(`/api/handicapper/${hId}/stats`)
+            .then(r => r.ok ? r.json() : null)
+            .then(s => s ? [hId, { e1: s.e1, eGeneral: s.eGeneral }] as const : null)
+            .catch(() => null)
+        )
+      );
+      setStatsMap(new Map(entries.filter((e): e is [string, { e1: number | null; eGeneral: number }] => e !== null)));
     } catch {
       setMeeting(null);
     } finally {
@@ -625,7 +647,8 @@ export default function PronosticosPage() {
           <RacePanel race={selectedRace} unlocked={selectedUnlocked} goldBalance={goldBalance} followedIds={followedIds}
             onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow}
             isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)}
-            meetingInfo={meeting ? { trackName: meeting.trackName, meetingNumber: meeting.meetingNumber } : undefined} />
+            meetingInfo={meeting ? { trackName: meeting.trackName, meetingNumber: meeting.meetingNumber } : undefined}
+            statsMap={statsMap} />
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>

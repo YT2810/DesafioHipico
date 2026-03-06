@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import type { HandicapperStats } from '@/app/api/handicapper/[id]/stats/route';
 
 const LABEL_COLORS: Record<string, string> = {
   'Línea':          'text-blue-400 bg-blue-950/40 border-blue-800/40',
@@ -33,7 +34,15 @@ function StatCard({ value, label, accent }: { value: string; label: string; acce
 export default function HandicapperPublicClient({ id, initialData }: { id: string; initialData: ProfileData | null }) {
   const { data: session } = useSession();
   const [sharing, setSharing] = useState(false);
+  const [stats, setStats] = useState<HandicapperStats | null>(null);
   const data = initialData;
+
+  useEffect(() => {
+    fetch(`/api/handicapper/${id}/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d); })
+      .catch(() => {});
+  }, [id]);
 
   if (!data) {
     return (
@@ -112,12 +121,53 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-2">
-          <StatCard value={String(profile.stats?.totalForecasts ?? 0)} label="Pronóst." />
-          <StatCard value={`${(profile.stats?.pct1st ?? 0).toFixed(0)}%`} label="1° lugar" accent />
-          <StatCard value={`${(profile.stats?.pct2nd ?? 0).toFixed(0)}%`} label="2° lugar" />
-          <StatCard value={`${(profile.stats?.pctGeneral ?? 0).toFixed(0)}%`} label="Acierto" accent />
-        </div>
+        {stats && stats.totalRaces > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-600 uppercase tracking-wider font-semibold">Efectividad histórica</p>
+            <div className="grid grid-cols-2 gap-2">
+              {stats.e1 !== null && (
+                <div className="bg-gray-900 border border-yellow-800/40 rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+                  <span className="text-2xl font-black text-yellow-400">{stats.e1}%</span>
+                  <span className="text-xs text-gray-500">E1 — Solo 1ª marca</span>
+                </div>
+              )}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+                <span className="text-2xl font-black text-white">{stats.eGeneral}%</span>
+                <span className="text-xs text-gray-500">E-General — Cualquier marca</span>
+              </div>
+              {stats.e1_2 !== null && (
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+                  <span className="text-2xl font-black text-white">{stats.e1_2}%</span>
+                  <span className="text-xs text-gray-500">E1-2 — Entre las 2 primeras</span>
+                </div>
+              )}
+              {stats.e1_3 !== null && (
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+                  <span className="text-2xl font-black text-white">{stats.e1_3}%</span>
+                  <span className="text-xs text-gray-500">E1-3 — Entre las 3 primeras</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs text-gray-600">{stats.totalRaces} carreras evaluadas{stats.orderedRaces < stats.totalRaces ? ` · ${stats.orderedRaces} con orden` : ''}</span>
+              {stats.roi1st !== null && (
+                <span className={`text-xs font-bold ${stats.roi1st >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  ROI 1ª marca: {stats.roi1st >= 0 ? '+' : ''}{stats.roi1st}%
+                </span>
+              )}
+            </div>
+          </div>
+        ) : stats && stats.totalRaces === 0 ? (
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4 text-center">
+            <p className="text-xs text-gray-600">Sin estadísticas aún — se calculan automáticamente cuando hay resultados oficiales</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 animate-pulse">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl h-16" />
+            ))}
+          </div>
+        )}
 
         {/* Meeting info + share */}
         {meeting && (
