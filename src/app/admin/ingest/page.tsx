@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import type { ProcessedDocument } from '@/services/pdfProcessor';
-import type { ImageResultDocument } from '@/services/dataIngestion';
 
 type WorkMode = 'program' | 'results';
 type ProgramPreview = Omit<ProcessedDocument, 'rawText'> & { preview: boolean };
@@ -289,135 +288,294 @@ function RacePreviewCard({ rb }: { rb: ProcessedDocument['races'][0] }) {
   );
 }
 
-function ResultsTab() {
-  const [jsonText, setJsonText] = useState('');
-  const [parsed, setParsed] = useState<ImageResultDocument | null>(null);
-  const [error, setError] = useState('');
+interface FinishRow {
+  dorsalNumber: number; horseName: string; finishPosition: number;
+  distanceMargin: string; isDistanced: boolean; isScratched: boolean; scratchReason: string;
+}
+interface PayoutRow { combination: string; amount: string; }
+interface PayoutsEdit {
+  winner: PayoutRow[]; exacta: PayoutRow[]; trifecta: PayoutRow[];
+  superfecta: PayoutRow[]; quinela: PayoutRow[]; dobleSeleccion: PayoutRow[];
+}
+const PAYOUT_LABELS: Record<string, string> = {
+  winner: 'Ganador', exacta: 'Exacta', trifecta: 'Trifecta',
+  superfecta: 'Superfecta', quinela: 'Quiniela', dobleSeleccion: 'Doble Selección',
+};
+function emptyPayouts(): PayoutsEdit {
+  return { winner: [], exacta: [], trifecta: [], superfecta: [], quinela: [], dobleSeleccion: [] };
+}
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setJsonText(await file.text());
-    setParsed(null);
+function ResultsTab() {
+  const [meetings, setMeetings] = useState<{ _id: string; meetingNumber: number; date: string; trackId?: { name?: string } }[]>([]);
+  const [meetingId, setMeetingId] = useState('');
+  const [raceNumber, setRaceNumber] = useState('');
+  const [images, setImages] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [savedOk, setSavedOk] = useState(false);
+  const [finishOrder, setFinishOrder] = useState<FinishRow[]>([]);
+  const [officialTime, setOfficialTime] = useState('');
+  const [payouts, setPayouts] = useState<PayoutsEdit>(emptyPayouts());
+  const [extracted, setExtracted] = useState(false);
+  const imgInputRef = useRef<HTMLInputElement>(null);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useState(() => {
+    fetch('/api/meetings/recent?limit=20').then(r => r.json()).then(d => {
+      const list = d.meetings ?? [];
+      setMeetings(list);
+      if (list.length > 0) setMeetingId(list[0]._id);
+    });
+  });
+
+  function addImages(files: FileList | File[]) {
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
+    setImages(prev => [...prev, ...arr].slice(0, 3));
   }
 
-  function handleParse() {
-    setError(''); setParsed(null);
+  async function handleExtract() {
+    if (!images.length) { setError('Sube al menos una imagen.'); return; }
+    if (!meetingId || !raceNumber) { setError('Selecciona reunión y número de carrera.'); return; }
+    setError(''); setExtracting(true); setExtracted(false); setSavedOk(false);
     try {
-      const doc = JSON.parse(jsonText) as ImageResultDocument;
-      if (!doc.races) throw new Error('El JSON no tiene el campo "races".');
-      setParsed(doc);
-    } catch (e) { setError(e instanceof Error ? e.message : 'JSON inválido'); }
+      const fd = new FormData();
+      images.forEach(f => fd.append('images', f));
+      const res = await fetch('/api/admin/results/extract', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error extrayendo resultados');
+      const r = data.result;
+      const rows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
+        dorsalNumber: e.dorsalNumber ?? 0, horseName: e.horseName ?? '',
+        finishPosition: e.finishPosition ?? 0, distanceMargin: e.distanceMargin ?? '',
+        isDistanced: e.isDistanced ?? false, isScratched: e.isScratched ?? false, scratchReason: '',
+      }));
+      setFinishOrder(rows);
+      setOfficialTime(r.officialTime ?? '');
+      const p = emptyPayouts();
+      for (const key of Object.keys(p) as (keyof PayoutsEdit)[]) {
+        const src = r.payouts?.[key];
+        if (Array.isArray(src)) p[key] = src.map((x: any) => ({ combination: String(x.combination ?? ''), amount: String(x.amount ?? '') }));
+      }
+      setPayouts(p);
+      if (r.raceNumber && !raceNumber) setRaceNumber(String(r.raceNumber));
+      setExtracted(true);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error desconocido'); }
+    finally { setExtracting(false); }
+  }
+
+  function updateRow(idx: number, field: keyof FinishRow, value: string | boolean | number) {
+    setFinishOrder(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  }
+  function updatePayout(type: keyof PayoutsEdit, idx: number, field: 'combination' | 'amount', value: string) {
+    setPayouts(prev => ({ ...prev, [type]: prev[type].map((r, i) => i === idx ? { ...r, [field]: value } : r) }));
+  }
+  function addPayoutRow(type: keyof PayoutsEdit) {
+    setPayouts(prev => ({ ...prev, [type]: [...prev[type], { combination: '', amount: '' }] }));
+  }
+  function removePayoutRow(type: keyof PayoutsEdit, idx: number) {
+    setPayouts(prev => ({ ...prev, [type]: prev[type].filter((_, i) => i !== idx) }));
+  }
+
+  async function handleSave() {
+    if (!meetingId || !raceNumber || !finishOrder.length) return;
+    setSaving(true); setError(''); setSavedOk(false);
+    try {
+      const payoutsPayload: Record<string, { combination: string; amount: number }[]> = {};
+      for (const [key, rows] of Object.entries(payouts)) {
+        const valid = (rows as PayoutRow[]).filter(r => r.combination && r.amount);
+        if (valid.length) payoutsPayload[key] = valid.map((r: PayoutRow) => ({ combination: r.combination, amount: parseFloat(r.amount) }));
+      }
+      const res = await fetch('/api/admin/results/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId, raceNumber: parseInt(raceNumber), officialTime: officialTime || undefined,
+          finishOrder: finishOrder.map(r => ({
+            dorsalNumber: r.dorsalNumber, finishPosition: r.finishPosition,
+            distanceMargin: r.distanceMargin || undefined, isDistanced: r.isDistanced,
+            isScratched: r.isScratched, scratchReason: r.scratchReason || undefined,
+          })),
+          payouts: Object.keys(payoutsPayload).length ? payoutsPayload : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error guardando');
+      setSavedOk(true);
+      setImages([]); setExtracted(false); setFinishOrder([]); setPayouts(emptyPayouts()); setOfficialTime('');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error desconocido'); }
+    finally { setSaving(false); }
   }
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-bold text-white">Carga de Resultados Oficiales</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Próximamente: carga de foto finish y dividendos. Por ahora acepta JSON estructurado.</p>
+        <p className="text-xs text-gray-500 mt-0.5">Sube las imágenes del INH. Gemini extrae los datos automáticamente para revisión y confirmación.</p>
       </div>
-      <section className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg cursor-pointer text-sm text-gray-300 transition-colors">
-            📁 Cargar JSON
-            <input type="file" accept=".json" className="hidden" onChange={handleFileUpload} />
-          </label>
-          <span className="text-xs text-gray-600">o pega el JSON directamente</span>
+
+      {/* Step 1 */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">1. Reunión y carrera</p>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-48">
+            <label className="text-xs text-gray-500 mb-1 block">Reunión</label>
+            <select value={meetingId} onChange={e => setMeetingId(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500">
+              {meetings.map(m => (
+                <option key={m._id} value={m._id}>
+                  R{m.meetingNumber} — {m.trackId?.name ?? 'Hipódromo'} — {new Date(m.date).toLocaleDateString('es-VE')}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-32">
+            <label className="text-xs text-gray-500 mb-1 block">N° Carrera</label>
+            <input type="number" min="1" max="15" value={raceNumber} onChange={e => setRaceNumber(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
+              placeholder="3" />
+          </div>
         </div>
-        <textarea
-          value={jsonText}
-          onChange={(e) => { setJsonText(e.target.value); setParsed(null); }}
-          placeholder={'{ "meetingNumber": 8, "trackName": "LA RINCONADA", "date": "2026-02-15", "races": [...] }'}
-          className="w-full h-44 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-amber-500 resize-none"
-        />
-        {error && <div className="flex items-center gap-2 text-red-400 text-sm bg-red-950/40 border border-red-800 rounded-lg px-4 py-2"><span>⚠️</span>{error}</div>}
+      </div>
+
+      {/* Step 2 */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">2. Imágenes (máx. 3)</p>
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); addImages(e.dataTransfer.files); }}
+          onClick={() => imgInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${dragging ? 'border-amber-500 bg-amber-950/20' : 'border-gray-700 hover:border-gray-500'}`}
+        >
+          <input ref={imgInputRef} type="file" accept="image/*" multiple className="hidden"
+            onChange={e => { if (e.target.files) addImages(e.target.files); }} />
+          <p className="text-gray-400 text-sm">📷 Arrastra las imágenes aquí o haz clic</p>
+          <p className="text-xs text-gray-600 mt-1">Orden de llegada · Dividendos · Foto finish</p>
+        </div>
+        {images.length > 0 && (
+          <div className="flex gap-3 flex-wrap">
+            {images.map((f, i) => (
+              <div key={i} className="relative group">
+                <img src={URL.createObjectURL(f)} alt={f.name} className="w-28 h-20 object-cover rounded-lg border border-gray-700" />
+                <button onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {error && <div className="text-red-400 text-sm bg-red-950/40 border border-red-800 rounded-lg px-4 py-2">⚠️ {error}</div>}
+        {savedOk && <div className="text-green-400 text-sm bg-green-950/40 border border-green-800 rounded-lg px-4 py-2">✅ Resultado guardado correctamente.</div>}
         <div className="flex gap-3">
-          <Btn onClick={handleParse} disabled={!jsonText.trim()} color="amber">🔍 Previsualizar Resultados</Btn>
-          {parsed && <Btn onClick={() => { setJsonText(''); setParsed(null); }} color="gray">🔄 Limpiar</Btn>}
+          <Btn onClick={handleExtract} disabled={extracting || !images.length || !meetingId || !raceNumber} color="amber">
+            {extracting ? <><span className="w-4 h-4 rounded-full border-2 border-amber-300 border-t-transparent animate-spin inline-block" /> Extrayendo...</> : '🤖 Extraer con IA'}
+          </Btn>
+          {extracted && <Btn onClick={() => { setExtracted(false); setFinishOrder([]); setPayouts(emptyPayouts()); setImages([]); setOfficialTime(''); setSavedOk(false); }} color="gray">🔄 Nueva carrera</Btn>}
         </div>
-      </section>
-      {parsed && <ResultsPreviewPanel doc={parsed} />}
+      </div>
+
+      {/* Step 3: Editable table */}
+      {extracted && finishOrder.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 bg-gray-800/60 border-b border-gray-700 flex items-center justify-between">
+            <p className="text-sm font-bold text-amber-400">📋 Orden de llegada — C{raceNumber} (editable)</p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Tiempo oficial:</span>
+              <input value={officialTime} onChange={e => setOfficialTime(e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-200 w-20 focus:outline-none focus:border-amber-500"
+                placeholder="1:12.4" />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-500 uppercase border-b border-gray-800 bg-gray-900/50">
+                  <th className="px-3 py-2 text-center">Pos.</th>
+                  <th className="px-3 py-2 text-center">Dorsal</th>
+                  <th className="px-3 py-2 text-left">Ejemplar</th>
+                  <th className="px-3 py-2 text-center">Cuerpos</th>
+                  <th className="px-3 py-2 text-center" title="Distanciado">Dist.</th>
+                  <th className="px-3 py-2 text-center" title="Retirado post-carrera">Ret.</th>
+                  <th className="px-3 py-2 text-left">Motivo retiro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {finishOrder.map((row, idx) => (
+                  <tr key={idx} className={`border-b border-gray-800/40 ${row.isScratched ? 'opacity-50 bg-red-950/10' : row.isDistanced ? 'bg-orange-950/10' : ''}`}>
+                    <td className="px-3 py-2 text-center">
+                      <input type="number" min="1" value={row.finishPosition}
+                        onChange={e => updateRow(idx, 'finishPosition', parseInt(e.target.value) || 0)}
+                        className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-white focus:outline-none focus:border-amber-500" />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input type="number" min="1" value={row.dorsalNumber}
+                        onChange={e => updateRow(idx, 'dorsalNumber', parseInt(e.target.value) || 0)}
+                        className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-gray-300 focus:outline-none" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input value={row.horseName} onChange={e => updateRow(idx, 'horseName', e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-amber-500" />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input value={row.distanceMargin} onChange={e => updateRow(idx, 'distanceMargin', e.target.value)}
+                        className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 focus:outline-none" placeholder="1 cpo" />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input type="checkbox" checked={row.isDistanced} onChange={e => updateRow(idx, 'isDistanced', e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input type="checkbox" checked={row.isScratched} onChange={e => updateRow(idx, 'isScratched', e.target.checked)} className="w-4 h-4 accent-red-500" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input value={row.scratchReason} onChange={e => updateRow(idx, 'scratchReason', e.target.value)} disabled={!row.isScratched}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-400 focus:outline-none disabled:opacity-30" placeholder="peso, aparato..." />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Payouts */}
+          <div className="p-5 border-t border-gray-800">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividendos Oficiales</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(Object.keys(payouts) as (keyof PayoutsEdit)[]).map(type => (
+                <div key={type} className="bg-gray-800/50 rounded-lg overflow-hidden">
+                  <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-400 uppercase">{PAYOUT_LABELS[type]}</span>
+                    <button onClick={() => addPayoutRow(type)} className="text-xs text-gray-500 hover:text-amber-400">+ añadir</button>
+                  </div>
+                  {payouts[type].length === 0
+                    ? <p className="px-3 py-2 text-xs text-gray-600 italic">Sin dividendo</p>
+                    : payouts[type].map((row, i) => (
+                      <div key={i} className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/50 last:border-0">
+                        <input value={row.combination} onChange={e => updatePayout(type, i, 'combination', e.target.value)}
+                          className="flex-1 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 font-mono focus:outline-none" placeholder="5-3" />
+                        <span className="text-xs text-gray-600">Bs.</span>
+                        <input value={row.amount} onChange={e => updatePayout(type, i, 'amount', e.target.value)}
+                          className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-green-400 font-mono focus:outline-none" placeholder="1500" />
+                        <button onClick={() => removePayoutRow(type, i)} className="text-gray-600 hover:text-red-400 text-xs px-1">×</button>
+                      </div>
+                    ))
+                  }
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Save button */}
+          <div className="px-5 py-4 border-t border-gray-800 flex gap-3">
+            <Btn onClick={handleSave} disabled={saving || !finishOrder.length} color="green">
+              {saving ? <><span className="w-4 h-4 rounded-full border-2 border-green-300 border-t-transparent animate-spin inline-block" /> Guardando...</> : '✅ Confirmar y Guardar'}
+            </Btn>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ResultsPreviewPanel({ doc }: { doc: ImageResultDocument }) {
-  const LABELS: Record<string, string> = {
-    winner: 'Ganador', exacta: 'Exacta', trifecta: 'Trifecta',
-    superfecta: 'Superfecta', quinela: 'Quiniela', dobleSeleccion: 'Doble Selección',
-  };
-  return (
-    <section className="space-y-4">
-      <h3 className="text-base font-bold text-amber-400">🏆 Resultados — Previsualización</h3>
-      {doc.races.map((race) => (
-        <div key={race.raceNumber} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-3 bg-gray-800/60 border-b border-gray-700">
-            <span className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">C{race.raceNumber}</span>
-            {race.officialTime && <span className="text-xs text-gray-400">⏱ {race.officialTime}</span>}
-          </div>
-          {race.entries.length > 0 && (
-            <div className="overflow-x-auto border-b border-gray-800">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-500 uppercase border-b border-gray-800">
-                    <th className="px-4 py-2 text-left">Pos.</th>
-                    <th className="px-4 py-2 text-left">Dorsal</th>
-                    <th className="px-4 py-2 text-left">Tiempo</th>
-                    <th className="px-4 py-2 text-left">Cuerpos</th>
-                    <th className="px-4 py-2 text-right">Dividendo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...race.entries]
-                    .sort((a, b) => (a.isScratched ? 1 : 0) - (b.isScratched ? 1 : 0) || (a.finishPosition ?? 99) - (b.finishPosition ?? 99))
-                    .map((entry) => (
-                      <tr key={entry.dorsalNumber} className={`border-b border-gray-800/50 ${entry.isScratched ? 'opacity-40' : 'hover:bg-gray-800/30'} transition-colors`}>
-                        <td className="px-4 py-2.5">
-                          {entry.isScratched
-                            ? <span className="text-xs font-bold text-red-400 bg-red-950/40 px-2 py-0.5 rounded">RET</span>
-                            : <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${entry.finishPosition === 1 ? 'bg-amber-500 text-black' : entry.finishPosition === 2 ? 'bg-gray-400 text-black' : entry.finishPosition === 3 ? 'bg-amber-800 text-white' : 'bg-gray-700 text-white'}`}>{entry.finishPosition ?? '—'}</span>}
-                        </td>
-                        <td className="px-4 py-2.5 font-bold text-white">{entry.dorsalNumber}</td>
-                        <td className="px-4 py-2.5 text-gray-300 font-mono text-xs">{entry.officialTime || '—'}</td>
-                        <td className="px-4 py-2.5 text-gray-400 text-xs">{entry.distanceMargin || '—'}</td>
-                        <td className="px-4 py-2.5 text-right text-amber-400 font-mono text-xs">{entry.finalOdds != null ? `${entry.finalOdds}x` : '—'}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {race.payouts && Object.keys(race.payouts).length > 0 && (
-            <div className="p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Dividendos Oficiales</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {Object.entries(race.payouts).map(([type, rows]) =>
-                  rows && rows.length > 0 ? (
-                    <div key={type} className="bg-gray-800/50 rounded-lg overflow-hidden">
-                      <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700">
-                        <span className="text-xs font-bold text-amber-400 uppercase">{LABELS[type] ?? type}</span>
-                      </div>
-                      <table className="w-full text-xs">
-                        <tbody>
-                          {rows.map((row, i) => (
-                            <tr key={i} className="border-b border-gray-700/50 last:border-0">
-                              <td className="px-3 py-1.5 text-gray-300 font-mono">{row.combination}</td>
-                              <td className="px-3 py-1.5 text-right text-green-400 font-bold font-mono">Bs. {row.amount.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : null
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-    </section>
-  );
-}
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
