@@ -699,15 +699,10 @@ function ResultsTab() {
 
           {/* Payouts */}
           {(() => {
-            const raceInfo = races.find(r => r.raceNumber === parseInt(raceNumber));
-            const activeGames = raceInfo?.games ?? [];
-            // Multi-race types: show if present in games, OR if games is empty (PDF may not have recorded them)
-            const visibleMulti = MULTI_RACE_TYPES.filter(k => {
-              if (activeGames.length === 0) return true;
-              const gameKey = Object.entries(GAME_TO_PAYOUT).find(([, v]) => v === k)?.[0];
-              return gameKey ? activeGames.includes(gameKey) : false;
-            });
-            const visibleTypes = [...PER_RACE_TYPES, ...visibleMulti];
+            // Always show all types — admin decides which apply.
+            // Multi-race games (Triple Apuesta, Pool de 4, 5y6, Loto) are collapsed by default
+            // but visible so dividends can be entered when that race closes the cycle.
+            const visibleTypes = [...PER_RACE_TYPES, ...MULTI_RACE_TYPES];
             return (
               <div className="p-5 border-t border-gray-800">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividendos Oficiales</p>
