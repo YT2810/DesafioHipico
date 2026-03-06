@@ -141,10 +141,12 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     let medication: string | undefined;
     // Check if i+3 is a med marker (not a number)
     const maybeMed = entryLines[wi]?.trim() ?? '';
-    if (/^[BL][.,]?L?$/.test(maybeMed) || /^B[.,]L$/i.test(maybeMed)) {
-      medication = maybeMed === 'B.L' || maybeMed === 'B,L' ? 'BUT-LAX' :
-                   maybeMed === 'B' || maybeMed === 'B.' ? 'BUT' :
-                   maybeMed === 'L' ? 'LAX' : maybeMed;
+    // Accept: B.L, B,L, L, B, .L (PDF sometimes drops the 'B' producing ".L")
+    if (/^\.?[BL][.,]?L?$/.test(maybeMed) || /^\.?B[.,]L$/i.test(maybeMed)) {
+      const normalized = maybeMed.replace(/^\./, ''); // strip leading dot if present
+      medication = normalized === 'B.L' || normalized === 'B,L' || normalized === 'L' ? 'BUT-LAX' :
+                   normalized === 'B' || normalized === 'B.' ? 'BUT' :
+                   normalized === '.L' ? 'LAX' : normalized;
       wi++; // skip med marker
     }
     // Now skip price (0,00)
