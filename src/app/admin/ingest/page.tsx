@@ -294,46 +294,40 @@ interface FinishRow {
   estimatedTime: string;
 }
 
-// Convert a margin string into fifths of a second to add to the winner's time.
-// Rule: 1 body = 1 fifth (0.2s). A fraction (1/2, 3/4, 1/4) adds 1 more fifth.
-// Pzo/Nrz/Cbz/Hcz = 0 fifths (same time). FC/Desc = null (S/T).
-// Examples: "1 cpo" → 1, "8 1/2" → 9, "2 1/2" → 3, "1/2" → 1, "3/4" → 1
-function marginToFifths(margin: string): number | null {
+// Returns exact bodies as decimal number. null = S/T (FC/Desc).
+// "8 1/2" → 8.5, "2 1/2" → 2.5, "1/2" → 0.5, "3/4" → 0.75, "1" → 1.0
+// Pzo/Nrz/Cbz/Hcz = 0 (same time as previous)
+function marginToBodies(margin: string): number | null {
   if (!margin) return 0;
   const m = margin.trim().toUpperCase();
-  if (['FC', 'FUERA', 'FUERA DE CARRERA', 'DESC'].includes(m)) return null; // S/T
+  if (['FC', 'FUERA', 'FUERA DE CARRERA', 'DESC'].includes(m)) return null;
   if (['PZO', 'PCZ', 'NRZ', 'NZ', 'CBZ', 'HCZ', 'HOCICO', 'NARIZ', 'CABEZA', 'PESCUEZO'].some(k => m.startsWith(k))) return 0;
-  // "N 1/2", "N 3/4", "N CPO 1/2" — whole bodies + fraction
+  // "N 1/2", "N 3/4", "N CPO 1/2" — whole + fraction
   const mixed = m.match(/^(\d+)\s*(?:CPO[S]?)?\s+(\d+)\/(\d+)/);
-  if (mixed) return parseInt(mixed[1]) + 1; // whole bodies + 1 for the fraction
-  // Fraction only: "1/2", "3/4", "1/4" → 1 fifth
+  if (mixed) return parseInt(mixed[1]) + parseInt(mixed[2]) / parseInt(mixed[3]);
+  // Fraction only: "1/2", "3/4", "1/4"
   const fracOnly = m.match(/^(\d+)\/(\d+)$/);
-  if (fracOnly) return 1;
-  // "N CPO" or "N CPOS" — plain bodies
+  if (fracOnly) return parseInt(fracOnly[1]) / parseInt(fracOnly[2]);
+  // "N CPO" or "N CPOS"
   const cpo = m.match(/^([\d.]+)\s*CPO/);
-  if (cpo) return Math.round(parseFloat(cpo[1]));
-  // Plain integer: "1", "2", "8"
+  if (cpo) return parseFloat(cpo[1]);
+  // Plain integer
   const plain = m.match(/^(\d+)$/);
   if (plain) return parseInt(plain[1]);
   return 0;
 }
 
-// Parse official time "97.4" or "1:37.4" → total fifths as integer
+// Parse "97.4" or "1:37.4" → total fifths (integer)
 function parseOfficialTime(t: string): number | null {
   if (!t) return null;
-  // "1:37.4" → mins:secs.fifths
   const long = t.match(/^(\d+):(\d{2})[.,](\d)$/);
-  if (long) {
-    const totalSecs = parseInt(long[1]) * 60 + parseInt(long[2]);
-    return totalSecs * 5 + parseInt(long[3]);
-  }
-  // "97.4" → secs.fifths
+  if (long) return (parseInt(long[1]) * 60 + parseInt(long[2])) * 5 + parseInt(long[3]);
   const short = t.match(/^(\d+)[.,](\d)$/);
   if (short) return parseInt(short[1]) * 5 + parseInt(short[2]);
   return null;
 }
 
-// Format total fifths → "sss.f" (Venezuelan standard, never m:ss)
+// Format integer fifths → "sss.f" (Venezuelan standard)
 function fifthsToStr(totalFifths: number): string {
   const secs = Math.floor(totalFifths / 5);
   const f = totalFifths % 5;
@@ -343,30 +337,21 @@ function fifthsToStr(totalFifths: number): string {
 function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
   const baseFifths = parseOfficialTime(winnerTime);
   if (baseFifths === null) return rows.map(r => ({ ...r, estimatedTime: r.isScratched ? 'S/T' : '' }));
-  // Sort by finish position (non-scratched first)
   const sorted = [...rows]
     .filter(r => !r.isScratched)
     .sort((a, b) => a.finishPosition - b.finishPosition);
   const timeMap: Record<number, string> = {};
-  let accumulatedFifths = 0; // total bodies from 1st place, built up position by position
+  let accBodies = 0; // exact decimal bodies from 1st place, accumulated position by position
   for (const row of sorted) {
-    if (row.finishPosition === 1) {
-      timeMap[row.dorsalNumber] = winnerTime;
-      continue;
-    }
-    // Each row's margin is relative to the horse ahead → accumulate to get distance from 1st
-    const fifths = marginToFifths(row.distanceMargin);
-    if (fifths === null) {
-      timeMap[row.dorsalNumber] = 'S/T';
-      accumulatedFifths = 0; // FC breaks the chain
-      continue;
-    }
-    accumulatedFifths += fifths;
-    timeMap[row.dorsalNumber] = fifthsToStr(baseFifths + accumulatedFifths);
+    if (row.finishPosition === 1) { timeMap[row.dorsalNumber] = winnerTime; continue; }
+    const bodies = marginToBodies(row.distanceMargin);
+    if (bodies === null) { timeMap[row.dorsalNumber] = 'S/T'; accBodies = 0; continue; }
+    accBodies += bodies; // e.g. 8.5 + 2.5 = 11.0 exact
+    // 1 body = 1 fifth (0.2s) — round to nearest fifth
+    const extraFifths = Math.round(accBodies);
+    timeMap[row.dorsalNumber] = fifthsToStr(baseFifths + extraFifths);
   }
-  for (const row of rows.filter(r => r.isScratched)) {
-    timeMap[row.dorsalNumber] = 'S/T';
-  }
+  for (const row of rows.filter(r => r.isScratched)) timeMap[row.dorsalNumber] = 'S/T';
   return rows.map(r => ({ ...r, estimatedTime: timeMap[r.dorsalNumber] ?? '' }));
 }
 interface PayoutRow { combination: string; amount: string; }
