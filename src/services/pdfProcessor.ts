@@ -242,7 +242,7 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
 // Lines may wrap — preprocessText joins them.
 
 // Known exact medication codes — order matters: longest first to avoid partial matches
-const MED_CODES = ['BUT-LAX', 'BUT', 'LAX', 'COR-FUR', 'COR', 'FUR', 'ACE', 'DIC', 'OXY', 'ATR', 'DIM'];
+const MED_CODES = ['BUT-LAX', 'COR-FUR', 'BUT', 'LAX', 'COR', 'FUR', 'ACE', 'DIC', 'OXY', 'ATR', 'DIM', 'PRO', 'AZA', 'DET', 'GUA', 'BRO', 'ISO', 'TRI', 'AMP', 'NAL'];
 // Implements: always starts with L. (látigo) followed by more codes — "L.BZ.CC.V.M.LA."
 // Starting with L. prevents last letter of jockey name from being captured
 const IMPL_PATTERN = /L\.(?:[A-Z]{1,3}\.)*/;
