@@ -22,6 +22,7 @@ export interface ResultPayoutRow {
 export interface SaveResultsPayload {
   meetingId: string;
   raceNumber: number;
+  annualRaceNumber?: number;
   officialTime?: string;
   timeSplits?: { distance: number; time: string }[];
   finishOrder: ResultFinishEntry[];
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body: SaveResultsPayload = await req.json();
-    const { meetingId, raceNumber, officialTime, timeSplits, finishOrder, payouts } = body;
+    const { meetingId, raceNumber, annualRaceNumber, officialTime, timeSplits, finishOrder, payouts } = body;
 
     if (!meetingId || !raceNumber || !finishOrder?.length) {
       return NextResponse.json({ error: 'Faltan campos requeridos: meetingId, raceNumber, finishOrder.' }, { status: 400 });
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
 
     // Update race: status, time, splits, payouts
     race.status = 'finished';
+    if (annualRaceNumber) race.annualRaceNumber = annualRaceNumber;
     if (officialTime) race.officialTime = officialTime;
     if (timeSplits?.length) race.timeSplits = timeSplits;
     if (payouts) {

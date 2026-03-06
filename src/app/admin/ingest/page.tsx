@@ -408,6 +408,7 @@ function ResultsTab() {
   const [payouts, setPayouts] = useState<PayoutsEdit>(emptyPayouts());
   const [extracted, setExtracted] = useState(false);
   const [tokensUsed, setTokensUsed] = useState<number | null>(null);
+  const [annualRaceNumber, setAnnualRaceNumber] = useState<number | null>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,10 +458,14 @@ function ResultsTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error extrayendo resultados');
       const r = data.result;
-      // Warn if Gemini detected a different race number but NEVER auto-overwrite
-      // Gemini may read annual race number (e.g. C089) instead of daily number (C3)
-      if (r.raceNumber && String(r.raceNumber) !== String(raceNumber)) {
-        setError(`ℹ️ La IA leyó "${r.raceNumber}" en la imagen (posiblemente número anual), se mantiene Carrera ${raceNumber}. Verifica si la imagen es correcta.`);
+      // Store annual race number from Gemini (e.g. C089 → 89) without overwriting daily raceNumber
+      if (r.raceNumber) {
+        if (String(r.raceNumber) !== String(raceNumber)) {
+          setAnnualRaceNumber(r.raceNumber);
+          setError(`ℹ️ La IA leyó "${r.raceNumber}" en la imagen (número anual). Se usará Carrera ${raceNumber} de jornada. Verifica si la imagen es correcta.`);
+        } else {
+          setAnnualRaceNumber(null);
+        }
       }
       const winTime: string = r.officialTime ?? '';
       const rawRows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
@@ -478,7 +483,7 @@ function ResultsTab() {
         if (Array.isArray(src)) p[key] = src.map((x: any) => ({ combination: String(x.combination ?? ''), amount: String(x.amount ?? '') }));
       }
       setPayouts(p);
-      // Do NOT auto-set raceNumber from Gemini — user selects manually
+      // raceNumber stays as selected by user — annualRaceNumber stored separately
       setExtracted(true);
       setTokensUsed(Math.round((images.reduce((s, f) => s + f.size, 0) / 1024) * 0.85 + 400));
     } catch (e) { setError(e instanceof Error ? e.message : 'Error desconocido'); }
@@ -518,7 +523,9 @@ function ResultsTab() {
       const res = await fetch('/api/admin/results/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          meetingId, raceNumber: parseInt(raceNumber), officialTime: officialTime || undefined,
+          meetingId, raceNumber: parseInt(raceNumber),
+          annualRaceNumber: annualRaceNumber ?? undefined,
+          officialTime: officialTime || undefined,
           finishOrder: finishOrder.map(r => ({
             dorsalNumber: r.dorsalNumber, finishPosition: r.finishPosition,
             distanceMargin: r.distanceMargin || undefined, isDistanced: r.isDistanced,
