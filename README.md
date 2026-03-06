@@ -1,9 +1,9 @@
 # 🏇 Desafío Hípico
 
 **Marketplace de pronósticos hípicos para Venezuela.**
-Plataforma freemium donde handicappers publican pronósticos y usuarios los consumen con un sistema de créditos (Golds). Pago vía Pago Móvil venezolano, aprobación manual por staff.
+Plataforma freemium donde handicappers publican pronósticos y usuarios los consumen con un sistema de créditos (Golds). Incluye ranking público de efectividad por hipódromo, ingesta de resultados oficiales INH con IA, y evaluación automática de handicappers.
 
-> **Estado actual (Feb 2026):** En producción en Vercel + MongoDB Atlas. Parser INH + HINAVA operativo. Ingestor Gemini operativo (`/admin/intelligence`). Ruta pública `/programa/[meetingId]` activa.
+> **Estado actual (Mar 2026):** En producción en [desafiohipico.com](https://www.desafiohipico.com) (Vercel + MongoDB Atlas). Parser INH + HINAVA operativo. Ingestor Gemini Vision operativo. Sistema de métricas de efectividad activo con 26+ handicappers rankeados.
 > Para contexto completo de arquitectura y lógica → ver [`CONTEXT.md`](./CONTEXT.md)
 
 ---
@@ -166,116 +166,106 @@ src/
 ## ✅ Funcionalidades Completadas
 
 ### Autenticación y Usuarios
-- [x] Google OAuth (credenciales reales configuradas)
-- [x] Magic Link por email via Resend API (requiere dominio verificado en producción)
-- [x] Telegram Credentials (estructura lista, validación HMAC pendiente)
-- [x] Middleware edge-compatible con `getToken()` — protege `/admin/*` y `/handicapper/*`
-- [x] `/auth/signin` con toggle Entrar/Registrarse
-- [x] `/auth/error` con mensajes amigables por tipo de error OAuth
+- [x] Google OAuth, Magic Link via Resend, Telegram Credentials
+- [x] Middleware edge-compatible con `getToken()` — protege `/admin/*` y `/staff/*`
 - [x] Roles: `customer | handicapper | staff | admin`
-- [x] Auto-asignación rol admin al email `yolfry@gmail.com` en cada login
-- [x] `/perfil`: saldo Golds, historial recargas + transacciones Gold, solicitud handicapper
-- [x] Panel admin `/admin/users`: buscar, asignar/quitar roles
-- [x] Solicitud de rol handicapper (form → pending → admin aprueba/rechaza)
+- [x] Auto-asignación rol admin al email `yolfry@gmail.com`
+- [x] Solicitud y aprobación de rol handicapper
+- [x] Al aprobar: si existe perfil ghost con mismo pseudónimo → se linkea automáticamente y se resetean las stats previas
 
-### Pronósticos y Freemium
-- [x] `/pronosticos` conectado a API real (eliminados todos los MOCK_MEETINGS)
-- [x] Auth gate: usuarios no logueados ven pantalla de login con CTA
-- [x] 2 carreras gratis por reunión, resto 1 Gold/carrera (permanente, sin reset)
-- [x] Pronósticos VIP bloqueados para no suscriptores (teaser visible)
-- [x] Factor de consenso visual por caballo (barra de porcentaje)
-- [x] Follow/unfollow handicappers
-- [x] Skeletons de carga para meetings y carreras
-- [x] `/handicapper/forecast`: subir pronósticos por carrera (admin + handicapper)
+### 🆕 Sistema de Métricas de Efectividad
+- [x] **Evaluación automática** al guardar resultados: `hit1st / hit2nd / hit3rd / hitAny` en cada `Forecast.result`
+- [x] **`/api/handicapper/[id]/stats`** — calcula on-the-fly: E1, E1-2, E1-3, E-General, ROI simulado + `byTrack[]` por hipódromo
+- [x] **Filtro por `claimedAt`** — si el perfil fue reclamado por un handicapper real, stats solo cuentan desde esa fecha
+- [x] **Reset automático al reclamar perfil ghost** — forecasts anteriores a `claimedAt` → `evaluated=false`
+- [x] **`/api/handicapper/ranking`** — ranking global agregado, mínimo 5 carreras
+- [x] **`scripts/backfill-forecasts.ts`** — evalúa pronósticos históricos sin re-subir imágenes (evaluó 259 en producción)
 
-### Sistema de Golds y Pagos
-- [x] `TopUpModal` 4 pasos: paquete → perfil facturación → destino BDV → formulario → éxito
-- [x] Perfil de facturación: nombre completo, cédula (prefijo V/E/J/P/G), teléfono (+58)
-- [x] Paquetes: 40/100/200/400 Golds = $10/$25/$50/$100 USD
-- [x] Tasa BCV manual: panel `/admin/exchange-rate`, muestra Bs en paquetes automáticamente
-- [x] Alerta si tasa lleva >24h sin actualizar
-- [x] Panel admin `/admin/topup`: aprobar/rechazar con motivo de rechazo
-- [x] 16 bancos venezolanos con códigos BCV oficiales en constantes
-- [x] Fix: documentos legacy con `balance: 0` (número) migrados a `{golds:0, diamonds:0}`
+| Métrica | Descripción |
+|---------|-------------|
+| **E1** | % carreras donde la **1ª marca** fue el ganador |
+| **E1-2** | % donde el ganador estuvo entre las **2 primeras** marcas |
+| **E1-3** | % donde el ganador estuvo entre las **3 primeras** marcas |
+| **E-General** | % donde el ganador estuvo en **cualquier** marca |
+| **ROI** | Retorno simulado apostando 100 Bs a la 1ª marca cada carrera |
 
-### Ingestión de Datos
-- [x] Parser PDF INH calibrado al formato real (11 carreras, ejemplares, jinetes, pesos)
-- [x] Parser PDF HINAVA (Hipódromo Valencia) con detección automática de fuente
-- [x] Fix IMPL_PATTERN: acepta `L.` solo (sin códigos adicionales) — corrige caballos con solo látigo
-- [x] Fix dorsal 1: strip de chars no-alfanuméricos antes de detectar inicio de entry
-- [x] Upsert idempotente — mismo PDF no duplica datos
-- [x] UI drag & drop con previsualización antes de confirmar ingestión
-- [x] Modo debug para inspeccionar texto extraído del PDF
+### 🆕 Ranking Público `/ranking`
+- [x] Página pública accesible sin login — SEO indexada
+- [x] Tabla ordenable por E1 / E1-2 / E1-3 / E-General con tabs
+- [x] Medallas 🥇🥈🥉 top-3, barra visual por métrica activa, glosario
+- [x] Mínimo 5 carreras evaluadas para aparecer (anti-ruido)
+
+### 🆕 Resultados Oficiales INH (`/admin/ingest`)
+- [x] Gemini Vision extrae resultados de imágenes (posición, dorsal, nombre, distancia, tiempo)
+- [x] Tabla editable antes de guardar — revisión humana del resultado de IA
+- [x] Cálculo de tiempos estimados: 1 cuerpo = 1 quinto (0.2s), acumulado desde 1er lugar, formato `sss.f` venezolano
+- [x] `annualRaceNumber` (ej: C089) guardado en `Race`, `raceNumber` de jornada no se sobreescribe
+- [x] Protección de sobreescritura: confirma si la carrera ya tiene status `finished`
+- [x] Dividendos INH completos: GANADOR, PLACE, EXACTA, TRIFECTA, SUPERFECTA, TRIPLE_APUESTA, POOL_DE_4, CINCO_Y_SEIS, LOTO_HIPICO
+- [x] Marker `NO_HUBO` para jugadas sin ganador
+- [x] API `/api/horses/[id]/history` para historial de carrera de un caballo
+
+### Pronósticos (`/pronosticos`) — mejoras
+- [x] Forecasts **ordenados por E1 descendente** dentro de cada carrera
+- [x] **Badge de posición global** 🥇🥈🥉 / `#N` en cada HandicapperBlock
+- [x] Estadísticas **E1 + E-General en vivo** junto al nombre
+- [x] Botón 🏆 en header → `/ranking`
+- [x] Auth gate, 2 carreras gratis/reunión, factor de consenso, follow/unfollow
+
+### Perfil Público `/handicapper/[id]`
+- [x] Tabla E1 / E1-2 / E1-3 / E-General / ROI cargada on-the-fly
+- [x] Desglose **por hipódromo** (La Rinconada vs Valencia) cuando hay datos de ambos
+- [x] Nota de fecha de verificación si el perfil fue reclamado
+- [x] Skeleton de carga, skeleton vacío con mensaje si no hay datos aún
+
+### Homepage `/`
+- [x] **Widget Top-3 ranking** 🥇🥈🥉 con E1 y link a `/ranking`
+- [x] Preview expertos con blur/CTA para no registrados
+- [x] Próximas reuniones con link a inscritos
+- [x] Sticky bottom CTA para no logueados
 
 ### Ingestor Gemini (`/admin/intelligence`)
-- [x] Prompt mínimo: extrae solo `raceNumber`, `dorsalNumber`, `rawName`, `rawLabel`, `hasOrder` — sin interpretación, sin contexto de DB en el modelo
-- [x] Soporte de formato dorsal-only (`8Oro`, `3/5/7`) y listas con barra separadora
-- [x] Resolución de caballos: match exacto por dorsal (100% confianza) → fallback similitud de nombre
-- [x] Tabla de comparación: raw del pronosticador vs. nombre resuelto en DB con barra de confianza
-- [x] Corrección manual: selector de caballo si no resuelve automáticamente
-- [x] Badge `con orden` / `sin orden` por carrera
-- [x] Etiqueta raw del pronosticador como badge informativo (no se normaliza)
-- [x] Etiqueta (`label`) completamente opcional — solo relevante cuando es `Línea` (única elección)
-- [x] Deduplicación por `contentHash` en `/process` (aviso al admin, no bloquea re-publicar)
-- [x] Upsert por `(expertSourceId + raceNumber + meetingId)` — re-publicar actualiza, no duplica
-- [x] Ghost `HandicapperProfile` + `ExpertSource` creados automáticamente (el experto puede reclamarlo)
-- [x] Guarda `ExpertForecast` (historial/auditoría) + `Forecast` (visible en `/pronosticos`)
-- [x] Manejo de JSON truncado con salvage progresivo + sentinel `__TRUNCATED__`
-- [x] Fallback de nombre: si dorsal no resuelve a DB → `"Dorsal N"` (no falla la validación)
+- [x] Pronósticos desde texto/tweet: extrae `raceNumber`, `dorsalNumber`, `rawName`, `rawLabel`, `hasOrder`
+- [x] Match por dorsal (100%) → fallback similitud de nombre
+- [x] Tabla comparación raw vs. DB con barra de confianza + corrección manual
+- [x] Ghost `HandicapperProfile` + `ExpertSource` automáticos
+- [x] Upsert por `(expertSourceId + raceNumber + meetingId)`, deduplicación por `contentHash`
 
-### Ruta Pública `/programa/[meetingId]`
-- [x] Muestra todos los inscritos (incluyendo raspados marcados visualmente)
-- [x] Preview borroso de pronósticos con CTA de registro para no-logueados
-- [x] Link desde homepage en cards de próximas reuniones
-- [x] SEO: metadata dinámica por reunión
-
-### UI/UX y SEO
-- [x] Favicon → logo DH (hexágono rojo/amarillo)
-- [x] Open Graph image (Banner dh.png) — miniatura al compartir en WhatsApp/Telegram/Twitter
-- [x] Twitter card `summary_large_image`
-- [x] Abreviaciones VLC/LRC en selector de reuniones de `/pronosticos`
-- [x] SEO metadata en `layout.tsx`: keywords La Rinconada, Valencia, INH, HINAVA
-- [x] Homepage reordenada: próximas reuniones arriba de previews de pronósticos
+### Ingesta de Inscritos (PDFs)
+- [x] Parser PDF INH (La Rinconada) + HINAVA (Valencia) con detección automática de fuente
+- [x] Upsert idempotente, UI drag & drop, modo debug
 
 ### Notificaciones In-App
-- [x] Modelo `Notification` con 12 tipos, TTL 90 días automático (MongoDB TTL index)
-- [x] `NotificationBell` 🔔 en header de `/` y `/pronosticos`: badge dorado, polling 30s
-- [x] Marca como leídas al abrir el panel, links directos a la acción
-- [x] **10 triggers activos:**
+- [x] `NotificationBell` 🔔 en headers, TTL 90 días, polling 30s
+- [x] 10 triggers: recargas, solicitudes handicapper, pronósticos, reuniones, Gold bajo
 
-| Evento | Audiencia | Tipo |
-|--------|-----------|------|
-| Usuario envía recarga | Admin + Staff | `topup_pending` |
-| Admin aprueba recarga | Usuario | `topup_approved` |
-| Admin rechaza recarga | Usuario | `topup_rejected` |
-| Usuario solicita ser handicapper | Admin + Staff | `handicapper_request` |
-| Admin aprueba solicitud | Usuario | `request_approved` |
-| Admin rechaza solicitud | Usuario | `request_rejected` |
-| Handicapper publica pronóstico | Sus seguidores | `followed_forecast` |
-| Admin ingesta PDF INH | Todos los usuarios | `new_meeting` |
-| Admin ingesta PDF INH | Todos los handicappers | `new_meeting_hcp` |
-| Usuario desbloquea con < 3 Golds | Usuario | `gold_low` |
+### UI/UX y SEO
+- [x] Open Graph + Twitter card, sitemap dinámico (incluye `/ranking`), robots.ts
+- [x] OG image 1080×1080 para cards compartibles (`/api/og/forecast`)
+- [x] `/retirados`: página pública con SEO, display tachado en `/pronosticos`
+- [x] `/staff/fuentes`: catálogo de handicappers conocidos con estado en DB
 
 ---
 
 ## 🔜 Pendiente — Próximas Sesiones
 
 ### Alta prioridad
-- [ ] **Manejo de retirados** — cuando un caballo se retira antes de la carrera, los pronósticos que lo incluyen deben marcarse y mostrarse de forma especial (no afectar las estadísticas del handicapper negativamente).
-- [ ] **Botón de compartir pronósticos** — para handicappers y usuarios. Compartir pronóstico propio o de otro. Incentivo: ganar monedas internas (Golds) por cada compartido que traiga un nuevo usuario, con un límite diario. Generar link/card visual para WhatsApp y Telegram.
+- [ ] **Manejo de retirados en stats** — cuando un caballo se retira, marcar el pronóstico que lo incluye sin penalizar las estadísticas del handicapper
+- [ ] **Botón de compartir pronósticos** — card visual 1080×1080 para WhatsApp/Telegram, incentivo Golds por compartido que traiga nuevo usuario, límite diario
 - [ ] **Notificación a seguidores** al publicar pronóstico externo (ghost handicapper)
-- [ ] **Envío en lote del ingestor Gemini** — opción de enviar todas las carreras de una sola pasada (texto completo) y también mantener el modo actual carrera a carrera. El admin elige el modo según la fuente.
+- [ ] **Verificar compartir card ghost** desde `/handicapper/[id]` para staff/admin
 
 ### Media prioridad
-- [ ] **Resultados oficiales INH** — ingestar PDF de resultados, evaluar pronósticos automáticamente, actualizar stats handicapper
+- [ ] **Envío en lote ingestor Gemini** — todas las carreras de una pasada + modo carrera a carrera actual
+- [ ] **Ingestor Gemini desde imagen/OCR** — ya existe `processImage`, esfuerzo bajo
+- [ ] **Advertencia de fecha incorrecta** en ingestor Gemini — comparar fecha del texto con reunión seleccionada
 - [ ] **Módulo Pollas** — gestión de jugadas grupales (scope separado)
 
 ### Baja prioridad
-- [ ] **Telegram Mini App** — validar `initData` con HMAC-SHA256 en backend (`TELEGRAM_BOT_TOKEN`)
 - [ ] **Tasa BCV automática** — scraping diario de bcv.org.ve (actualmente manual)
 - [ ] **Notificaciones push** — Web Push API o Telegram Bot
 - [ ] **PWA / App móvil** — instalable en Android/iOS
-- [ ] **AI Handicapper** — ingestión desde YouTube, OCR, audio (stubs en `aiHandicapperService.ts`)
+- [ ] **YouTube automático** — dividir transcript por carrera antes del prompt Gemini
 
 ---
 
@@ -391,25 +381,34 @@ Requiere: Node.js 20+, nginx como reverse proxy, SSL con Let's Encrypt.
 # Desarrollo
 npm run dev
 
-# Verificar tipos TypeScript (0 errores)
+# Verificar tipos TypeScript (0 errores esperados)
 npx tsc --noEmit
 
-# Migración one-time: fix usuarios con balance=0 (ya ejecutada Feb 2026)
+# ── Migraciones / Backfill ──────────────────────────────────────────────────
+
+# Evaluar pronósticos históricos sin re-subir imágenes (conecta directo a MongoDB)
+npx tsx scripts/backfill-forecasts.ts
+
+# One-time: fix POOL_4 → POOL_DE_4 en Race.games (ya ejecutada Mar 2026)
+npx tsx scripts/migrate-pool4.ts
+
+# One-time: fix usuarios con balance=0 (ya ejecutada Feb 2026)
 node --env-file=.env scripts/fix-balance.mjs
+
+# ── Tests manuales ──────────────────────────────────────────────────────────
 
 # Test ingestión PDF (modo debug — muestra texto extraído)
 curl -X POST 'http://localhost:3000/api/admin/ingest?debug=true' \
   -F 'file=@"Ejemplares inscritos reunión 9.pdf"'
 
-# Test ingestión completa
-curl -X POST 'http://localhost:3000/api/admin/ingest' \
-  -F 'file=@"Ejemplares inscritos reunión 9.pdf"'
+# Test ranking de handicappers
+curl http://localhost:3000/api/handicapper/ranking
+
+# Test stats de un handicapper específico
+curl http://localhost:3000/api/handicapper/HANDICAPPER_ID/stats
 
 # Test tasa BCV
 curl http://localhost:3000/api/exchange-rate
-
-# Test notificaciones (requiere sesión activa)
-curl http://localhost:3000/api/notifications
 ```
 
 ---
