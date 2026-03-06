@@ -294,71 +294,78 @@ interface FinishRow {
   estimatedTime: string;
 }
 
-// Convert a margin string like "1 cpo", "8 1/2", "2 1/2", "Pzo", "Nrz", "Cbz", "FC" into seconds offset
+// Convert a margin string into fifths of a second to add to the winner's time.
+// Rule: 1 body = 1 fifth (0.2s). A fraction (1/2, 3/4, 1/4) adds 1 more fifth.
+// Pzo/Nrz/Cbz/Hcz = 0 fifths (same time). FC/Desc = null (S/T).
+// Examples: "1 cpo" → 1, "8 1/2" → 9, "2 1/2" → 3, "1/2" → 1, "3/4" → 1
 function marginToFifths(margin: string): number | null {
   if (!margin) return 0;
   const m = margin.trim().toUpperCase();
   if (['FC', 'FUERA', 'FUERA DE CARRERA', 'DESC'].includes(m)) return null; // S/T
   if (['PZO', 'PCZ', 'NRZ', 'NZ', 'CBZ', 'HCZ', 'HOCICO', 'NARIZ', 'CABEZA', 'PESCUEZO'].some(k => m.startsWith(k))) return 0;
-  // Fractions: "1/2", "3/4", "1/4"
+  // "N 1/2", "N 3/4", "N CPO 1/2" — whole bodies + fraction
+  const mixed = m.match(/^(\d+)\s*(?:CPO[S]?)?\s+(\d+)\/(\d+)/);
+  if (mixed) return parseInt(mixed[1]) + 1; // whole bodies + 1 for the fraction
+  // Fraction only: "1/2", "3/4", "1/4" → 1 fifth
   const fracOnly = m.match(/^(\d+)\/(\d+)$/);
-  if (fracOnly) {
-    const f = parseInt(fracOnly[1]) / parseInt(fracOnly[2]);
-    return f <= 0.5 ? 1 : 1; // 1/4, 1/2, 3/4 → 1 fifth
-  }
-  // "N 1/2", "N 3/4" — whole + fraction
-  const mixed = m.match(/^(\d+)\s+(\d+)\/(\d+)/);
-  if (mixed) {
-    const whole = parseInt(mixed[1]);
-    return whole * 5 + 1; // each body = 5 fifths; fraction = 1 more fifth
-  }
-  // plain number: "1", "2", "8"
-  const plain = m.match(/^(\d+)$/);
-  if (plain) return parseInt(plain[1]) * 5;
-  // "N CPO", "N CPOS"
+  if (fracOnly) return 1;
+  // "N CPO" or "N CPOS" — plain bodies
   const cpo = m.match(/^([\d.]+)\s*CPO/);
-  if (cpo) return Math.round(parseFloat(cpo[1]) * 5);
+  if (cpo) return Math.round(parseFloat(cpo[1]));
+  // Plain integer: "1", "2", "8"
+  const plain = m.match(/^(\d+)$/);
+  if (plain) return parseInt(plain[1]);
   return 0;
 }
 
-// Parse official time string like "1:12.4" or "97.4" into total fifths (hundredths * 5 approx → we use 1/5s)
-function parseOfficialTime(t: string): { mins: number; secs: number; fifths: number } | null {
+// Parse official time "97.4" or "1:37.4" → total fifths as integer
+function parseOfficialTime(t: string): number | null {
   if (!t) return null;
-  // "1:12.4" or "1:12,4"
+  // "1:37.4" → mins:secs.fifths
   const long = t.match(/^(\d+):(\d{2})[.,](\d)$/);
-  if (long) return { mins: parseInt(long[1]), secs: parseInt(long[2]), fifths: parseInt(long[3]) };
-  // "72.4" — seconds.fifths
+  if (long) {
+    const totalSecs = parseInt(long[1]) * 60 + parseInt(long[2]);
+    return totalSecs * 5 + parseInt(long[3]);
+  }
+  // "97.4" → secs.fifths
   const short = t.match(/^(\d+)[.,](\d)$/);
-  if (short) return { mins: 0, secs: parseInt(short[1]), fifths: parseInt(short[2]) };
+  if (short) return parseInt(short[1]) * 5 + parseInt(short[2]);
   return null;
 }
 
-function addFifths(base: { mins: number; secs: number; fifths: number }, extra: number): string {
-  let f = base.fifths + extra;
-  let s = base.secs + Math.floor(f / 5);
-  f = f % 5;
-  let m = base.mins + Math.floor(s / 60);
-  s = s % 60;
-  if (m > 0) return `${m}:${String(s).padStart(2, '0')}.${f}`;
-  return `${s}.${f}`;
+// Format total fifths → "sss.f" (Venezuelan standard, never m:ss)
+function fifthsToStr(totalFifths: number): string {
+  const secs = Math.floor(totalFifths / 5);
+  const f = totalFifths % 5;
+  return `${secs}.${f}`;
 }
 
 function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
-  const base = parseOfficialTime(winnerTime);
-  if (!base) return rows.map(r => ({ ...r, estimatedTime: r.isScratched ? 'S/T' : '' }));
-  let accumulated = 0;
-  // Sort by finish position, scratched last
-  const sorted = [...rows].sort((a, b) =>
-    a.isScratched ? 1 : b.isScratched ? -1 : a.finishPosition - b.finishPosition
-  );
+  const baseFifths = parseOfficialTime(winnerTime);
+  if (baseFifths === null) return rows.map(r => ({ ...r, estimatedTime: r.isScratched ? 'S/T' : '' }));
+  // Sort by finish position (non-scratched first)
+  const sorted = [...rows]
+    .filter(r => !r.isScratched)
+    .sort((a, b) => a.finishPosition - b.finishPosition);
   const timeMap: Record<number, string> = {};
+  let accumulatedFifths = 0; // total bodies from 1st place, built up position by position
   for (const row of sorted) {
-    if (row.isScratched) { timeMap[row.dorsalNumber] = 'S/T'; continue; }
-    if (row.finishPosition === 1) { timeMap[row.dorsalNumber] = winnerTime; continue; }
+    if (row.finishPosition === 1) {
+      timeMap[row.dorsalNumber] = winnerTime;
+      continue;
+    }
+    // Each row's margin is relative to the horse ahead → accumulate to get distance from 1st
     const fifths = marginToFifths(row.distanceMargin);
-    if (fifths === null) { timeMap[row.dorsalNumber] = 'S/T'; accumulated = 0; continue; }
-    accumulated += fifths;
-    timeMap[row.dorsalNumber] = addFifths(base, accumulated);
+    if (fifths === null) {
+      timeMap[row.dorsalNumber] = 'S/T';
+      accumulatedFifths = 0; // FC breaks the chain
+      continue;
+    }
+    accumulatedFifths += fifths;
+    timeMap[row.dorsalNumber] = fifthsToStr(baseFifths + accumulatedFifths);
+  }
+  for (const row of rows.filter(r => r.isScratched)) {
+    timeMap[row.dorsalNumber] = 'S/T';
   }
   return rows.map(r => ({ ...r, estimatedTime: timeMap[r.dorsalNumber] ?? '' }));
 }
