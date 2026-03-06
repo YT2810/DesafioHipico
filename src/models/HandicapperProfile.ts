@@ -24,6 +24,7 @@ export interface IHandicapperProfile extends Document {
   expertSourceId?: Types.ObjectId;
   revenueSharePct: number;
   stats: IHandicapperStats;
+  claimedAt?: Date;       // set when a real user links to this profile — stats reset from this date
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +39,7 @@ const HandicapperProfileSchema = new Schema<IHandicapperProfile>(
     bio: { type: String, trim: true, maxlength: 500 },
     isActive: { type: Boolean, default: true },
     isPublic: { type: Boolean, default: true },
+    claimedAt: { type: Date },
     revenueSharePct: {
       type: Number,
       default: 70,

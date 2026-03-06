@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Forecast from '@/models/Forecast';
 import HandicapperProfile from '@/models/HandicapperProfile';
+import Race from '@/models/Race';
+import Meeting from '@/models/Meeting';
+import Track from '@/models/Track';
+
+export interface TrackStats {
+  trackId: string;
+  trackName: string;
+  totalRaces: number;
+  orderedRaces: number;
+  e1: number | null;
+  e1_2: number | null;
+  e1_3: number | null;
+  eGeneral: number;
+}
 
 export interface HandicapperStats {
   totalRaces: number;          // races with evaluated forecasts
@@ -10,7 +24,28 @@ export interface HandicapperStats {
   e1_2: number | null;         // % hit within top-2 marks
   e1_3: number | null;         // % hit within top-3 marks
   eGeneral: number;            // % hit in any mark (all races)
-  roi1st: number | null;       // simulated ROI following only 1st mark (Bs ganados / Bs apostados - 1)
+  roi1st: number | null;       // simulated ROI following only 1st mark
+  byTrack: TrackStats[];       // per-track breakdown
+  claimedAt?: string | null;   // ISO date — stats only from this date if present
+}
+
+interface Bucket {
+  totalRaces: number; orderedRaces: number;
+  hitAny: number; hit1st: number; hit2nd: number; hit3rd: number;
+  roi1stWinnings: number; roi1stStakes: number;
+}
+function emptyBucket(): Bucket {
+  return { totalRaces: 0, orderedRaces: 0, hitAny: 0, hit1st: 0, hit2nd: 0, hit3rd: 0, roi1stWinnings: 0, roi1stStakes: 0 };
+}
+function calcMetrics(b: Bucket) {
+  const e1 = b.orderedRaces > 0 ? Math.round((b.hit1st / b.orderedRaces) * 1000) / 10 : null;
+  const e1_2 = b.orderedRaces > 0 ? Math.round((b.hit2nd / b.orderedRaces) * 1000) / 10 : null;
+  const e1_3 = b.orderedRaces > 0 ? Math.round((b.hit3rd / b.orderedRaces) * 1000) / 10 : null;
+  const eGeneral = b.totalRaces > 0 ? Math.round((b.hitAny / b.totalRaces) * 1000) / 10 : 0;
+  const roi1st = b.roi1stStakes > 0
+    ? Math.round(((b.roi1stWinnings - b.roi1stStakes) / b.roi1stStakes) * 1000) / 10
+    : null;
+  return { e1, e1_2, e1_3, eGeneral, roi1st };
 }
 
 export async function GET(
@@ -21,77 +56,100 @@ export async function GET(
     const { id } = await params;
     await dbConnect();
 
-    const profile = await HandicapperProfile.findById(id).lean();
+    // Ensure Track model is registered for population
+    void Track;
+
+    const profile = await HandicapperProfile.findById(id).lean() as any;
     if (!profile) return NextResponse.json({ error: 'Handicapper no encontrado.' }, { status: 404 });
 
-    // Only evaluated forecasts
-    const forecasts = await Forecast.find({
+    // Filter from claimedAt if set (ghost profile claimed by real user)
+    const claimedAt: Date | null = profile.claimedAt ?? null;
+    const forecastQuery: Record<string, unknown> = {
       handicapperId: id,
       'result.evaluated': true,
-    })
-      .populate({ path: 'raceId', select: 'payouts status' })
+    };
+    if (claimedAt) forecastQuery.createdAt = { $gte: claimedAt };
+
+    // Only evaluated forecasts, populate race → meeting → track
+    const forecasts = await Forecast.find(forecastQuery)
+      .populate({
+        path: 'raceId',
+        select: 'payouts meetingId',
+        populate: { path: 'meetingId', select: 'trackId', populate: { path: 'trackId', select: 'name' } },
+      })
       .lean();
 
     if (forecasts.length === 0) {
       return NextResponse.json({
         totalRaces: 0, orderedRaces: 0,
         e1: null, e1_2: null, e1_3: null, eGeneral: 0, roi1st: null,
+        byTrack: [],
+        claimedAt: claimedAt?.toISOString() ?? null,
       } satisfies HandicapperStats);
     }
 
-    let totalRaces = 0;
-    let orderedRaces = 0;
-    let hitAnyCount = 0;
-    let hit1stCount = 0;
-    let hit2Count = 0;
-    let hit3Count = 0;
-
-    // ROI: sum of winnings when 1st mark hit, vs total races with ordered marks
-    let roi1stWinnings = 0;
-    let roi1stStakes = 0;
+    const global = emptyBucket();
+    const trackBuckets = new Map<string, { name: string; bucket: Bucket }>();
 
     for (const fc of forecasts) {
       const result = fc.result;
       if (!result?.evaluated) continue;
-      totalRaces++;
 
-      if (result.hitAny) hitAnyCount++;
+      const race = fc.raceId as any;
+      const trackId: string = race?.meetingId?.trackId?._id?.toString() ?? 'unknown';
+      const trackName: string = race?.meetingId?.trackId?.name ?? 'Hipódromo';
+      const winnerPayouts: { combination: string; amount: number }[] = race?.payouts?.winner ?? [];
 
-      // Check if this forecast had ordered marks with dorsals
       const hasOrder = fc.marks.some((m: { dorsalNumber?: number }) => m.dorsalNumber != null);
-      if (hasOrder) {
-        orderedRaces++;
-        if (result.hit1st) hit1stCount++;
-        if (result.hit2nd) hit2Count++;
-        if (result.hit3rd) hit3Count++;
 
-        // ROI calculation: 1 unit staked per race on 1st mark
-        roi1stStakes += 1;
+      // Global
+      global.totalRaces++;
+      if (result.hitAny) global.hitAny++;
+      if (hasOrder) {
+        global.orderedRaces++;
+        if (result.hit1st) global.hit1st++;
+        if (result.hit2nd) global.hit2nd++;
+        if (result.hit3rd) global.hit3rd++;
+        global.roi1stStakes++;
         if (result.hit1st) {
-          // Get winner payout from race
-          const race = fc.raceId as { payouts?: { winner?: { combination: string; amount: number }[] } } | null;
-          const winnerPayouts = race?.payouts?.winner ?? [];
-          // Find the matching payout (first entry that is not NO_HUBO)
           const payout = winnerPayouts.find(p => p.combination !== 'NO_HUBO');
-          if (payout?.amount) {
-            // INH payouts are per 100 Bs base — normalize to 1 unit
-            roi1stWinnings += payout.amount / 100;
-          }
+          if (payout?.amount) global.roi1stWinnings += payout.amount / 100;
         }
+      }
+
+      // Per track
+      if (!trackBuckets.has(trackId)) trackBuckets.set(trackId, { name: trackName, bucket: emptyBucket() });
+      const tb = trackBuckets.get(trackId)!.bucket;
+      tb.totalRaces++;
+      if (result.hitAny) tb.hitAny++;
+      if (hasOrder) {
+        tb.orderedRaces++;
+        if (result.hit1st) tb.hit1st++;
+        if (result.hit2nd) tb.hit2nd++;
+        if (result.hit3rd) tb.hit3rd++;
       }
     }
 
-    const eGeneral = totalRaces > 0 ? Math.round((hitAnyCount / totalRaces) * 1000) / 10 : 0;
-    const e1 = orderedRaces > 0 ? Math.round((hit1stCount / orderedRaces) * 1000) / 10 : null;
-    const e1_2 = orderedRaces > 0 ? Math.round((hit2Count / orderedRaces) * 1000) / 10 : null;
-    const e1_3 = orderedRaces > 0 ? Math.round((hit3Count / orderedRaces) * 1000) / 10 : null;
-    const roi1st = roi1stStakes > 0
-      ? Math.round(((roi1stWinnings - roi1stStakes) / roi1stStakes) * 1000) / 10
-      : null;
+    const globalMetrics = calcMetrics(global);
+
+    const byTrack: TrackStats[] = [...trackBuckets.entries()]
+      .map(([trackId, { name, bucket }]) => ({
+        trackId,
+        trackName: name,
+        totalRaces: bucket.totalRaces,
+        orderedRaces: bucket.orderedRaces,
+        ...calcMetrics(bucket),
+        roi1st: undefined as unknown as null,  // not included in per-track
+      }))
+      .map(t => { const { roi1st: _r, ...rest } = t; return { ...rest, roi1st: null }; })
+      .sort((a, b) => b.totalRaces - a.totalRaces);
 
     return NextResponse.json({
-      totalRaces, orderedRaces,
-      e1, e1_2, e1_3, eGeneral, roi1st,
+      totalRaces: global.totalRaces,
+      orderedRaces: global.orderedRaces,
+      ...globalMetrics,
+      byTrack,
+      claimedAt: claimedAt?.toISOString() ?? null,
     } satisfies HandicapperStats);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido';

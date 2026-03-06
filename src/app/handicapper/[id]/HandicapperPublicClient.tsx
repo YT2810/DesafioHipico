@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import type { HandicapperStats } from '@/app/api/handicapper/[id]/stats/route';
+import type { HandicapperStats, TrackStats } from '@/app/api/handicapper/[id]/stats/route';
 
 const LABEL_COLORS: Record<string, string> = {
   'Línea':          'text-blue-400 bg-blue-950/40 border-blue-800/40',
@@ -156,6 +156,39 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
                 </span>
               )}
             </div>
+            {stats.claimedAt && (
+              <p className="text-xs text-blue-400/60 px-1">
+                ℹ️ Estadísticas desde {new Date(stats.claimedAt).toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })} (fecha de verificación)
+              </p>
+            )}
+
+            {/* Per-track breakdown */}
+            {stats.byTrack.length > 1 && (
+              <div className="mt-1 space-y-1.5">
+                <p className="text-xs text-gray-600 uppercase tracking-wider font-semibold px-1">Por hipódromo</p>
+                {stats.byTrack.map((t: TrackStats) => (
+                  <div key={t.trackId} className="bg-gray-950 border border-gray-800/60 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                    <span className="text-sm shrink-0">{t.trackName.toLowerCase().includes('valencia') ? '🏙' : '🏗'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-300 truncate">{t.trackName}</p>
+                      <p className="text-xs text-gray-600">{t.totalRaces} carreras</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {t.e1 !== null && (
+                        <div className="text-center">
+                          <p className="text-sm font-black text-yellow-400">{t.e1}%</p>
+                          <p className="text-[10px] text-gray-600">E1</p>
+                        </div>
+                      )}
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-white">{t.eGeneral}%</p>
+                        <p className="text-[10px] text-gray-600">Gral</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : stats && stats.totalRaces === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4 text-center">
