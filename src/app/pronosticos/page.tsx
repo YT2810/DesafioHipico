@@ -56,10 +56,11 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals, statsMap }: {
+function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId, onDeleted, scratchedDorsals, statsMap, rankPos }: {
   forecast: ForecastItem; isFollowed: boolean; onFollow: () => void;
   isPrivileged?: boolean; raceId?: string; onDeleted?: () => void; scratchedDorsals?: number[];
   statsMap?: Map<string, { e1: number | null; eGeneral: number }>;
+  rankPos?: number;
 }) {
   const { handicapper, marks, isVip, sourceRef, uploadedByRole } = forecast;
   const isGhost = handicapper.isGhost ?? false;
@@ -101,6 +102,15 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 py-3 text-left hover:bg-gray-800/30 active:bg-gray-800/50 transition-colors rounded-lg -mx-1 px-1"
       >
+        {/* Rank badge */}
+        {rankPos != null && rankPos <= 3 && (
+          <span className="shrink-0 text-base leading-none" title={`#${rankPos} en ranking`}>
+            {rankPos === 1 ? '🥇' : rankPos === 2 ? '🥈' : '🥉'}
+          </span>
+        )}
+        {rankPos != null && rankPos > 3 && (
+          <span className="shrink-0 text-xs font-bold text-gray-600 w-5 text-center">#{rankPos}</span>
+        )}
         {/* Avatar */}
         <span
           className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold"
@@ -275,7 +285,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap }: {
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap }: {
   race: RaceItem; 
   unlocked: boolean; 
   goldBalance: number; 
@@ -286,9 +296,20 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   onRefresh?: () => void;
   meetingInfo?: { trackName: string; meetingNumber: number };
   statsMap?: Map<string, { e1: number | null; eGeneral: number }>;
+  globalRankMap?: Map<string, number>;
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
+  // Sort forecasts: ranked handicappers first (by E1 desc), unranked last
+  const sortedForecasts = unlocked
+    ? [...race.forecasts].sort((a, b) => {
+        const as = statsMap?.get(a.handicapper.id);
+        const bs = statsMap?.get(b.handicapper.id);
+        const aE1 = as?.e1 ?? as?.eGeneral ?? -1;
+        const bE1 = bs?.e1 ?? bs?.eGeneral ?? -1;
+        return bE1 - aE1;
+      })
+    : race.forecasts;
   return (
     <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-3">
@@ -343,7 +364,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           )}
           {race.forecasts.length === 0
             ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{race.forecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} />)}</div>
+            : <div className="divide-y divide-gray-800/60">{sortedForecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} rankPos={globalRankMap?.get(fc.handicapper.id)} />)}</div>
           }
         </>
       )}
@@ -364,6 +385,7 @@ export default function PronosticosPage() {
   const [loadingMeeting, setLoadingMeeting] = useState(false);
   const [freeRemaining, setFreeRemaining] = useState(FREE_RACES_PER_MEETING);
   const [statsMap, setStatsMap] = useState<Map<string, { e1: number | null; eGeneral: number }>>(new Map());
+  const [globalRankMap, setGlobalRankMap] = useState<Map<string, number>>(new Map());
 
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
@@ -442,17 +464,25 @@ export default function PronosticosPage() {
         races: raceItems,
       });
 
-      // Fetch live stats for all unique handicappers in parallel
+      // Fetch live stats + ranking in parallel
       const uniqueIds = [...new Set(raceItems.flatMap(r => r.forecasts.map(f => f.handicapper.id)).filter(Boolean))];
-      const entries = await Promise.all(
-        uniqueIds.map(hId =>
-          fetch(`/api/handicapper/${hId}/stats`)
-            .then(r => r.ok ? r.json() : null)
-            .then(s => s ? [hId, { e1: s.e1, eGeneral: s.eGeneral }] as const : null)
-            .catch(() => null)
-        )
-      );
-      setStatsMap(new Map(entries.filter((e): e is [string, { e1: number | null; eGeneral: number }] => e !== null)));
+      const [statsEntries, rankingRes] = await Promise.all([
+        Promise.all(
+          uniqueIds.map(hId =>
+            fetch(`/api/handicapper/${hId}/stats`)
+              .then(r => r.ok ? r.json() : null)
+              .then(s => s ? [hId, { e1: s.e1, eGeneral: s.eGeneral }] as const : null)
+              .catch(() => null)
+          )
+        ),
+        fetch('/api/handicapper/ranking').then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      setStatsMap(new Map(statsEntries.filter((e): e is [string, { e1: number | null; eGeneral: number }] => e !== null)));
+      if (rankingRes?.ranking) {
+        const rankMap = new Map<string, number>();
+        rankingRes.ranking.forEach((entry: { id: string }, idx: number) => rankMap.set(entry.id, idx + 1));
+        setGlobalRankMap(rankMap);
+      }
     } catch {
       setMeeting(null);
     } finally {
@@ -563,6 +593,9 @@ export default function PronosticosPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Link href="/ranking" className="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-yellow-400 hover:border-yellow-600 transition-colors shrink-0" title="Ranking de handicappers">
+              🏆
+            </Link>
             {!isPrivileged && (
               <div className="flex items-center gap-1.5 bg-gray-800 rounded-lg px-2.5 py-1.5">
                 <span className="text-sm">🪙</span>
@@ -648,7 +681,7 @@ export default function PronosticosPage() {
             onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow}
             isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)}
             meetingInfo={meeting ? { trackName: meeting.trackName, meetingNumber: meeting.meetingNumber } : undefined}
-            statsMap={statsMap} />
+            statsMap={statsMap} globalRankMap={globalRankMap} />
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>
