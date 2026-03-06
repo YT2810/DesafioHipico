@@ -3,7 +3,6 @@ import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import Race from '@/models/Race';
 import Entry from '@/models/Entry';
-import Meeting from '@/models/Meeting';
 
 export interface ResultFinishEntry {
   dorsalNumber: number;

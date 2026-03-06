@@ -306,7 +306,7 @@ function emptyPayouts(): PayoutsEdit {
 }
 
 function ResultsTab() {
-  const [meetings, setMeetings] = useState<{ _id: string; meetingNumber: number; date: string; trackId?: { name?: string } }[]>([]);
+  const [meetings, setMeetings] = useState<{ _id: string; meetingNumber: number; date: string; trackName?: string }[]>([]);
   const [meetingId, setMeetingId] = useState('');
   const [raceNumber, setRaceNumber] = useState('');
   const [images, setImages] = useState<File[]>([]);
@@ -424,7 +424,7 @@ function ResultsTab() {
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500">
               {meetings.map(m => (
                 <option key={m._id} value={m._id}>
-                  R{m.meetingNumber} — {m.trackId?.name ?? 'Hipódromo'} — {new Date(m.date).toLocaleDateString('es-VE')}
+                  R{m.meetingNumber} — {m.trackName ?? 'Hipódromo'} — {new Date(m.date).toLocaleDateString('es-VE')}
                 </option>
               ))}
             </select>
