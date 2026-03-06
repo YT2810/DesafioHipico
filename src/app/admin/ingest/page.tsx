@@ -396,7 +396,7 @@ function ResultsTab() {
   const [meetingId, setMeetingId] = useState('');
   const [raceNumber, setRaceNumber] = useState('');
   const [raceDistance, setRaceDistance] = useState<number | null>(null);
-  const [races, setRaces] = useState<{ raceNumber: number; distance: number; status: string }[]>([]);
+  const [races, setRaces] = useState<{ raceNumber: number; distance: number; status?: string }[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -422,7 +422,7 @@ function ResultsTab() {
   useEffect(() => {
     if (!meetingId) return;
     fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()).then(d => {
-      const list = (d.races ?? []).map((r: any) => ({ raceNumber: r.raceNumber, distance: r.distance, status: r.status }));
+      const list = (d.races ?? []).map((r: any) => ({ raceNumber: r.raceNumber, distance: r.distance ?? null, status: r.status ?? '' }));
       setRaces(list);
       setRaceDistance(null);
     });
@@ -433,6 +433,13 @@ function ResultsTab() {
     const found = races.find(r => r.raceNumber === parseInt(raceNumber));
     setRaceDistance(found?.distance ?? null);
   }, [raceNumber, races]);
+
+  useEffect(() => {
+    if (!officialTime || !finishOrder.length) return;
+    setFinishOrder(prev => computeEntryTimes(prev, officialTime));
+  // Only rerun when officialTime changes, not on every finishOrder update
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officialTime]);
 
   function addImages(files: FileList | File[]) {
     const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
@@ -450,9 +457,10 @@ function ResultsTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error extrayendo resultados');
       const r = data.result;
-      // Warn if Gemini detected a different race number
+      // Warn if Gemini detected a different race number but NEVER auto-overwrite
+      // Gemini may read annual race number (e.g. C089) instead of daily number (C3)
       if (r.raceNumber && String(r.raceNumber) !== String(raceNumber)) {
-        setError(`⚠️ La IA detectó Carrera ${r.raceNumber} pero tienes seleccionada Carrera ${raceNumber}. Verifica las imágenes antes de guardar.`);
+        setError(`ℹ️ La IA leyó "${r.raceNumber}" en la imagen (posiblemente número anual), se mantiene Carrera ${raceNumber}. Verifica si la imagen es correcta.`);
       }
       const winTime: string = r.officialTime ?? '';
       const rawRows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
@@ -470,7 +478,7 @@ function ResultsTab() {
         if (Array.isArray(src)) p[key] = src.map((x: any) => ({ combination: String(x.combination ?? ''), amount: String(x.amount ?? '') }));
       }
       setPayouts(p);
-      if (r.raceNumber) setRaceNumber(String(r.raceNumber));
+      // Do NOT auto-set raceNumber from Gemini — user selects manually
       setExtracted(true);
       setTokensUsed(Math.round((images.reduce((s, f) => s + f.size, 0) / 1024) * 0.85 + 400));
     } catch (e) { setError(e instanceof Error ? e.message : 'Error desconocido'); }

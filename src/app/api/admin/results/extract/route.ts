@@ -30,16 +30,16 @@ Extrae los pagos para cada tipo de apuesta:
 Los montos pueden ser "Bs. 1.234,56" → extrae 1234.56 como número.
 
 ═══ TIEMPOS ═══
-- officialTime: tiempo oficial de la carrera (ej: "1:12.4"). null si no aparece.
-- timeSplits: array de {distance: número en metros, time: "0:23.1"}. Vacío si no hay foto finish.
+- officialTime: tiempo oficial del GANADOR en formato venezolano "segundos.quintos" (ej: "97.4", "108.2"). Si aparece en formato minutos como "1:37.4" conviértelo a segundos: 1*60+37=97, quintos=4 → "97.4". null si no aparece.
+- timeSplits: array de {distance: número en metros, time: string}. Vacío si no hay splits.
 
 ═══ NÚMERO DE CARRERA ═══
-- raceNumber: número de carrera que aparece en la imagen. null si no se ve claramente.
+- raceNumber: número de JORNADA (1ra, 2da, 3ra carrera del día). NO uses el número correlativo anual (ej: C089 → ignora 89, usa el número ordinal del día como 3). null si no se puede determinar.
 
 ═══ JSON DE SALIDA (puro, sin markdown) ═══
 {
   "raceNumber": 3,
-  "officialTime": "1:12.4",
+  "officialTime": "97.4",
   "timeSplits": [{"distance": 400, "time": "0:23.1"}, {"distance": 800, "time": "0:46.3"}],
   "finishOrder": [
     {"finishPosition": 1, "dorsalNumber": 5, "horseName": "EJEMPLO", "distanceMargin": null, "isDistanced": false, "isScratched": false},
