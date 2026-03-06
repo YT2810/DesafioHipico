@@ -71,14 +71,14 @@ function preprocessText(raw: string): string {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    // Entry line: starts with 1-2 digits + 2+ spaces + uppercase letter
-    if (/^\d{1,2}\s{2,}[A-ZÁÉÍÓÚÑ´'(]/.test(line)) {
+    // Entry line: starts with 1-2 digits + 2+ spaces + uppercase letter (NOT parenthesis — that's a name continuation like "(USA)")
+    if (/^\d{1,2}\s{2,}[A-ZÁÉÍÓÚÑ´']/.test(line)) {
       let combined = line;
       // Absorb continuation lines (don't start a new entry or section keyword)
       while (
         i + 1 < lines.length &&
         lines[i + 1].trim() !== '' &&
-        !/^\d{1,2}\s{2,}[A-ZÁÉÍÓÚÑ´'(]/.test(lines[i + 1]) &&
+        !/^\d{1,2}\s{2,}[A-ZÁÉÍÓÚÑ´']/.test(lines[i + 1]) &&
         !/^(JUEGOS|OBSERVACI|Junta|Hip[oó]dromo|Carrera\s+Prog|Reuni[oó]n|Premio|N[°o]\s+Ejemplar)/i.test(lines[i + 1].trim()) &&
         !/^\d+\s{2,}(?:LUNES|MARTES|MI[EÉ]RCOLES|JUEVES|VIERNES|S[AÁ]BADO|DOMINGO)/i.test(lines[i + 1])
       ) {
@@ -316,12 +316,12 @@ function parseEntries(block: string): { entries: ExtractedEntry[]; failedLines: 
   const rawLines = block.split('\n');
   const joinedLines: string[] = [];
   for (const raw of rawLines) {
-    const line = raw.trim().replace(/^[^A-Za-z0-9ÁÉÍÓÚÑ]+/, '');
+    const line = raw.trim().replace(/^[^A-Za-z0-9ÁÉÍÓÚÑ(]+/, '');
     if (!line) continue;
-    if (/^\d{1,2}[A-ZÁÉÍÓÚÑ'(]/.test(line)) {
+    if (/^\d{1,2}[A-ZÁÉÍÓÚÑ']/.test(line)) {
       joinedLines.push(line);
     } else if (joinedLines.length > 0 && !/^(JUEGOS|OBSERVACI|GANADOR|Carrera\s+Prog|N[°o]Ejemplar)/i.test(line)) {
-      joinedLines[joinedLines.length - 1] += line;
+      joinedLines[joinedLines.length - 1] += ' ' + line;
     }
   }
 
