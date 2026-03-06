@@ -216,9 +216,10 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (/EXACTA/i.test(g)) games.push('EXACTA');
     if (/TRIFECTA/i.test(g)) games.push('TRIFECTA');
     if (/SUPERFECTA/i.test(g)) games.push('SUPERFECTA');
-    if (/QUINELA/i.test(g)) games.push('QUINELA');
-    if (/POOL\s+DE\s+4/i.test(g)) games.push('POOL_4');
-    if (/DOBLE/i.test(g)) games.push('DOBLE_SELECCION');
+    if (/TRIPLE/i.test(g)) games.push('TRIPLE_APUESTA');
+    if (/POOL\s+DE\s+4/i.test(g)) games.push('POOL_DE_4');
+    if (/5\s*Y\s*6|CINCO\s*Y\s*SEIS/i.test(g)) games.push('CINCO_Y_SEIS');
+    if (/LOTO/i.test(g)) games.push('LOTO_HIPICO');
   }
 
   return {

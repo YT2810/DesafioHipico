@@ -78,13 +78,15 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
 
   // Games — from OBSERVACIONES block
   const games: string[] = [];
-  if (/GANADOR\s*\nX/m.test(block))   games.push('GANADOR');
-  if (/PLACE\s*\nX/m.test(block))     games.push('PLACE');
-  if (/EXACTA\s*\nX/m.test(block))    games.push('EXACTA');
-  if (/TRIFECTA\s*\nX/m.test(block))  games.push('TRIFECTA');
+  if (/GANADOR\s*\nX/m.test(block))    games.push('GANADOR');
+  if (/PLACE\s*\nX/m.test(block))      games.push('PLACE');
+  if (/EXACTA\s*\nX/m.test(block))     games.push('EXACTA');
+  if (/TRIFECTA\s*\nX/m.test(block))   games.push('TRIFECTA');
   if (/SUPERFECTA\s*\nX/m.test(block)) games.push('SUPERFECTA');
-  if (/POOL DE 4/m.test(block))        games.push('POOL_4');
-  if (/DOBLE PERFECTA/m.test(block))   games.push('DOBLE_SELECCION');
+  if (/TRIPLE\s*APUESTA/m.test(block)) games.push('TRIPLE_APUESTA');
+  if (/POOL\s*DE\s*4/m.test(block))    games.push('POOL_DE_4');
+  if (/5\s*Y\s*6|CINCO\s*Y\s*SEIS/m.test(block)) games.push('CINCO_Y_SEIS');
+  if (/LOTO/m.test(block))             games.push('LOTO_HIPICO');
 
   const race: ExtractedRace = {
     raceNumber,

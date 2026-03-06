@@ -389,11 +389,12 @@ const PAYOUT_LABELS: Record<string, string> = {
   superfecta: 'Superfecta', tripleApuesta: 'Triple Apuesta', poolDe4: 'Pool de 4',
   cincoYSeis: '5 y 6', lotoHipico: 'Loto Hípico',
 };
-// Maps Race.games enum values to PayoutsEdit keys
+// Maps Race.games enum values to PayoutsEdit keys.
+// Multi-race games (TRIPLE_APUESTA, POOL_DE_4, CINCO_Y_SEIS, LOTO_HIPICO) pay out
+// at end of cycle — NOT per individual race, so they are excluded here.
 const GAME_TO_PAYOUT: Record<string, keyof PayoutsEdit> = {
   GANADOR: 'winner', PLACE: 'place', EXACTA: 'exacta', TRIFECTA: 'trifecta',
-  SUPERFECTA: 'superfecta', TRIPLE_APUESTA: 'tripleApuesta', POOL_DE_4: 'poolDe4',
-  CINCO_Y_SEIS: 'cincoYSeis', LOTO_HIPICO: 'lotoHipico',
+  SUPERFECTA: 'superfecta',
 };
 function emptyPayouts(): PayoutsEdit {
   return { winner: [], place: [], exacta: [], trifecta: [], superfecta: [], tripleApuesta: [], poolDe4: [], cincoYSeis: [], lotoHipico: [] };
