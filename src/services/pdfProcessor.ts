@@ -39,7 +39,7 @@ export interface ExtractedEntry {
   medication?: string; implements?: string;
   horse: ExtractedHorse; jockey: ExtractedPerson; trainer: ExtractedPerson;
 }
-export interface ExtractedRaceBlock { race: ExtractedRace; entries: ExtractedEntry[]; }
+export interface ExtractedRaceBlock { race: ExtractedRace; entries: ExtractedEntry[]; failedLines?: string[]; }
 export interface ProcessedDocument { meeting: ExtractedMeeting; races: ExtractedRaceBlock[]; rawText: string; hash: string; warnings: string[]; }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -310,37 +310,34 @@ function parseEntryLine(line: string): ExtractedEntry | null {
   };
 }
 
-function parseEntries(block: string): ExtractedEntry[] {
+function parseEntries(block: string): { entries: ExtractedEntry[]; failedLines: string[] } {
   const entries: ExtractedEntry[] = [];
-  // Normalize: join lines that are continuations of a wrapped entry
-  // A continuation line starts with spaces or a lowercase letter or a digit that is NOT a new dorsal
+  const failedLines: string[] = [];
   const rawLines = block.split('\n');
   const joinedLines: string[] = [];
   for (const raw of rawLines) {
-    // Strip leading non-alphanumeric chars (non-breaking spaces, pipes, dashes)
-    // that can appear before the dorsal number in some PDF extractions
     const line = raw.trim().replace(/^[^A-Za-z0-9ÁÉÍÓÚÑ]+/, '');
     if (!line) continue;
-    // New entry: starts with 1-2 digits immediately followed by uppercase letter
     if (/^\d{1,2}[A-ZÁÉÍÓÚÑ'(]/.test(line)) {
       joinedLines.push(line);
     } else if (joinedLines.length > 0 && !/^(JUEGOS|OBSERVACI|GANADOR|Carrera\s+Prog|N[°o]Ejemplar)/i.test(line)) {
-      // Continuation of previous line
       joinedLines[joinedLines.length - 1] += line;
     }
   }
 
   for (let line of joinedLines) {
     if (/JUEGOS|OBSERVACI[OÓ]N/i.test(line)) continue;
-    // Strip OBSERVACION/GANADOR text that bleeds in from next section
     line = line.replace(/GANADOR\s+UN\s+EJE.*$/i, '').replace(/OBSERVACI[OÓ]N.*$/i, '').trim();
-    // Remove pipe chars and surrounding spaces (PDF line-break artifact)
     line = line.replace(/\s*\|\s*/g, '');
     const entry = parseEntryLine(line);
-    if (entry) entries.push(entry);
+    if (entry) {
+      entries.push(entry);
+    } else {
+      failedLines.push(line.slice(0, 120)); // cap length for display
+    }
   }
 
-  return entries;
+  return { entries, failedLines };
 }
 
 // ─── Block Splitter ───────────────────────────────────────────────────────────
@@ -378,8 +375,8 @@ export function processDocument(rawText: string): ProcessedDocument {
 
   const races: ExtractedRaceBlock[] = blocks.map((blockText) => {
     const race = parseRaceHeader(blockText, warnings);
-    const entries = parseEntries(blockText);
-    return { race, entries };
+    const { entries, failedLines } = parseEntries(blockText);
+    return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
   });
 
   return { meeting, races, rawText, hash, warnings };

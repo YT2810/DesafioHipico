@@ -273,6 +273,16 @@ function RacePreviewCard({ rb }: { rb: ProcessedDocument['races'][0] }) {
           ) : (
             <p className="px-5 py-4 text-sm text-gray-600 italic">No se extrajeron ejemplares para esta carrera.</p>
           )}
+          {rb.failedLines && rb.failedLines.length > 0 && (
+            <div className="px-5 py-3 border-t border-orange-900/40 bg-orange-950/10">
+              <p className="text-xs font-semibold text-orange-400 mb-1.5">⚠️ {rb.failedLines.length} línea{rb.failedLines.length > 1 ? 's' : ''} no pudo parsearse:</p>
+              <div className="space-y-1">
+                {rb.failedLines.map((l, i) => (
+                  <p key={i} className="text-xs font-mono text-orange-300/70 bg-gray-900 rounded px-2 py-1 break-all">{l}</p>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

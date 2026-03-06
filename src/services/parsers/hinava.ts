@@ -122,6 +122,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   // [0] dorsal, [1] horse name, [2] pedigree, [3] med marker (B.L/L/B,L),
   // [4] price (0,00), [5] weight, [6] jockey, [7] implements, [8] trainer, [9] PP
   const entries: ExtractedEntry[] = [];
+  const failedLines: string[] = [];
   let i = 0;
   while (i < entryLines.length) {
     const line = entryLines[i];
@@ -141,12 +142,14 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     let medication: string | undefined;
     // Check if i+3 is a med marker (not a number)
     const maybeMed = entryLines[wi]?.trim() ?? '';
-    // Accept: B.L, B,L, L, B, .L (PDF sometimes drops the 'B' producing ".L")
-    if (/^\.?[BL][.,]?L?$/.test(maybeMed) || /^\.?B[.,]L$/i.test(maybeMed)) {
-      const normalized = maybeMed.replace(/^\./, ''); // strip leading dot if present
-      medication = normalized === 'B.L' || normalized === 'B,L' || normalized === 'L' ? 'BUT-LAX' :
-                   normalized === 'B' || normalized === 'B.' ? 'BUT' :
-                   normalized === '.L' ? 'LAX' : normalized;
+    // Accept all observed HINAVA medication variants:
+    //   B.L  B.L.  B,L  B,L.  .L  .L.  L  L.  B  B.
+    //   (PDF sometimes drops 'B' → ".L", sometimes adds trailing dot → "B.L.")
+    if (/^\.?B?[.,]?L\.?$/.test(maybeMed) || /^\.?B[.,]L\.?$/i.test(maybeMed)) {
+      const normalized = maybeMed.replace(/^\.|\.$|,/g, match => match === ',' ? '.' : ''); // normalise
+      const hasB = /B/i.test(normalized);
+      const hasL = /L/i.test(normalized);
+      medication = (hasB && hasL) ? 'BUT-LAX' : hasB ? 'BUT' : hasL ? 'LAX' : maybeMed;
       wi++; // skip med marker
     }
     // Now skip price (0,00)
@@ -159,7 +162,11 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     const ppRaw      = entryLines[wi + 4] ? entryLines[wi + 4].trim() : '';
     const pp         = parseInt(ppRaw);
 
-    if (!weightRaw.match(/^\d/) || isNaN(pp) || pp < 1 || pp > 30 || !jockeyName || !trainerName) { i++; continue; }
+    if (!weightRaw.match(/^\d/) || isNaN(pp) || pp < 1 || pp > 30 || !jockeyName || !trainerName) {
+      const horseName2 = entryLines[i + 1] ? clean(entryLines[i + 1]) : '?';
+      failedLines.push(`#${dorsal} ${horseName2} | med=${JSON.stringify(maybeMed)} weight=${JSON.stringify(weightRaw)} pp=${ppRaw}`);
+      i++; continue;
+    }
 
     const weight = parseWeight(weightRaw);
     const horse: ExtractedHorse = { name: horseName, pedigree: {} };
@@ -181,7 +188,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     i = wi + 5; // advance past PP to next entry
   }
 
-  return { race, entries };
+  return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
