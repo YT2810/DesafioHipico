@@ -389,8 +389,10 @@ const PAYOUT_LABELS: Record<string, string> = {
   superfecta: 'Superfecta', tripleApuesta: 'Triple Apuesta', poolDe4: 'Pool de 4',
   cincoYSeis: '5 y 6', lotoHipico: 'Loto Hípico',
 };
-// Maps Race.games enum values to PayoutsEdit keys.
-// Multi-race games appear only in the last race of their cycle (when race.games includes them).
+// Per-race payouts — always shown
+const PER_RACE_TYPES: (keyof PayoutsEdit)[] = ['winner', 'place', 'exacta', 'trifecta', 'superfecta'];
+// Multi-race payouts — shown only when race.games includes them (or games is empty/unreliable)
+const MULTI_RACE_TYPES: (keyof PayoutsEdit)[] = ['tripleApuesta', 'poolDe4', 'cincoYSeis', 'lotoHipico'];
 const GAME_TO_PAYOUT: Record<string, keyof PayoutsEdit> = {
   GANADOR: 'winner', PLACE: 'place', EXACTA: 'exacta', TRIFECTA: 'trifecta',
   SUPERFECTA: 'superfecta', TRIPLE_APUESTA: 'tripleApuesta', POOL_DE_4: 'poolDe4',
@@ -526,8 +528,8 @@ function ResultsTab() {
     try {
       const payoutsPayload: Record<string, { combination: string; amount: number }[]> = {};
       for (const [key, rows] of Object.entries(payouts)) {
-        const valid = (rows as PayoutRow[]).filter(r => r.combination && r.amount);
-        if (valid.length) payoutsPayload[key] = valid.map((r: PayoutRow) => ({ combination: r.combination, amount: parseFloat(r.amount) }));
+        const valid = (rows as PayoutRow[]).filter(r => r.combination === 'NO_HUBO' || (r.combination && r.amount));
+        if (valid.length) payoutsPayload[key] = valid.map((r: PayoutRow) => ({ combination: r.combination, amount: parseFloat(r.amount) || 0 }));
       }
       const res = await fetch('/api/admin/results/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -695,41 +697,58 @@ function ResultsTab() {
             </table>
           </div>
 
-          {/* Payouts — only show types that match race.games (fallback: all) */}
+          {/* Payouts */}
           {(() => {
             const raceInfo = races.find(r => r.raceNumber === parseInt(raceNumber));
             const activeGames = raceInfo?.games ?? [];
-            const visibleTypes: (keyof PayoutsEdit)[] = activeGames.length > 0
-              ? (Object.keys(payouts) as (keyof PayoutsEdit)[]).filter(k => {
-                  const gameKey = Object.entries(GAME_TO_PAYOUT).find(([, v]) => v === k)?.[0];
-                  return gameKey ? activeGames.includes(gameKey) : false;
-                })
-              : (Object.keys(payouts) as (keyof PayoutsEdit)[]);
+            // Multi-race types: show if present in games, OR if games is empty (PDF may not have recorded them)
+            const visibleMulti = MULTI_RACE_TYPES.filter(k => {
+              if (activeGames.length === 0) return true;
+              const gameKey = Object.entries(GAME_TO_PAYOUT).find(([, v]) => v === k)?.[0];
+              return gameKey ? activeGames.includes(gameKey) : false;
+            });
+            const visibleTypes = [...PER_RACE_TYPES, ...visibleMulti];
             return (
               <div className="p-5 border-t border-gray-800">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividendos Oficiales</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {visibleTypes.map(type => (
-                    <div key={type} className="bg-gray-800/50 rounded-lg overflow-hidden">
-                      <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-400 uppercase">{PAYOUT_LABELS[type]}</span>
-                        <button onClick={() => addPayoutRow(type)} className="text-xs text-gray-500 hover:text-amber-400">+ añadir</button>
-                      </div>
-                      {payouts[type].length === 0
-                        ? <p className="px-3 py-2 text-xs text-gray-600 italic">Sin dividendo</p>
-                        : payouts[type].map((row, i) => (
-                          <div key={i} className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/50 last:border-0">
-                            <input value={row.combination} onChange={e => updatePayout(type, i, 'combination', e.target.value)}
-                              className="flex-1 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 font-mono focus:outline-none" placeholder="5-3" />
-                            <span className="text-xs text-gray-600">Bs.</span>
-                            <input value={row.amount} onChange={e => updatePayout(type, i, 'amount', e.target.value)}
-                              className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-green-400 font-mono focus:outline-none" placeholder="1500" />
-                            <button onClick={() => removePayoutRow(type, i)} className="text-gray-600 hover:text-red-400 text-xs px-1">×</button>
+                  {visibleTypes.map(type => {
+                    const isNoHubo = payouts[type].length === 1 && payouts[type][0].combination === 'NO_HUBO';
+                    return (
+                      <div key={type} className="bg-gray-800/50 rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-400 uppercase">{PAYOUT_LABELS[type]}</span>
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
+                              <input type="checkbox" checked={isNoHubo}
+                                onChange={e => setPayouts(prev => ({
+                                  ...prev,
+                                  [type]: e.target.checked ? [{ combination: 'NO_HUBO', amount: '0' }] : [],
+                                }))}
+                                className="accent-orange-500" />
+                              No hubo
+                            </label>
+                            {!isNoHubo && <button onClick={() => addPayoutRow(type)} className="text-xs text-gray-500 hover:text-amber-400">+ añadir</button>}
                           </div>
-                        ))
-                      }
-                    </div>
-                  ))}
+                        </div>
+                        {isNoHubo
+                          ? <p className="px-3 py-2 text-xs text-orange-400 italic font-semibold">NO HUBO ACERTANTE</p>
+                          : payouts[type].length === 0
+                            ? <p className="px-3 py-2 text-xs text-gray-600 italic">Sin registrar</p>
+                            : payouts[type].map((row, i) => (
+                              <div key={i} className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/50 last:border-0">
+                                <input value={row.combination} onChange={e => updatePayout(type, i, 'combination', e.target.value)}
+                                  className="flex-1 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 font-mono focus:outline-none" placeholder="5-3" />
+                                <span className="text-xs text-gray-600">Bs.</span>
+                                <input value={row.amount} onChange={e => updatePayout(type, i, 'amount', e.target.value)}
+                                  className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-green-400 font-mono focus:outline-none" placeholder="1500" />
+                                <button onClick={() => removePayoutRow(type, i)} className="text-gray-600 hover:text-red-400 text-xs px-1">×</button>
+                              </div>
+                            ))
+                        }
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

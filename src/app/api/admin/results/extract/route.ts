@@ -30,7 +30,9 @@ Extrae los pagos para cada tipo de apuesta del INH venezolano:
 - cincoYSeis: 5 Y 6 / CINCO Y SEIS — {combination: "D1-D2-D3-D4-D5-D6", amount}
 - lotoHipico: LOTO HÍPICO — {combination: string, amount}
 
-Los montos pueden ser "Bs. 1.234,56" → extrae 1234.56 como número. Si un tipo no aparece en la imagen, usa array vacío [].
+Los montos pueden ser "Bs. 1.234,56" → extrae 1234.56 como número.
+- Si un tipo de apuesta aparece en la imagen con la leyenda "NO HUBO", "SIN ACERTANTE", "DESIERTO" o similar → usa [{"combination": "NO_HUBO", "amount": 0}].
+- Si un tipo de apuesta NO aparece en la imagen en absoluto → usa array vacío [].
 
 ═══ TIEMPOS ═══
 - officialTime: tiempo oficial del GANADOR en formato venezolano "segundos.quintos" (ej: "97.4", "108.2"). Si aparece en formato minutos como "1:37.4" conviértelo a segundos: 1*60+37=97, quintos=4 → "97.4". null si no aparece.
