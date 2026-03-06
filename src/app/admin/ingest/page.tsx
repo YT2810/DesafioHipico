@@ -291,6 +291,76 @@ function RacePreviewCard({ rb }: { rb: ProcessedDocument['races'][0] }) {
 interface FinishRow {
   dorsalNumber: number; horseName: string; finishPosition: number;
   distanceMargin: string; isDistanced: boolean; isScratched: boolean; scratchReason: string;
+  estimatedTime: string;
+}
+
+// Convert a margin string like "1 cpo", "8 1/2", "2 1/2", "Pzo", "Nrz", "Cbz", "FC" into seconds offset
+function marginToFifths(margin: string): number | null {
+  if (!margin) return 0;
+  const m = margin.trim().toUpperCase();
+  if (['FC', 'FUERA', 'FUERA DE CARRERA', 'DESC'].includes(m)) return null; // S/T
+  if (['PZO', 'PCZ', 'NRZ', 'NZ', 'CBZ', 'HCZ', 'HOCICO', 'NARIZ', 'CABEZA', 'PESCUEZO'].some(k => m.startsWith(k))) return 0;
+  // Fractions: "1/2", "3/4", "1/4"
+  const fracOnly = m.match(/^(\d+)\/(\d+)$/);
+  if (fracOnly) {
+    const f = parseInt(fracOnly[1]) / parseInt(fracOnly[2]);
+    return f <= 0.5 ? 1 : 1; // 1/4, 1/2, 3/4 → 1 fifth
+  }
+  // "N 1/2", "N 3/4" — whole + fraction
+  const mixed = m.match(/^(\d+)\s+(\d+)\/(\d+)/);
+  if (mixed) {
+    const whole = parseInt(mixed[1]);
+    return whole * 5 + 1; // each body = 5 fifths; fraction = 1 more fifth
+  }
+  // plain number: "1", "2", "8"
+  const plain = m.match(/^(\d+)$/);
+  if (plain) return parseInt(plain[1]) * 5;
+  // "N CPO", "N CPOS"
+  const cpo = m.match(/^([\d.]+)\s*CPO/);
+  if (cpo) return Math.round(parseFloat(cpo[1]) * 5);
+  return 0;
+}
+
+// Parse official time string like "1:12.4" or "97.4" into total fifths (hundredths * 5 approx → we use 1/5s)
+function parseOfficialTime(t: string): { mins: number; secs: number; fifths: number } | null {
+  if (!t) return null;
+  // "1:12.4" or "1:12,4"
+  const long = t.match(/^(\d+):(\d{2})[.,](\d)$/);
+  if (long) return { mins: parseInt(long[1]), secs: parseInt(long[2]), fifths: parseInt(long[3]) };
+  // "72.4" — seconds.fifths
+  const short = t.match(/^(\d+)[.,](\d)$/);
+  if (short) return { mins: 0, secs: parseInt(short[1]), fifths: parseInt(short[2]) };
+  return null;
+}
+
+function addFifths(base: { mins: number; secs: number; fifths: number }, extra: number): string {
+  let f = base.fifths + extra;
+  let s = base.secs + Math.floor(f / 5);
+  f = f % 5;
+  let m = base.mins + Math.floor(s / 60);
+  s = s % 60;
+  if (m > 0) return `${m}:${String(s).padStart(2, '0')}.${f}`;
+  return `${s}.${f}`;
+}
+
+function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
+  const base = parseOfficialTime(winnerTime);
+  if (!base) return rows.map(r => ({ ...r, estimatedTime: r.isScratched ? 'S/T' : '' }));
+  let accumulated = 0;
+  // Sort by finish position, scratched last
+  const sorted = [...rows].sort((a, b) =>
+    a.isScratched ? 1 : b.isScratched ? -1 : a.finishPosition - b.finishPosition
+  );
+  const timeMap: Record<number, string> = {};
+  for (const row of sorted) {
+    if (row.isScratched) { timeMap[row.dorsalNumber] = 'S/T'; continue; }
+    if (row.finishPosition === 1) { timeMap[row.dorsalNumber] = winnerTime; continue; }
+    const fifths = marginToFifths(row.distanceMargin);
+    if (fifths === null) { timeMap[row.dorsalNumber] = 'S/T'; accumulated = 0; continue; }
+    accumulated += fifths;
+    timeMap[row.dorsalNumber] = addFifths(base, accumulated);
+  }
+  return rows.map(r => ({ ...r, estimatedTime: timeMap[r.dorsalNumber] ?? '' }));
 }
 interface PayoutRow { combination: string; amount: string; }
 interface PayoutsEdit {
@@ -319,6 +389,7 @@ function ResultsTab() {
   const [officialTime, setOfficialTime] = useState('');
   const [payouts, setPayouts] = useState<PayoutsEdit>(emptyPayouts());
   const [extracted, setExtracted] = useState(false);
+  const [tokensUsed, setTokensUsed] = useState<number | null>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -346,27 +417,35 @@ function ResultsTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error extrayendo resultados');
       const r = data.result;
-      const rows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
+      const winTime: string = r.officialTime ?? '';
+      const rawRows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
         dorsalNumber: e.dorsalNumber ?? 0, horseName: e.horseName ?? '',
         finishPosition: e.finishPosition ?? 0, distanceMargin: e.distanceMargin ?? '',
-        isDistanced: e.isDistanced ?? false, isScratched: e.isScratched ?? false, scratchReason: '',
+        isDistanced: e.isDistanced ?? false, isScratched: e.isScratched ?? false,
+        scratchReason: '', estimatedTime: '',
       }));
+      const rows = computeEntryTimes(rawRows, winTime);
       setFinishOrder(rows);
-      setOfficialTime(r.officialTime ?? '');
+      setOfficialTime(winTime);
       const p = emptyPayouts();
       for (const key of Object.keys(p) as (keyof PayoutsEdit)[]) {
         const src = r.payouts?.[key];
         if (Array.isArray(src)) p[key] = src.map((x: any) => ({ combination: String(x.combination ?? ''), amount: String(x.amount ?? '') }));
       }
       setPayouts(p);
-      if (r.raceNumber && !raceNumber) setRaceNumber(String(r.raceNumber));
+      // Always update race number from Gemini detection
+      if (r.raceNumber) setRaceNumber(String(r.raceNumber));
       setExtracted(true);
+      setTokensUsed(Math.round((images.reduce((s, f) => s + f.size, 0) / 1024) * 0.85 + 400));
     } catch (e) { setError(e instanceof Error ? e.message : 'Error desconocido'); }
     finally { setExtracting(false); }
   }
 
   function updateRow(idx: number, field: keyof FinishRow, value: string | boolean | number) {
-    setFinishOrder(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    setFinishOrder(prev => {
+      const updated = prev.map((r, i) => i === idx ? { ...r, [field]: value } : r);
+      return (field === 'distanceMargin' || field === 'isScratched') ? computeEntryTimes(updated, officialTime) : updated;
+    });
   }
   function updatePayout(type: keyof PayoutsEdit, idx: number, field: 'combination' | 'amount', value: string) {
     setPayouts(prev => ({ ...prev, [type]: prev[type].map((r, i) => i === idx ? { ...r, [field]: value } : r) }));
@@ -395,6 +474,7 @@ function ResultsTab() {
             dorsalNumber: r.dorsalNumber, finishPosition: r.finishPosition,
             distanceMargin: r.distanceMargin || undefined, isDistanced: r.isDistanced,
             isScratched: r.isScratched, scratchReason: r.scratchReason || undefined,
+            officialTime: r.estimatedTime && r.estimatedTime !== 'S/T' ? r.estimatedTime : undefined,
           })),
           payouts: Object.keys(payoutsPayload).length ? payoutsPayload : undefined,
         }),
@@ -480,10 +560,13 @@ function ResultsTab() {
           <div className="px-5 py-3 bg-gray-800/60 border-b border-gray-700 flex items-center justify-between">
             <p className="text-sm font-bold text-amber-400">📋 Orden de llegada — C{raceNumber} (editable)</p>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Tiempo oficial:</span>
-              <input value={officialTime} onChange={e => setOfficialTime(e.target.value)}
+              <span className="text-xs text-gray-500">Tiempo oficial 1°:</span>
+              <input value={officialTime} onChange={e => {
+                  setOfficialTime(e.target.value);
+                  setFinishOrder(prev => computeEntryTimes(prev, e.target.value));
+                }}
                 className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-200 w-20 focus:outline-none focus:border-amber-500"
-                placeholder="1:12.4" />
+                placeholder="97.4" />
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -497,6 +580,7 @@ function ResultsTab() {
                   <th className="px-3 py-2 text-center" title="Distanciado">Dist.</th>
                   <th className="px-3 py-2 text-center" title="Retirado post-carrera">Ret.</th>
                   <th className="px-3 py-2 text-left">Motivo retiro</th>
+                  <th className="px-3 py-2 text-center" title="Tiempo estimado">Tiempo</th>
                 </tr>
               </thead>
               <tbody>
@@ -529,6 +613,12 @@ function ResultsTab() {
                     <td className="px-3 py-2">
                       <input value={row.scratchReason} onChange={e => updateRow(idx, 'scratchReason', e.target.value)} disabled={!row.isScratched}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-400 focus:outline-none disabled:opacity-30" placeholder="peso, aparato..." />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`text-xs font-mono ${
+                        row.estimatedTime === 'S/T' ? 'text-red-400' :
+                        row.finishPosition === 1 ? 'text-amber-400 font-bold' : 'text-gray-300'
+                      }`}>{row.estimatedTime || (officialTime ? '—' : '')}</span>
                     </td>
                   </tr>
                 ))}
@@ -565,10 +655,13 @@ function ResultsTab() {
           </div>
 
           {/* Save button */}
-          <div className="px-5 py-4 border-t border-gray-800 flex gap-3">
+          <div className="px-5 py-4 border-t border-gray-800 flex items-center gap-4">
             <Btn onClick={handleSave} disabled={saving || !finishOrder.length} color="green">
               {saving ? <><span className="w-4 h-4 rounded-full border-2 border-green-300 border-t-transparent animate-spin inline-block" /> Guardando...</> : '✅ Confirmar y Guardar'}
             </Btn>
+            {tokensUsed && (
+              <span className="text-xs text-gray-500">~{tokensUsed.toLocaleString()} tokens estimados</span>
+            )}
           </div>
         </div>
       )}

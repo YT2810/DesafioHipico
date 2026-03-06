@@ -11,6 +11,7 @@ export interface ResultFinishEntry {
   isDistanced?: boolean;
   isScratched?: boolean;
   scratchReason?: string;
+  officialTime?: string;
 }
 
 export interface ResultPayoutRow {
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
 
       entry.result = {
         finishPosition: result.isScratched ? undefined : result.finishPosition,
+        officialTime: result.officialTime,
         distanceMargin: result.distanceMargin,
         isScratched: result.isScratched ?? false,
         scratchReason: result.scratchReason,
