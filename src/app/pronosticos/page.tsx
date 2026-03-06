@@ -252,6 +252,15 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
               })}
             </div>
           )}
+          <div className="mt-2.5 flex justify-end">
+            <Link
+              href={`/handicapper/${handicapper.id}`}
+              onClick={e => e.stopPropagation()}
+              className="text-xs text-gray-600 hover:text-yellow-400 transition-colors font-medium"
+            >
+              Ver perfil →
+            </Link>
+          </div>
         </div>
       )}
     </div>
