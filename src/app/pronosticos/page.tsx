@@ -436,6 +436,9 @@ export default function PronosticosPage() {
             pctGeneral: f.handicapperId?.stats?.pctGeneral ?? 0,
             contactNumber: f.handicapperId?.contactNumber,
             isGhost: f.handicapperId?.isGhost ?? false,
+            // Precomputed stats — no extra fetch needed
+            e1: f.handicapperId?.stats?.e1 ?? null,
+            eGeneral: f.handicapperId?.stats?.eGeneral ?? 0,
           },
           marks: f.marks ?? [],
           isVip: f.isVip ?? false,
@@ -464,20 +467,23 @@ export default function PronosticosPage() {
         races: raceItems,
       });
 
-      // Fetch live stats + ranking in parallel
-      const uniqueIds = [...new Set(raceItems.flatMap(r => r.forecasts.map(f => f.handicapper.id)).filter(Boolean))];
-      const [statsEntries, rankingRes] = await Promise.all([
-        Promise.all(
-          uniqueIds.map(hId =>
-            fetch(`/api/handicapper/${hId}/stats`)
-              .then(r => r.ok ? r.json() : null)
-              .then(s => s ? [hId, { e1: s.e1, eGeneral: s.eGeneral }] as const : null)
-              .catch(() => null)
-          )
-        ),
-        fetch('/api/handicapper/ranking').then(r => r.ok ? r.json() : null).catch(() => null),
-      ]);
-      setStatsMap(new Map(statsEntries.filter((e): e is [string, { e1: number | null; eGeneral: number }] => e !== null)));
+      // Build statsMap from precomputed stats already in the forecast payload — 0 extra DB queries
+      const statsFromPayload = new Map<string, { e1: number | null; eGeneral: number }>();
+      for (const race of raceItems) {
+        for (const fc of race.forecasts) {
+          const hId = fc.handicapper.id;
+          if (hId && !statsFromPayload.has(hId)) {
+            statsFromPayload.set(hId, {
+              e1: (fc.handicapper as any).e1 ?? null,
+              eGeneral: (fc.handicapper as any).eGeneral ?? 0,
+            });
+          }
+        }
+      }
+      setStatsMap(statsFromPayload);
+
+      // Single ranking fetch (now reads precomputed stats — 1 lightweight DB query)
+      const rankingRes = await fetch('/api/handicapper/ranking').then(r => r.ok ? r.json() : null).catch(() => null);
       if (rankingRes?.ranking) {
         const rankMap = new Map<string, number>();
         rankingRes.ranking.forEach((entry: { id: string }, idx: number) => rankMap.set(entry.id, idx + 1));

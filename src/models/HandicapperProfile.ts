@@ -1,5 +1,16 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
+export interface ITrackStats {
+  trackId: string;
+  trackName: string;
+  totalRaces: number;
+  orderedRaces: number;
+  e1: number | null;
+  e1_2: number | null;
+  e1_3: number | null;
+  eGeneral: number;
+}
+
 export interface IHandicapperStats {
   totalForecasts: number;
   totalRacesWithResult: number;
@@ -11,6 +22,16 @@ export interface IHandicapperStats {
   pct2nd: number;
   pct3rd: number;
   pctGeneral: number;
+  // Precomputed effective metrics — updated on every results save
+  totalRaces: number;
+  orderedRaces: number;
+  e1: number | null;
+  e1_2: number | null;
+  e1_3: number | null;
+  eGeneral: number;
+  roi1st: number | null;
+  byTrack: ITrackStats[];
+  statsUpdatedAt?: Date;
 }
 
 export interface IHandicapperProfile extends Document {
@@ -58,6 +79,28 @@ const HandicapperProfileSchema = new Schema<IHandicapperProfile>(
       pct2nd: { type: Number, default: 0 },
       pct3rd: { type: Number, default: 0 },
       pctGeneral: { type: Number, default: 0 },
+      // Precomputed effective metrics
+      totalRaces: { type: Number, default: 0 },
+      orderedRaces: { type: Number, default: 0 },
+      e1: { type: Number, default: null },
+      e1_2: { type: Number, default: null },
+      e1_3: { type: Number, default: null },
+      eGeneral: { type: Number, default: 0 },
+      roi1st: { type: Number, default: null },
+      byTrack: [
+        {
+          trackId: { type: String },
+          trackName: { type: String },
+          totalRaces: { type: Number, default: 0 },
+          orderedRaces: { type: Number, default: 0 },
+          e1: { type: Number, default: null },
+          e1_2: { type: Number, default: null },
+          e1_3: { type: Number, default: null },
+          eGeneral: { type: Number, default: 0 },
+          _id: false,
+        },
+      ],
+      statsUpdatedAt: { type: Date },
     },
   },
   { timestamps: true }

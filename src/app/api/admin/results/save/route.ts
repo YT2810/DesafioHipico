@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb';
 import Race from '@/models/Race';
 import Entry from '@/models/Entry';
 import Forecast from '@/models/Forecast';
+import { recalcHandicapperStats } from '@/services/handicapperStatsService';
 
 export interface ResultFinishEntry {
   dorsalNumber: number;
@@ -114,21 +115,17 @@ export async function POST(req: NextRequest) {
 
     const forecasts = await Forecast.find({ raceId: race._id });
     let evaluatedForecasts = 0;
+    const affectedHandicapperIds: string[] = [];
+
     for (const fc of forecasts) {
       // Sorted marks by preferenceOrder
       const sorted = [...fc.marks].sort((a: { preferenceOrder: number }, b: { preferenceOrder: number }) => a.preferenceOrder - b.preferenceOrder);
       const dorsals = sorted.map((m: { dorsalNumber?: number }) => m.dorsalNumber?.toString());
 
-      // hit1st: 1st mark matched winner
       const hit1st = !!winner1st && dorsals[0] === winner1st;
-      // hit2nd: top-2 marks contain winner
       const hit2nd = !!winner1st && dorsals.slice(0, 2).includes(winner1st);
-      // hit3rd: top-3 marks contain winner
       const hit3rd = !!winner1st && dorsals.slice(0, 3).includes(winner1st);
-      // hitAny: any mark matched winner
       const hitAny = !!winner1st && dorsals.includes(winner1st);
-
-      // If marks have no dorsalNumber (unordered list), only hitAny is meaningful
       const hasOrder = sorted.some((m: { dorsalNumber?: number }) => m.dorsalNumber != null);
 
       // Strip empty-string labels that fail enum validation (legacy data)
@@ -146,6 +143,15 @@ export async function POST(req: NextRequest) {
       };
       await fc.save();
       evaluatedForecasts++;
+      affectedHandicapperIds.push(fc.handicapperId.toString());
+    }
+
+    // Recalculate and persist stats for all affected handicappers (fire-and-forget is fine —
+    // we await so the response reflects the updated state, but errors here don't fail the save)
+    if (affectedHandicapperIds.length > 0) {
+      await recalcHandicapperStats(affectedHandicapperIds).catch(err =>
+        console.error('[results/save] recalcHandicapperStats error:', err)
+      );
     }
 
     return NextResponse.json({
