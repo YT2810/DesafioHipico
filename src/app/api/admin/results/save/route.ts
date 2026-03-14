@@ -131,6 +131,11 @@ export async function POST(req: NextRequest) {
       // If marks have no dorsalNumber (unordered list), only hitAny is meaningful
       const hasOrder = sorted.some((m: { dorsalNumber?: number }) => m.dorsalNumber != null);
 
+      // Strip empty-string labels that fail enum validation (legacy data)
+      for (const mark of fc.marks) {
+        if ((mark as any).label === '') (mark as any).label = undefined;
+      }
+
       fc.result = {
         evaluated: true,
         evaluatedAt: new Date(),
