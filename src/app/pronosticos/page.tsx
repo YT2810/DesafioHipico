@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING } from '@/lib/constants';
@@ -404,6 +404,12 @@ export default function PronosticosPage() {
   const [statsMap, setStatsMap] = useState<Map<string, { e1: number | null; eGeneral: number }>>(new Map());
   const [globalRankMap, setGlobalRankMap] = useState<Map<string, number>>(new Map());
 
+  // Derive the raceId of the currently selected race for the ticker
+  const selectedRaceId = useMemo(() => {
+    if (!meeting || selectedRaceNumber === null) return undefined;
+    return meeting.races.find(r => r.raceNumber === selectedRaceNumber)?.raceId;
+  }, [meeting, selectedRaceNumber]);
+
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
   const goldBalance = user?.balance?.golds ?? 0;
@@ -635,9 +641,9 @@ export default function PronosticosPage() {
         </div>
       </header>
 
-      {/* Expert Ticker — sticky below header, self-fetching */}
+      {/* Expert Ticker — sticky below header, self-fetching. raceId scopes fijos to active race. */}
       <div className="sticky top-14 z-10">
-        <ExpertTickerBar meetingId={selectedMeetingId || undefined} />
+        <ExpertTickerBar meetingId={selectedMeetingId || undefined} raceId={selectedRaceId} />
       </div>
 
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">

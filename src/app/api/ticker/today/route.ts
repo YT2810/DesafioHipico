@@ -36,9 +36,12 @@ export interface TickerTodayEntry {
   fijoLabel?: string;       // 'Línea', 'Casi Fijo', etc.
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await dbConnect();
+
+    const { searchParams } = new URL(req.url);
+    const raceId = searchParams.get('raceId');
 
     // ── 1. Find the most recent active (or upcoming) meeting ──────────────
     const now = new Date();
@@ -55,11 +58,15 @@ export async function GET() {
     const activeHandicapperIds = new Set<string>();
 
     if (recentMeeting) {
-      // ── 2. Distinct handicappers with ≥1 published forecast this meeting ──
-      const publishedForecasts = await Forecast.find({
-        meetingId: recentMeeting._id,
-        isPublished: true,
-      })
+      // ── 2. Distinct handicappers with ≥1 published forecast ──────────────
+      // If raceId provided: only that race. Otherwise: whole meeting.
+      const forecastFilter: any = { isPublished: true };
+      if (raceId) {
+        forecastFilter.raceId = raceId;
+      } else {
+        forecastFilter.meetingId = recentMeeting._id;
+      }
+      const publishedForecasts = await Forecast.find(forecastFilter)
         .select('handicapperId marks')
         .lean() as any[];
 

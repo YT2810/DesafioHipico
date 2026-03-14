@@ -6,13 +6,15 @@ import HandicapperQuickDrawer from './HandicapperQuickDrawer';
 
 const GOLD = '#D4AF37';
 
-// ExpertTickerBar is now self-fetching — no entries prop required.
-// The optional meetingId prop is still accepted for the drawer context.
+// ExpertTickerBar is now self-fetching.
+// raceId: when provided, shows fijos for that specific race.
+// meetingId: used as drawer context.
 interface Props {
   meetingId?: string;
+  raceId?: string;
 }
 
-export default function ExpertTickerBar({ meetingId }: Props) {
+export default function ExpertTickerBar({ meetingId, raceId }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TickerEntry | null>(null);
   const [entries, setEntries] = useState<TickerEntry[]>([]);
@@ -21,7 +23,8 @@ export default function ExpertTickerBar({ meetingId }: Props) {
 
   // ── Fetch hybrid ticker data ────────────────────────────────────
   useEffect(() => {
-    fetch('/api/ticker/today')
+    const url = raceId ? `/api/ticker/today?raceId=${raceId}` : '/api/ticker/today';
+    fetch(url)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d) return;
@@ -34,7 +37,6 @@ export default function ExpertTickerBar({ meetingId }: Props) {
           eGeneral: e.eGeneral,
           totalRaces: e.totalRaces,
           contactNumber: e.contactNumber,
-          // hybrid-specific
           activeToday: e.activeToday,
           fijoDorsal: e.fijoDorsal,
           fijoHorseName: e.fijoHorseName,
@@ -43,7 +45,7 @@ export default function ExpertTickerBar({ meetingId }: Props) {
         setEntries(mapped);
       })
       .catch(() => {});
-  }, [meetingId]);
+  }, [meetingId, raceId]);
 
   // ── Fetch commercial slots ──────────────────────────────────────
   useEffect(() => {
