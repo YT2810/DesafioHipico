@@ -6,49 +6,46 @@ import HandicapperQuickDrawer from './HandicapperQuickDrawer';
 
 const GOLD = '#D4AF37';
 
+// ExpertTickerBar is now self-fetching — no entries prop required.
+// The optional meetingId prop is still accepted for the drawer context.
 interface Props {
-  entries: TickerEntry[];
   meetingId?: string;
 }
 
-function EffBadge({ e1, eGeneral }: { e1: number | null; eGeneral: number }) {
-  const val = e1 ?? eGeneral;
-  const color =
-    val >= 70 ? 'text-green-400 bg-green-950/50 border-green-800/50' :
-    val >= 50 ? 'text-yellow-400 bg-yellow-950/50 border-yellow-800/50' :
-    'text-gray-400 bg-gray-800/50 border-gray-700/50';
-  const label = e1 !== null ? `E1 ${e1}%` : `Gral ${eGeneral}%`;
-  return (
-    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${color}`}>
-      {label}
-    </span>
-  );
-}
-
-function StatusBadge({ races }: { races: number }) {
-  if (races === 0) return (
-    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-gray-800/60 border border-gray-700/40 text-gray-500">
-      Nuevo
-    </span>
-  );
-  if (races >= 20) return (
-    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-orange-950/50 border border-orange-800/50 text-orange-400">
-      🔥 {races} carreras
-    </span>
-  );
-  return (
-    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-950/40 border border-blue-800/40 text-blue-400">
-      {races} carreras
-    </span>
-  );
-}
-
-export default function ExpertTickerBar({ entries, meetingId }: Props) {
+export default function ExpertTickerBar({ meetingId }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TickerEntry | null>(null);
+  const [entries, setEntries] = useState<TickerEntry[]>([]);
   const [slots, setSlots] = useState<TickerEntry[]>([]);
+  const [activeMeetingId, setActiveMeetingId] = useState<string | undefined>(meetingId);
 
-  // Load commercial slots and merge with handicapper entries
+  // ── Fetch hybrid ticker data ────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/ticker/today')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        if (d.meetingId && !meetingId) setActiveMeetingId(d.meetingId);
+        const mapped: TickerEntry[] = (d.entries ?? []).map((e: any) => ({
+          id: e.id,
+          pseudonym: e.pseudonym,
+          isGhost: e.isGhost,
+          e1: e.e1,
+          eGeneral: e.eGeneral,
+          totalRaces: e.totalRaces,
+          contactNumber: e.contactNumber,
+          // hybrid-specific
+          activeToday: e.activeToday,
+          fijoDorsal: e.fijoDorsal,
+          fijoHorseName: e.fijoHorseName,
+          fijoLabel: e.fijoLabel,
+        }));
+        setEntries(mapped);
+      })
+      .catch(() => {});
+  }, [meetingId]);
+
+  // ── Fetch commercial slots ──────────────────────────────────────
   useEffect(() => {
     fetch('/api/ticker-slots')
       .then(r => r.ok ? r.json() : null)
@@ -56,7 +53,7 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
       .catch(() => {});
   }, []);
 
-  // ── Drag / touch scroll ──────────────────────────────────────────
+  // ── Drag / touch scroll ─────────────────────────────────────────
   const isDragging = useRef(false);
   const startX = useRef(0);
   const scrollLeft = useRef(0);
@@ -85,15 +82,14 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
     }
   }, []);
 
-  // ── Auto-scroll marquee ──────────────────────────────────────────
+  // ── Auto-scroll marquee ─────────────────────────────────────────
   const animRef = useRef<number | null>(null);
   const pausedRef = useRef(false);
 
   useEffect(() => {
     const el = trackRef.current;
-    if (!el || entries.length < 4) return;
-
-    let pos = 0;
+    if (!el || entries.length < 3) return;
+    let pos = el.scrollLeft;
     function tick() {
       if (!el || pausedRef.current) { animRef.current = requestAnimationFrame(tick); return; }
       pos += 0.5;
@@ -105,22 +101,19 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [entries.length]);
 
-  // Merge: interleave commercial slots every ~3 handicapper entries
+  // ── Merge commercial slots every 4 handicapper entries ──────────
   const merged: TickerEntry[] = [];
-  const allEntries = [...entries];
   let slotIdx = 0;
-  for (let i = 0; i < allEntries.length; i++) {
-    if (i > 0 && i % 3 === 0 && slotIdx < slots.length) {
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0 && i % 4 === 0 && slotIdx < slots.length) {
       merged.push(slots[slotIdx++]);
     }
-    merged.push(allEntries[i]);
+    merged.push(entries[i]);
   }
-  // Append remaining slots at end
   while (slotIdx < slots.length) merged.push(slots[slotIdx++]);
 
   if (!merged.length) return null;
 
-  // Duplicate list for seamless marquee loop when many entries
   const displayEntries = merged.length >= 4 ? [...merged, ...merged] : merged;
 
   return (
@@ -146,47 +139,89 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
         >
           {displayEntries.map((entry, idx) => {
             const isSponsor = entry.slotType === 'sponsor' || entry.slotType === 'promo';
+            const isActive = (entry as any).activeToday === true;
+            const fijoDorsal = (entry as any).fijoDorsal;
             const accent = entry.accentColor ?? GOLD;
+
             return (
               <button
                 key={`${entry.id}-${idx}`}
                 onClick={() => setSelected(entry)}
-                className={`flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-xl border transition-all select-none active:scale-95 ${
+                className={`flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-xl border transition-all select-none active:scale-95 ${
                   isSponsor
                     ? 'bg-gray-900 hover:bg-gray-800/80'
-                    : 'bg-gray-900 border-gray-800 hover:border-yellow-700/60 hover:bg-gray-800/80'
+                    : isActive
+                      ? 'bg-gray-900 border-green-800/50 hover:border-green-600/60 hover:bg-gray-800/80'
+                      : 'bg-gray-900 border-gray-800 hover:border-yellow-700/50 hover:bg-gray-800/80'
                 }`}
                 style={isSponsor ? { borderColor: `${accent}55` } : {}}
               >
-                {/* Avatar / Logo */}
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 overflow-hidden"
-                  style={{ backgroundColor: accent }}
-                >
-                  {entry.logoUrl
-                    ? <img src={entry.logoUrl} alt={entry.pseudonym} className="w-full h-full object-cover" />
-                    : <span className="text-[10px] font-black text-black">{entry.pseudonym[0].toUpperCase()}</span>
-                  }
-                </div>
-
-                {/* Name */}
-                <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
-
-                {/* Sponsor badge */}
-                {isSponsor && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border"
-                    style={{ color: accent, borderColor: `${accent}55`, backgroundColor: `${accent}18` }}>
-                    {entry.badgeText ?? (entry.slotType === 'promo' ? '📢 Promo' : '� Partner')}
-                  </span>
-                )}
-
-                {/* Handicapper badges */}
-                {!isSponsor && <StatusBadge races={entry.totalRaces} />}
-                {!isSponsor && entry.totalRaces >= 5 && (
-                  <EffBadge e1={entry.e1} eGeneral={entry.eGeneral} />
-                )}
-                {!isSponsor && entry.isGhost && (
-                  <span className="text-[10px] text-blue-400">🤖</span>
+                {/* ── SPONSOR card ── */}
+                {isSponsor ? (
+                  <>
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-black shrink-0 overflow-hidden"
+                      style={{ backgroundColor: accent }}>
+                      {entry.logoUrl
+                        ? <img src={entry.logoUrl} alt={entry.pseudonym} className="w-full h-full object-cover" />
+                        : entry.pseudonym[0].toUpperCase()
+                      }
+                    </div>
+                    <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border"
+                      style={{ color: accent, borderColor: `${accent}55`, backgroundColor: `${accent}18` }}>
+                      {entry.badgeText ?? (entry.slotType === 'promo' ? '📢' : '🤝')}
+                    </span>
+                  </>
+                ) : isActive && fijoDorsal != null ? (
+                  /* ── ACTIVE TODAY with fijo dorsal ── */
+                  <>
+                    {/* Green live dot */}
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0 animate-pulse" />
+                    {/* Dorsal chip — prominent */}
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-extrabold shrink-0 text-black"
+                      style={{ backgroundColor: GOLD }}>
+                      {fijoDorsal}
+                    </span>
+                    {/* Name */}
+                    <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
+                    {/* E1 if available */}
+                    {entry.e1 !== null && (
+                      <span className={`text-[10px] font-bold px-1 py-0.5 rounded border ${
+                        entry.e1 >= 70 ? 'text-green-400 border-green-800/50 bg-green-950/40' :
+                        entry.e1 >= 50 ? 'text-yellow-400 border-yellow-800/50 bg-yellow-950/40' :
+                        'text-gray-400 border-gray-700 bg-gray-800/40'
+                      }`}>
+                        {entry.e1}%
+                      </span>
+                    )}
+                  </>
+                ) : isActive ? (
+                  /* ── ACTIVE TODAY but no specific dorsal ── */
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0 animate-pulse" />
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-black shrink-0"
+                      style={{ backgroundColor: GOLD }}>
+                      {entry.pseudonym[0].toUpperCase()}
+                    </div>
+                    <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-green-950/40 border border-green-800/40 text-green-400">
+                      Hoy
+                    </span>
+                  </>
+                ) : (
+                  /* ── DISCOVERY (ranking fill) ── */
+                  <>
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-black shrink-0 opacity-70"
+                      style={{ backgroundColor: GOLD }}>
+                      {entry.pseudonym[0].toUpperCase()}
+                    </div>
+                    <span className="text-xs font-semibold text-gray-400 whitespace-nowrap">{entry.pseudonym}</span>
+                    {entry.e1 !== null && (
+                      <span className="text-[10px] font-bold px-1 py-0.5 rounded border text-gray-500 border-gray-700 bg-gray-800/40">
+                        E1 {entry.e1}%
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             );
@@ -198,7 +233,7 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
       <HandicapperQuickDrawer
         entry={selected}
         onClose={() => setSelected(null)}
-        meetingId={meetingId}
+        meetingId={activeMeetingId}
       />
     </>
   );
