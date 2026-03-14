@@ -6,10 +6,21 @@ import Link from 'next/link';
 const GOLD = '#D4AF37';
 type Status = 'pending' | 'approved' | 'rejected';
 
+interface SocialLink {
+  platform: string;
+  url: string;
+  frequency?: string;
+}
+
 interface HReqItem {
   _id: string;
   pseudonym: string;
   bio?: string;
+  contactPlatform?: 'whatsapp' | 'telegram';
+  contactValue?: string;
+  socialLinks?: SocialLink[];
+  yearsExperience?: number;
+  methodology?: string;
   status: Status;
   rejectionReason?: string;
   createdAt: string;
@@ -177,9 +188,52 @@ export default function AdminHandicapperRequestPage() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <Detail label="Seudónimo" value={item.pseudonym} highlight />
                         <Detail label="Email" value={item.userId?.email ?? '—'} />
-                        {item.userId?.phone && <Detail label="Teléfono" value={item.userId.phone} />}
+                        {item.userId?.phone && <Detail label="Teléfono cuenta" value={item.userId.phone} />}
                         <Detail label="Solicitud" value={new Date(item.createdAt).toLocaleDateString('es-VE')} />
                       </div>
+
+                      {/* Contacto obligatorio */}
+                      {item.contactValue && (
+                        <div className="bg-gray-800/50 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                          <span className="text-lg shrink-0">{item.contactPlatform === 'whatsapp' ? '📱' : '💬'}</span>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5 capitalize">{item.contactPlatform}</p>
+                            <p className="text-xs font-semibold text-white">{item.contactValue}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Experiencia + metodología */}
+                      {(item.yearsExperience != null || item.methodology) && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {item.yearsExperience != null && (
+                            <Detail label="Años experiencia" value={`${item.yearsExperience} años`} />
+                          )}
+                          {item.methodology && (
+                            <Detail label="Metodología" value={item.methodology} />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Redes sociales */}
+                      {item.socialLinks && item.socialLinks.length > 0 && (
+                        <div className="bg-gray-800/50 rounded-xl px-3 py-2.5">
+                          <p className="text-xs text-gray-500 mb-2">Redes / canales</p>
+                          <div className="space-y-1.5">
+                            {item.socialLinks.map((l, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-gray-400 capitalize w-16 shrink-0">{l.platform}</span>
+                                <a href={l.url.startsWith('http') ? l.url : `https://${l.url}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-yellow-400 hover:text-yellow-300 truncate flex-1 underline">{l.url}</a>
+                                {l.frequency && (
+                                  <span className="text-xs text-gray-600 shrink-0 capitalize">{l.frequency === 'daily' ? 'Diario' : l.frequency === 'weekly' ? 'Semanal' : 'Irregular'}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {item.bio && (
                         <div className="bg-gray-800/50 rounded-xl px-3 py-2.5">

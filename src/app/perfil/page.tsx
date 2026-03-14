@@ -58,6 +58,11 @@ export default function PerfilPage() {
   const [showForm, setShowForm] = useState(false);
   const [pseudonym, setPseudonym] = useState('');
   const [bio, setBio] = useState('');
+  const [contactPlatform, setContactPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
+  const [contactValue, setContactValue] = useState('');
+  const [socialLinks, setSocialLinks] = useState<{ platform: string; url: string; frequency: string }[]>([]);
+  const [yearsExperience, setYearsExperience] = useState('');
+  const [methodology, setMethodology] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -155,16 +160,36 @@ export default function PerfilPage() {
     }
   }
 
+  function addSocialLink() {
+    if (socialLinks.length >= 4) return;
+    setSocialLinks(prev => [...prev, { platform: 'youtube', url: '', frequency: 'weekly' }]);
+  }
+  function removeSocialLink(idx: number) {
+    setSocialLinks(prev => prev.filter((_, i) => i !== idx));
+  }
+  function updateSocialLink(idx: number, field: string, value: string) {
+    setSocialLinks(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l));
+  }
+
   async function handleSubmitRequest(e: React.FormEvent) {
     e.preventDefault();
     if (!pseudonym.trim()) { setFormError('El seudónimo es requerido.'); return; }
+    if (!contactValue.trim()) { setFormError('El número o usuario de contacto es requerido.'); return; }
     setSubmitting(true);
     setFormError('');
     try {
       const res = await fetch('/api/handicapper-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pseudonym, bio }),
+        body: JSON.stringify({
+          pseudonym,
+          bio,
+          contactPlatform,
+          contactValue,
+          socialLinks: socialLinks.filter(l => l.url.trim()),
+          yearsExperience: yearsExperience ? Number(yearsExperience) : undefined,
+          methodology: methodology || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error');
@@ -422,25 +447,112 @@ export default function PerfilPage() {
               </div>
             ) : showForm ? (
               <form onSubmit={handleSubmitRequest} className="space-y-3">
+                {/* Seudónimo */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1 font-medium">Seudónimo <span className="text-red-500">*</span></label>
                   <input value={pseudonym} onChange={e => setPseudonym(e.target.value)}
                     placeholder="Ej: El Maestro, TurfMaster VE..."
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
                 </div>
+
+                {/* Contacto obligatorio */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium">Contacto <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    <div className="flex rounded-xl overflow-hidden border border-gray-700 shrink-0">
+                      <button type="button"
+                        onClick={() => setContactPlatform('whatsapp')}
+                        className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                          contactPlatform === 'whatsapp' ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-500 hover:text-white'
+                        }`}>
+                        WhatsApp
+                      </button>
+                      <button type="button"
+                        onClick={() => setContactPlatform('telegram')}
+                        className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                          contactPlatform === 'telegram' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-500 hover:text-white'
+                        }`}>
+                        Telegram
+                      </button>
+                    </div>
+                    <input value={contactValue} onChange={e => setContactValue(e.target.value)}
+                      placeholder={contactPlatform === 'whatsapp' ? '+58 412 000 0000' : '@usuario o número'}
+                      className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
+                  </div>
+                </div>
+
+                {/* Presentación */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1 font-medium">Presentación <span className="text-gray-600">(opcional)</span></label>
-                  <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3}
+                  <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2}
                     placeholder="Cuéntanos tu experiencia en el mundo hípico..."
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors resize-none" />
                 </div>
-                {formError && <p className="text-xs text-red-400">{formError}</p>}
+
+                {/* Experiencia + metodología */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1 font-medium">Años pronosticando <span className="text-gray-600">(opc.)</span></label>
+                    <input type="number" min="0" max="50" value={yearsExperience} onChange={e => setYearsExperience(e.target.value)}
+                      placeholder="Ej: 5"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1 font-medium">Metodología <span className="text-gray-600">(opc.)</span></label>
+                    <input value={methodology} onChange={e => setMethodology(e.target.value)}
+                      placeholder="Ej: Estadística, forma..."
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
+                  </div>
+                </div>
+
+                {/* Redes sociales */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-400 font-medium">Redes / canales <span className="text-gray-600">(opcional)</span></label>
+                    {socialLinks.length < 4 && (
+                      <button type="button" onClick={addSocialLink}
+                        className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
+                        + Agregar
+                      </button>
+                    )}
+                  </div>
+                  {socialLinks.length === 0 && (
+                    <p className="text-xs text-gray-700 italic">YouTube, X, Instagram, TikTok donde publicas tus pronósticos</p>
+                  )}
+                  <div className="space-y-2">
+                    {socialLinks.map((link, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <select value={link.platform} onChange={e => updateSocialLink(idx, 'platform', e.target.value)}
+                          className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none shrink-0">
+                          <option value="youtube">YouTube</option>
+                          <option value="x">X / Twitter</option>
+                          <option value="instagram">Instagram</option>
+                          <option value="tiktok">TikTok</option>
+                          <option value="other">Otro</option>
+                        </select>
+                        <input value={link.url} onChange={e => updateSocialLink(idx, 'url', e.target.value)}
+                          placeholder="URL o @usuario"
+                          className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
+                        <select value={link.frequency} onChange={e => updateSocialLink(idx, 'frequency', e.target.value)}
+                          className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-gray-400 focus:outline-none shrink-0">
+                          <option value="daily">Diario</option>
+                          <option value="weekly">Semanal</option>
+                          <option value="irregular">Irregular</option>
+                        </select>
+                        <button type="button" onClick={() => removeSocialLink(idx)}
+                          className="text-gray-600 hover:text-red-400 transition-colors text-sm shrink-0">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {formError && <p className="text-xs text-red-400 bg-red-950/30 border border-red-800/40 rounded-xl px-3 py-2">{formError}</p>}
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setShowForm(false)}
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors">
                     Cancelar
                   </button>
-                  <button type="submit" disabled={submitting || !pseudonym.trim()}
+                  <button type="submit" disabled={submitting || !pseudonym.trim() || !contactValue.trim()}
                     className="flex-1 py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40 transition-opacity"
                     style={{ backgroundColor: GOLD }}>
                     {submitting ? 'Enviando...' : 'Enviar solicitud'}

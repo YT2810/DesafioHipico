@@ -15,11 +15,26 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
 
-    const { pseudonym, bio } = await req.json();
+    const { pseudonym, bio, contactPlatform, contactValue, socialLinks, yearsExperience, methodology } = await req.json();
+
     if (!pseudonym?.trim()) return NextResponse.json({ error: 'El seudónimo es requerido.' }, { status: 400 });
+    if (!contactPlatform || !['whatsapp', 'telegram'].includes(contactPlatform)) {
+      return NextResponse.json({ error: 'Selecciona WhatsApp o Telegram como medio de contacto.' }, { status: 400 });
+    }
+    if (!contactValue?.trim()) return NextResponse.json({ error: 'El número o usuario de contacto es requerido.' }, { status: 400 });
 
     await dbConnect();
     const userId = new Types.ObjectId(session.user.id);
+
+    const fields = {
+      pseudonym: pseudonym.trim(),
+      bio: bio?.trim() ?? '',
+      contactPlatform,
+      contactValue: contactValue.trim(),
+      socialLinks: Array.isArray(socialLinks) ? socialLinks.filter((l: any) => l?.platform && l?.url?.trim()) : [],
+      yearsExperience: yearsExperience != null ? Number(yearsExperience) : undefined,
+      methodology: methodology?.trim() || undefined,
+    };
 
     const existing = await HandicapperRequest.findOne({ userId });
     if (existing) {
@@ -30,8 +45,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Ya eres handicapper.' }, { status: 409 });
       }
       // rejected — allow re-apply
-      existing.pseudonym = pseudonym.trim();
-      existing.bio = bio?.trim() ?? '';
+      Object.assign(existing, fields);
       existing.status = 'pending';
       existing.rejectionReason = undefined;
       existing.reviewedBy = undefined;
@@ -41,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, status: 'pending' });
     }
 
-    await HandicapperRequest.create({ userId, pseudonym: pseudonym.trim(), bio: bio?.trim() ?? '' });
+    await HandicapperRequest.create({ userId, ...fields });
     notifyHandicapperRequestPending(session.user.id, pseudonym.trim()).catch(() => {});
     return NextResponse.json({ success: true, status: 'pending' });
   } catch (err) {
