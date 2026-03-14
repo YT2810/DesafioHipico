@@ -175,18 +175,13 @@ export default function ExpertTickerBar({ meetingId }: Props) {
                 ) : isActive && fijoDorsal != null ? (
                   /* ── ACTIVE TODAY with fijo dorsal ── */
                   <>
-                    {/* Green live dot */}
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0 animate-pulse" />
-                    {/* Dorsal chip — prominent */}
-                    <span className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-extrabold shrink-0 text-black"
-                      style={{ backgroundColor: GOLD }}>
-                      {fijoDorsal}
-                    </span>
-                    {/* Name */}
                     <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
-                    {/* E1 if available */}
+                    <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: GOLD }}>
+                      da el {fijoDorsal}
+                    </span>
                     {entry.e1 !== null && (
-                      <span className={`text-[10px] font-bold px-1 py-0.5 rounded border ${
+                      <span className={`text-[10px] font-semibold px-1 py-0.5 rounded border ${
                         entry.e1 >= 70 ? 'text-green-400 border-green-800/50 bg-green-950/40' :
                         entry.e1 >= 50 ? 'text-yellow-400 border-yellow-800/50 bg-yellow-950/40' :
                         'text-gray-400 border-gray-700 bg-gray-800/40'
