@@ -82,9 +82,34 @@ export async function GET() {
           activeHandicapperIds.add(pid);
           const allMarks = byHandicapper.get(pid) ?? [];
 
-          // Best "fijo": prefer label==='Línea' with dorsalNumber, else preferenceOrder===1
-          const lineas = allMarks.filter((m: any) => m.label === 'Línea' && m.dorsalNumber != null);
-          const fijo = lineas[0] ?? allMarks.find((m: any) => m.preferenceOrder === 1 && m.dorsalNumber != null) ?? allMarks[0];
+          // True "fijo del día": the dorsal that appears most as preferenceOrder=1 + label=Línea
+          // across ALL races of the meeting (one fijo for the whole card, not per race).
+          // Tiebreak: first occurrence wins.
+          const fijoFreq = new Map<number, { count: number; horseName: string; label: string }>();
+          for (const m of allMarks) {
+            if (m.preferenceOrder === 1 && m.label === 'Línea' && m.dorsalNumber != null) {
+              const prev = fijoFreq.get(m.dorsalNumber);
+              fijoFreq.set(m.dorsalNumber, {
+                count: (prev?.count ?? 0) + 1,
+                horseName: prev?.horseName ?? m.horseName,
+                label: m.label,
+              });
+            }
+          }
+
+          let fijo: { dorsalNumber?: number; horseName?: string; label?: string } = {};
+          if (fijoFreq.size > 0) {
+            // Most frequent Línea dorsal across all races
+            let best = { dorsal: 0, count: 0, horseName: '', label: '' };
+            for (const [dorsal, val] of fijoFreq) {
+              if (val.count > best.count) best = { dorsal, count: val.count, horseName: val.horseName, label: val.label };
+            }
+            fijo = { dorsalNumber: best.dorsal, horseName: best.horseName, label: best.label };
+          } else {
+            // Fallback: any preferenceOrder=1 mark with a dorsal
+            const fallback = allMarks.find((m: any) => m.preferenceOrder === 1 && m.dorsalNumber != null);
+            if (fallback) fijo = { dorsalNumber: fallback.dorsalNumber, horseName: fallback.horseName, label: fallback.label };
+          }
 
           activeEntries.push({
             id: pid,
@@ -95,9 +120,9 @@ export async function GET() {
             totalRaces: p.stats?.totalRaces ?? 0,
             contactNumber: p.contactNumber,
             activeToday: true,
-            fijoDorsal: fijo?.dorsalNumber,
-            fijoHorseName: fijo?.horseName,
-            fijoLabel: fijo?.label,
+            fijoDorsal: fijo.dorsalNumber,
+            fijoHorseName: fijo.horseName,
+            fijoLabel: fijo.label,
           });
         }
 
