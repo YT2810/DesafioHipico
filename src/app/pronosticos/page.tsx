@@ -102,95 +102,110 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
       {/* ── Collapsed row — always visible ── */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 py-3 text-left hover:bg-gray-800/30 active:bg-gray-800/50 transition-colors rounded-lg -mx-1 px-1"
+        className="w-full py-2.5 text-left hover:bg-gray-800/30 active:bg-gray-800/50 transition-colors rounded-lg -mx-1 px-1"
       >
-        {/* Rank badge */}
-        {rankPos != null && rankPos <= 3 && (
-          <span className="shrink-0 text-base leading-none" title={`#${rankPos} en ranking`}>
-            {rankPos === 1 ? '🥇' : rankPos === 2 ? '🥈' : '🥉'}
-          </span>
-        )}
-        {rankPos != null && rankPos > 3 && (
-          <span className="shrink-0 text-xs font-bold text-gray-600 w-5 text-center">#{rankPos}</span>
-        )}
-        {/* Avatar */}
-        <span
-          className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold"
-          style={{ backgroundColor: 'rgba(212,175,55,0.15)', color: GOLD, border: '1.5px solid rgba(212,175,55,0.25)' }}
-        >
-          {handicapper.pseudonym[0].toUpperCase()}
-        </span>
+        {/* Row 1: rank + avatar + name + VIP badge + chevron */}
+        <div className="flex items-center gap-2">
+          {/* Rank */}
+          {rankPos != null && rankPos <= 3 ? (
+            <span className="shrink-0 text-base leading-none" title={`#${rankPos} en ranking`}>
+              {rankPos === 1 ? '🥇' : rankPos === 2 ? '🥈' : '🥉'}
+            </span>
+          ) : rankPos != null ? (
+            <span className="shrink-0 text-xs font-bold text-gray-600 w-6 text-center">#{rankPos}</span>
+          ) : null}
 
-        {/* Name + stats */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link href={`/handicapper/${handicapper.id}`} onClick={e => e.stopPropagation()} className="text-sm font-bold text-white hover:text-yellow-400 transition-colors">{handicapper.pseudonym}</Link>
-            {isVip && (
-              <span className="text-xs font-bold px-1.5 py-0.5 rounded"
-                style={{ color: GOLD, backgroundColor: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)' }}>
-                VIP
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {(() => {
-              const s = statsMap?.get(handicapper.id);
-              if (s) return (
-                <>
-                  {s.e1 !== null && <StatPill label="E1" value={`${s.e1}%`} accent />}
-                  <StatPill label="Gral" value={`${s.eGeneral}%`} />
-                </>
-              );
-              return <span className="text-xs text-gray-700">calculando…</span>;
-            })()}
-          </div>
+          {/* Avatar */}
+          <span
+            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold"
+            style={{ backgroundColor: 'rgba(212,175,55,0.15)', color: GOLD, border: '1.5px solid rgba(212,175,55,0.25)' }}
+          >
+            {handicapper.pseudonym[0].toUpperCase()}
+          </span>
+
+          {/* Name */}
+          <Link
+            href={`/handicapper/${handicapper.id}`}
+            onClick={e => e.stopPropagation()}
+            className="flex-1 min-w-0 text-sm font-bold text-white hover:text-yellow-400 transition-colors truncate"
+          >
+            {handicapper.pseudonym}
+          </Link>
+
+          {/* VIP badge */}
+          {isVip && (
+            <span className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded"
+              style={{ color: GOLD, backgroundColor: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)' }}>
+              VIP
+            </span>
+          )}
+
+          {/* Chevron */}
+          <span className="text-gray-700 text-xs shrink-0">{open ? '▲' : '▼'}</span>
         </div>
 
-        {/* Compact dorsal chips preview (collapsed) */}
-        {!open && !_locked && sortedMarks.length > 0 && (
-          <div className="flex items-center gap-1 shrink-0">
-            {sortedMarks.slice(0, 3).map(m => {
-              const cfg = getLabelCfg(m.label);
-              return (
-                <span
-                  key={m.preferenceOrder}
-                  className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold border ${cfg.border}`}
-                  style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'white' }}
-                  title={m.horseName}
-                >
-                  {m.dorsalNumber ?? m.horseName?.slice(0,3).toUpperCase() ?? '?'}
-                </span>
-              );
-            })}
-            {sortedMarks.length > 3 && (
-              <span className="text-xs text-gray-600">+{sortedMarks.length - 3}</span>
-            )}
-          </div>
-        )}
-        {!open && isVip && (
-          <span className="text-xs shrink-0" style={{color:'#D4AF37'}}>🎁 Liberado</span>
-        )}
+        {/* Row 2: stats + dorsal chips + controls */}
+        <div className="flex items-center gap-1.5 mt-1.5 pl-9" onClick={e => e.stopPropagation()}>
+          {/* Stats pills */}
+          {(() => {
+            const s = statsMap?.get(handicapper.id);
+            if (s) return (
+              <>
+                {s.e1 !== null && <StatPill label="E1" value={`${s.e1}%`} accent />}
+                <StatPill label="Gral" value={`${s.eGeneral}%`} />
+              </>
+            );
+            return null;
+          })()}
 
-        {/* Follow + admin controls */}
-        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          {/* Dorsal chips (collapsed only) */}
+          {!open && !_locked && sortedMarks.length > 0 && (
+            <div className="flex items-center gap-0.5 ml-1">
+              {sortedMarks.slice(0, 3).map(m => {
+                const cfg = getLabelCfg(m.label);
+                return (
+                  <span
+                    key={m.preferenceOrder}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold border ${cfg.border}`}
+                    style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'white' }}
+                    title={m.horseName}
+                  >
+                    {m.dorsalNumber ?? m.horseName?.slice(0,2).toUpperCase() ?? '?'}
+                  </span>
+                );
+              })}
+              {sortedMarks.length > 3 && (
+                <span className="text-[10px] text-gray-600 ml-0.5">+{sortedMarks.length - 3}</span>
+              )}
+            </div>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Source badge */}
           {sourceBadge && (
             <span title={sourceBadge.label} className={`text-sm shrink-0 cursor-help ${sourceBadge.cls}`}>
               {sourceBadge.icon}
             </span>
           )}
+
+          {/* WhatsApp */}
           {handicapper.contactNumber && (
             <a
               href={`https://wa.me/${handicapper.contactNumber.replace(/\D/g, '')}`}
               target="_blank" rel="noopener noreferrer"
-              className="w-7 h-7 rounded-full bg-green-900/40 border border-green-800/40 flex items-center justify-center text-xs transition-colors hover:bg-green-800/50"
+              className="w-6 h-6 rounded-full bg-green-900/40 border border-green-800/40 flex items-center justify-center text-xs transition-colors hover:bg-green-800/50 shrink-0"
               title="WhatsApp"
             >
               📱
             </a>
           )}
+
+          {/* Follow */}
           <button
             onClick={onFollow}
-            className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-all ${
+            className={`px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
               isFollowed
                 ? 'bg-yellow-900/40 border-yellow-700/50 text-yellow-300'
                 : 'bg-gray-800 border-gray-700 text-gray-500 hover:border-yellow-700/40 hover:text-yellow-300'
@@ -198,18 +213,19 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
           >
             {isFollowed ? '✓' : '+ Seguir'}
           </button>
+
+          {/* Delete (privileged) */}
           {isPrivileged && (
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="w-6 h-6 rounded flex items-center justify-center text-gray-700 hover:text-red-400 hover:bg-red-950/40 transition-colors border border-transparent hover:border-red-800/40 text-xs"
+              className="w-6 h-6 rounded flex items-center justify-center text-gray-700 hover:text-red-400 hover:bg-red-950/40 transition-colors border border-transparent hover:border-red-800/40 text-xs shrink-0"
               title="Eliminar pronóstico"
             >
               {deleting ? '…' : '🗑'}
             </button>
           )}
         </div>
-        <span className="text-gray-700 text-xs shrink-0 ml-1">{open ? '▲' : '▼'}</span>
       </button>
 
       {/* ── Expanded marks ── */}
@@ -632,9 +648,11 @@ export default function PronosticosPage() {
         </div>
       </header>
 
-      {/* Expert Ticker — shown once meeting data is loaded */}
+      {/* Expert Ticker — sticky below header (top-14 = 56px header height) */}
       {tickerEntries.length > 0 && (
-        <ExpertTickerBar entries={tickerEntries} meetingId={selectedMeetingId || undefined} />
+        <div className="sticky top-14 z-10">
+          <ExpertTickerBar entries={tickerEntries} meetingId={selectedMeetingId || undefined} />
+        </div>
       )}
 
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
