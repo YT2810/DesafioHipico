@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 export type GoldTxType =
   | 'purchase'
   | 'race_unlock'
+  | 'audio_purchase'
   | 'refund'
   | 'bonus'
   | 'handicapper_payout'
@@ -25,6 +26,7 @@ export interface IGoldTransaction extends Document {
     platformAmount: number;
   };
   externalRef?: string;
+  metadata?: Record<string, unknown>;  // e.g. { audioId: '...' }
   createdAt: Date;
 }
 
@@ -33,7 +35,7 @@ const GoldTransactionSchema = new Schema<IGoldTransaction>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     type: {
       type: String,
-      enum: ['purchase', 'race_unlock', 'refund', 'bonus', 'handicapper_payout', 'platform_fee'],
+      enum: ['purchase', 'race_unlock', 'audio_purchase', 'refund', 'bonus', 'handicapper_payout', 'platform_fee'],
       required: true,
     },
     amount: { type: Number, required: true },
@@ -50,6 +52,7 @@ const GoldTransactionSchema = new Schema<IGoldTransaction>(
       platformAmount: { type: Number },
     },
     externalRef: { type: String, trim: true },
+    metadata: { type: Schema.Types.Mixed },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

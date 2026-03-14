@@ -5,6 +5,8 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING } from '@/lib/constants';
 import NotificationBell from '@/components/NotificationBell';
+import ExpertTickerBar from '@/components/ExpertTickerBar';
+import type { TickerEntry } from '@/components/HandicapperQuickDrawer';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; e1?: number | null; eGeneral?: number; }
@@ -386,6 +388,7 @@ export default function PronosticosPage() {
   const [freeRemaining, setFreeRemaining] = useState(FREE_RACES_PER_MEETING);
   const [statsMap, setStatsMap] = useState<Map<string, { e1: number | null; eGeneral: number }>>(new Map());
   const [globalRankMap, setGlobalRankMap] = useState<Map<string, number>>(new Map());
+  const [tickerEntries, setTickerEntries] = useState<TickerEntry[]>([]);
 
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
@@ -488,6 +491,17 @@ export default function PronosticosPage() {
         const rankMap = new Map<string, number>();
         rankingRes.ranking.forEach((entry: { id: string }, idx: number) => rankMap.set(entry.id, idx + 1));
         setGlobalRankMap(rankMap);
+        // Build ticker entries from ranking (already sorted by E1)
+        const ticker: TickerEntry[] = rankingRes.ranking.map((entry: any) => ({
+          id: entry.id,
+          pseudonym: entry.pseudonym,
+          isGhost: entry.isGhost,
+          e1: entry.e1 ?? null,
+          eGeneral: entry.eGeneral ?? 0,
+          totalRaces: entry.totalRaces ?? 0,
+          contactNumber: undefined, // not in ranking payload — drawer will load via profile
+        }));
+        setTickerEntries(ticker);
       }
     } catch {
       setMeeting(null);
@@ -617,6 +631,12 @@ export default function PronosticosPage() {
           </div>
         </div>
       </header>
+
+      {/* Expert Ticker — shown once meeting data is loaded */}
+      {tickerEntries.length > 0 && (
+        <ExpertTickerBar entries={tickerEntries} meetingId={selectedMeetingId || undefined} />
+      )}
+
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
         {/* Meeting selector */}
         <div className="flex gap-2 overflow-x-auto pb-1">
