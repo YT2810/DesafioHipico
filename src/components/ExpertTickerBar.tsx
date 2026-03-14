@@ -4,6 +4,8 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import type { TickerEntry } from './HandicapperQuickDrawer';
 import HandicapperQuickDrawer from './HandicapperQuickDrawer';
 
+const GOLD = '#D4AF37';
+
 interface Props {
   entries: TickerEntry[];
   meetingId?: string;
@@ -44,6 +46,15 @@ function StatusBadge({ races }: { races: number }) {
 export default function ExpertTickerBar({ entries, meetingId }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TickerEntry | null>(null);
+  const [slots, setSlots] = useState<TickerEntry[]>([]);
+
+  // Load commercial slots and merge with handicapper entries
+  useEffect(() => {
+    fetch('/api/ticker-slots')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.slots) setSlots(d.slots); })
+      .catch(() => {});
+  }, []);
 
   // ── Drag / touch scroll ──────────────────────────────────────────
   const isDragging = useRef(false);
@@ -94,10 +105,23 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [entries.length]);
 
-  if (!entries.length) return null;
+  // Merge: interleave commercial slots every ~3 handicapper entries
+  const merged: TickerEntry[] = [];
+  const allEntries = [...entries];
+  let slotIdx = 0;
+  for (let i = 0; i < allEntries.length; i++) {
+    if (i > 0 && i % 3 === 0 && slotIdx < slots.length) {
+      merged.push(slots[slotIdx++]);
+    }
+    merged.push(allEntries[i]);
+  }
+  // Append remaining slots at end
+  while (slotIdx < slots.length) merged.push(slots[slotIdx++]);
+
+  if (!merged.length) return null;
 
   // Duplicate list for seamless marquee loop when many entries
-  const displayEntries = entries.length >= 4 ? [...entries, ...entries] : entries;
+  const displayEntries = merged.length >= 4 ? [...merged, ...merged] : merged;
 
   return (
     <>
@@ -120,37 +144,53 @@ export default function ExpertTickerBar({ entries, meetingId }: Props) {
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
         >
-          {displayEntries.map((entry, idx) => (
-            <button
-              key={`${entry.id}-${idx}`}
-              onClick={() => setSelected(entry)}
-              className="flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-xl bg-gray-900 border border-gray-800 hover:border-yellow-700/60 hover:bg-gray-800/80 transition-all select-none active:scale-95"
-            >
-              {/* Avatar */}
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0"
-                style={{ backgroundColor: '#D4AF37' }}
+          {displayEntries.map((entry, idx) => {
+            const isSponsor = entry.slotType === 'sponsor' || entry.slotType === 'promo';
+            const accent = entry.accentColor ?? GOLD;
+            return (
+              <button
+                key={`${entry.id}-${idx}`}
+                onClick={() => setSelected(entry)}
+                className={`flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-xl border transition-all select-none active:scale-95 ${
+                  isSponsor
+                    ? 'bg-gray-900 hover:bg-gray-800/80'
+                    : 'bg-gray-900 border-gray-800 hover:border-yellow-700/60 hover:bg-gray-800/80'
+                }`}
+                style={isSponsor ? { borderColor: `${accent}55` } : {}}
               >
-                {entry.pseudonym[0].toUpperCase()}
-              </div>
+                {/* Avatar / Logo */}
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 overflow-hidden"
+                  style={{ backgroundColor: accent }}
+                >
+                  {entry.logoUrl
+                    ? <img src={entry.logoUrl} alt={entry.pseudonym} className="w-full h-full object-cover" />
+                    : <span className="text-[10px] font-black text-black">{entry.pseudonym[0].toUpperCase()}</span>
+                  }
+                </div>
 
-              {/* Name */}
-              <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
+                {/* Name */}
+                <span className="text-xs font-bold text-white whitespace-nowrap">{entry.pseudonym}</span>
 
-              {/* Ghost badge */}
-              {entry.isGhost && (
-                <span className="text-[10px] text-blue-400">🤖</span>
-              )}
+                {/* Sponsor badge */}
+                {isSponsor && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border"
+                    style={{ color: accent, borderColor: `${accent}55`, backgroundColor: `${accent}18` }}>
+                    {entry.badgeText ?? (entry.slotType === 'promo' ? '📢 Promo' : '� Partner')}
+                  </span>
+                )}
 
-              {/* Status badge */}
-              <StatusBadge races={entry.totalRaces} />
-
-              {/* Effectiveness */}
-              {entry.totalRaces >= 5 && (
-                <EffBadge e1={entry.e1} eGeneral={entry.eGeneral} />
-              )}
-            </button>
-          ))}
+                {/* Handicapper badges */}
+                {!isSponsor && <StatusBadge races={entry.totalRaces} />}
+                {!isSponsor && entry.totalRaces >= 5 && (
+                  <EffBadge e1={entry.e1} eGeneral={entry.eGeneral} />
+                )}
+                {!isSponsor && entry.isGhost && (
+                  <span className="text-[10px] text-blue-400">🤖</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
