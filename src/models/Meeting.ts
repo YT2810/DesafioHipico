@@ -7,6 +7,7 @@ export interface IMeeting extends Document {
   date: Date;
   meetingNumber: number;
   status: MeetingStatus;
+  summaryVideoUrl?: string;
   metadata: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -22,6 +23,7 @@ const MeetingSchema = new Schema<IMeeting>(
       enum: ['scheduled', 'active', 'finished', 'cancelled'],
       default: 'scheduled',
     },
+    summaryVideoUrl: { type: String, trim: true },
     metadata: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

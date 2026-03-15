@@ -154,6 +154,10 @@ export default function HomePage() {
             style={{ backgroundColor: GOLD }}>
             Ver pronósticos
           </Link>
+          <Link href="/resultados"
+            className="w-full py-3 rounded-2xl text-sm font-semibold text-white bg-gray-900 border border-gray-700 hover:border-yellow-700/60 transition-colors text-center">
+            🏆 Resultados de carreras
+          </Link>
           <Link href="/retirados"
             className="w-full py-3 rounded-2xl text-sm font-semibold text-gray-400 bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors text-center">
             🚫 Ver retirados del día
