@@ -19,7 +19,8 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const secure = req.nextUrl.protocol === 'https:';
     const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
@@ -33,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const { videoUrl } = await req.json();
 
-    const meeting = await Meeting.findById(params.id);
+    const meeting = await Meeting.findById(id);
     if (!meeting) return NextResponse.json({ error: 'Reunión no encontrada.' }, { status: 404 });
 
     if (videoUrl) {
