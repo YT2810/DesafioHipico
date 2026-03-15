@@ -154,6 +154,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Auto-update meeting status: if all races are finished → meeting is finished
+    const [totalRaces, finishedRaces] = await Promise.all([
+      Race.countDocuments({ meetingId }),
+      Race.countDocuments({ meetingId, status: 'finished' }),
+    ]);
+    if (totalRaces > 0 && finishedRaces >= totalRaces) {
+      await Race.db.model('Meeting').findByIdAndUpdate(meetingId, { status: 'finished' });
+    } else if (finishedRaces > 0) {
+      await Race.db.model('Meeting').findByIdAndUpdate(meetingId, { status: 'active' });
+    }
+
     return NextResponse.json({
       success: true,
       raceId: race._id,
