@@ -26,9 +26,14 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
     const trackIdFilter = searchParams.get('trackId');
 
-    const meetingFilter: any = {
-      status: { $in: ['finished', 'active'] },
-    };
+    // Find meetings that have at least one finished race — regardless of meeting.status
+    // (status may still be 'scheduled' even when results have been loaded)
+    const meetingsWithResults = await Race.distinct('meetingId', { status: 'finished' });
+    if (meetingsWithResults.length === 0) {
+      return NextResponse.json({ meetings: [], total: 0, page, totalPages: 0 });
+    }
+
+    const meetingFilter: any = { _id: { $in: meetingsWithResults } };
     if (trackIdFilter) meetingFilter.trackId = trackIdFilter;
 
     const [meetings, total] = await Promise.all([
