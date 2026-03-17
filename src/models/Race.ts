@@ -44,7 +44,6 @@ export interface IRace extends Document {
   meetingId: Types.ObjectId;
   raceNumber: number;
   annualRaceNumber?: number;
-  llamado?: number;
   distance: number;
   scheduledTime: string;
   prizePool: IPrizePool;
@@ -78,7 +77,6 @@ const RaceSchema = new Schema<IRace>(
       default: 'scheduled',
     },
     annualRaceNumber: { type: Number },
-    llamado: { type: Number },
     conditions: { type: String, trim: true },
     surface: { type: String, enum: ['dirt', 'turf', 'synthetic'] },
     bonoPrimerCriador: { type: Number },

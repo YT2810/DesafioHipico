@@ -26,7 +26,7 @@
 export interface ExtractedTrack { name: string; location: string; country: string; }
 export interface ExtractedMeeting { track: ExtractedTrack; date: string; meetingNumber: number; dayOfWeek?: string; }
 export interface ExtractedRace {
-  raceNumber: number; annualRaceNumber?: number; llamado?: number;
+  raceNumber: number; annualRaceNumber?: number;
   distance: number; scheduledTime: string; conditions: string;
   prizePool: { bs: number; usd: number }; bonoPrimerCriador?: number;
   prizeDistribution?: { first: number; second: number; third: number; fourth: number; fifth: number; breederBonus: number; };
@@ -129,7 +129,7 @@ function parseMeeting(text: string, warnings: string[]): ExtractedMeeting {
 //   "Premio Bs.:\n3600\nBono $:\n37180"
 
 function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
-  let raceNumber = 0, llamado = 0, annualRaceNumber = 0, distance = 0, scheduledTime = '';
+  let raceNumber = 0, annualRaceNumber = 0, distance = 0, scheduledTime = '';
 
   // Distance line: "1400 mts.1" or "1200 mts.2" — distance + raceNumber glued
   const distLine = block.match(/(\d{3,4})\s*mts\.(\d{1,2})(?:\s|$)/);
@@ -141,25 +141,6 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (dm) distance = parseInt(dm[1]);
   }
 
-  // "Carrera Nro:Llamado:\n476" — pdf-parse concatenates llamado+raceNumber on one line
-  // e.g. "476" = llamado=47, raceNro=6 (raceNumber already known from distLine)
-  // e.g. "387" = llamado=38, raceNro=7
-  const valLine = block.match(/Carrera\s+Nro:Llamado:\s*\n?(\d+)/i);
-  if (valLine) {
-    const val = valLine[1];
-    if (raceNumber) {
-      // raceNumber already known — strip it from the RIGHT of val to get llamado
-      const rnStr = raceNumber.toString();
-      if (val.endsWith(rnStr) && val.length > rnStr.length) {
-        llamado = parseInt(val.slice(0, val.length - rnStr.length)) || 0;
-      } else {
-        llamado = parseInt(val) || 0;
-      }
-    } else {
-      raceNumber = parseInt(val.slice(-2)) || parseInt(val.slice(-1)) || 0;
-      llamado = parseInt(val.slice(0, val.length - raceNumber.toString().length)) || 0;
-    }
-  }
 
   // pdf-parse renders the INH table as:
   // With annual number:    "Carrera Anual Nro.:Hora:\n122\n01:25 p. m." (number on its own line, NOT followed by ':')
@@ -232,7 +213,6 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
   return {
     raceNumber,
     annualRaceNumber: annualRaceNumber || undefined,
-    llamado: llamado || undefined,
     distance,
     scheduledTime,
     conditions,

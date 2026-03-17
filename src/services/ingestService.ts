@@ -100,7 +100,6 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
           meetingId: meeting._id,
           raceNumber: raceBlock.race.raceNumber,
           annualRaceNumber: finalAnnual,
-          llamado: raceBlock.race.llamado,
           distance: raceBlock.race.distance,
           scheduledTime: raceBlock.race.scheduledTime,
           prizePool: raceBlock.race.prizePool,

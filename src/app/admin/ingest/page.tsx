@@ -237,7 +237,6 @@ function RacePreviewCard({ rb, annualOverride, onAnnualChange }: {
           }
           <span className="text-sm font-semibold text-white">{rb.race.distance > 0 ? `${rb.race.distance} mts` : '— mts'}</span>
           {rb.race.scheduledTime && <span className="text-xs text-gray-400">🕐 {rb.race.scheduledTime}</span>}
-          {rb.race.llamado != null && <span className="text-xs text-gray-500">Llamado {rb.race.llamado}</span>}
         </div>
         <div className="flex items-center gap-4">
           <div className="flex gap-3 text-xs text-gray-400">

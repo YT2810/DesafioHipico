@@ -46,7 +46,6 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   const reunionMatch = block.match(/^REUNION:\s*(\d+)/m);
   const fechaMatch   = block.match(/^FECHA:\s*(\d{1,2}\/\d{1,2}\/\d{4})/m);
   const horaMatch    = block.match(/^HORA:\s*(\d{1,2}:\d{2}\s*[aApP]\.\s*[mM]\.)/m);
-  const llamadoMatch = block.match(/LLAMADO:\s*(\d+)/m);
   const diaMatch     = block.match(/^DIA:\s*(LUNES|MARTES|MI[EÉ]RCOLES|JUEVES|VIERNES|S[AÁ]BADO|DOMINGO)/im);
   const carreraMatch = block.match(/^CARRERA DEL DIA:\s*\n(\d+)/m);
   const distMatch    = block.match(/^DISTANCIA:\s*\n([\d.]+)/m);
@@ -63,7 +62,6 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   const conditions = condMatch ? clean(condMatch[0]) : '';
   const bsRaw = premioMatch ? premioMatch[1].replace('.', '').replace(',', '.') : '0';
   const bs = parseFloat(bsRaw) || 0;
-  const llamado = llamadoMatch ? parseInt(llamadoMatch[1]) : undefined;
   const annualRaceNumber = anualMatch ? parseInt(anualMatch[1]) : undefined;
 
   // Prize distribution — HINAVA uses 60/28/7/3/2 or 60/20/9/6/5
@@ -91,7 +89,6 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   const race: ExtractedRace = {
     raceNumber,
     annualRaceNumber,
-    llamado,
     distance,
     scheduledTime,
     conditions,
