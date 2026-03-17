@@ -74,15 +74,23 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
     ? await Race.countDocuments({ meetingId: { $in: earlierMeetingIds } })
     : 0;
 
+  // Detect gaps: if meetingNumber > earlierMeetings+1, data is incomplete
+  const meetingNum = doc.meeting.meetingNumber ?? 1;
+  const expectedEarlier = meetingNum - 1;
+  const canAutoCalc = earlierMeetings.length >= expectedEarlier;
+  if (!canAutoCalc && expectedEarlier > 0) {
+    warnings.push(`⚠️ Faltan ${expectedEarlier - earlierMeetings.length} reunión(es) anterior(es) — annualRaceNumber no se auto-calcula.`);
+  }
+
   for (const raceBlock of doc.races) {
-    // Determine annualRaceNumber: use extracted value, else auto-calculate from count
+    // Determine annualRaceNumber: use extracted value, else auto-calculate (only if no gaps)
     const extractedAnnual = raceBlock.race.annualRaceNumber;
-    const computedAnnual = racesBeforeThisMeeting + raceBlock.race.raceNumber;
+    const computedAnnual = canAutoCalc ? racesBeforeThisMeeting + raceBlock.race.raceNumber : undefined;
     const annualRaceNumber = extractedAnnual ?? computedAnnual;
 
     // Check if race already exists with annualRaceNumber set — don't overwrite
     const existingRace = await Race.findOne({ meetingId: meeting._id, raceNumber: raceBlock.race.raceNumber }).select('annualRaceNumber').lean() as any;
-    const finalAnnual = existingRace?.annualRaceNumber ?? annualRaceNumber;
+    const finalAnnual = existingRace?.annualRaceNumber ?? annualRaceNumber ?? undefined;
 
     // 3. Upsert Race
     const race = await Race.findOneAndUpdate(

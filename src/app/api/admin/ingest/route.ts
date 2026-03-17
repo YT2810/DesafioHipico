@@ -79,17 +79,27 @@ export async function POST(request: NextRequest) {
             const earlierMeetings = await Meeting.find({
               trackId: track._id,
               date: { $gte: yearStart, $lt: meetingDate },
-            }).select('_id').lean() as any[];
-            const earlierIds = earlierMeetings.map((m: any) => m._id);
-            const racesBeforeThis = earlierIds.length > 0
-              ? await Race.countDocuments({ meetingId: { $in: earlierIds } })
-              : 0;
-            for (const rb of processed.races) {
-              if (!rb.race.annualRaceNumber) {
-                rb.race.annualRaceNumber = racesBeforeThis + rb.race.raceNumber;
+            }).select('_id meetingNumber').lean() as any[];
+            const meetingNum = processed.meeting.meetingNumber ?? 1;
+            const expectedEarlier = meetingNum - 1;
+            const actualEarlier = earlierMeetings.length;
+
+            if (expectedEarlier > 0 && actualEarlier < expectedEarlier) {
+              // Missing earlier meetings — don't auto-calculate
+              const missing = expectedEarlier - actualEarlier;
+              processed.warnings.push(`⚠️ Faltan ${missing} reunión(es) anterior(es) en la BD (hay ${actualEarlier} de ${expectedEarlier} esperadas). Sube las reuniones anteriores primero para calcular el N° Anual automáticamente, o ingrésalo manualmente.`);
+            } else {
+              const earlierIds = earlierMeetings.map((m: any) => m._id);
+              const racesBeforeThis = earlierIds.length > 0
+                ? await Race.countDocuments({ meetingId: { $in: earlierIds } })
+                : 0;
+              for (const rb of processed.races) {
+                if (!rb.race.annualRaceNumber) {
+                  rb.race.annualRaceNumber = racesBeforeThis + rb.race.raceNumber;
+                }
               }
+              processed.warnings.push(`[INFO] annualRaceNumber auto-calculado: base ${racesBeforeThis} carreras previas en ${meetingDate.getFullYear()}`);
             }
-            processed.warnings.push(`[INFO] annualRaceNumber auto-calculado: base ${racesBeforeThis} carreras previas en ${meetingDate.getFullYear()}`);
           }
         } catch { /* non-critical */ }
       }
