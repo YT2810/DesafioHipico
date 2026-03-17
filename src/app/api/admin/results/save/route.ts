@@ -4,6 +4,8 @@ import dbConnect from '@/lib/mongodb';
 import Race from '@/models/Race';
 import Entry from '@/models/Entry';
 import Forecast from '@/models/Forecast';
+import Meeting from '@/models/Meeting';
+import Track from '@/models/Track';
 import { recalcHandicapperStats } from '@/services/handicapperStatsService';
 
 export interface ResultFinishEntry {
@@ -65,10 +67,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Carrera ${raceNumber} no encontrada para esta reunión.` }, { status: 404 });
     }
 
+    // Resolve annualRaceNumber: use provided value, or keep existing, or auto-calculate
+    let resolvedAnnual: number | undefined = annualRaceNumber || race.annualRaceNumber || undefined;
+    if (!resolvedAnnual) {
+      try {
+        const meeting = await Meeting.findById(meetingId).lean() as any;
+        if (meeting) {
+          const track = await Track.findById(meeting.trackId).lean() as any;
+          if (track) {
+            const meetingDate = new Date(meeting.date);
+            const yearStart = new Date(meetingDate.getFullYear(), 0, 1);
+            const earlierMeetings = await Meeting.find({
+              trackId: track._id,
+              date: { $gte: yearStart, $lt: meetingDate },
+            }).select('_id').lean() as any[];
+            const expectedEarlier = (meeting.meetingNumber ?? 1) - 1;
+            if (earlierMeetings.length >= expectedEarlier) {
+              const racesBeforeThis = earlierMeetings.length > 0
+                ? await Race.countDocuments({ meetingId: { $in: earlierMeetings.map((m: any) => m._id) } })
+                : 0;
+              resolvedAnnual = racesBeforeThis + raceNumber;
+            }
+          }
+        }
+      } catch { /* non-critical */ }
+    }
+
     // Update race: status, time, splits, payouts
     race.status = 'finished';
     race.hasResults = true;
-    if (annualRaceNumber) race.annualRaceNumber = annualRaceNumber;
+    if (resolvedAnnual) race.annualRaceNumber = resolvedAnnual;
     if (officialTime) race.officialTime = officialTime;
     if (timeSplits?.length) race.timeSplits = timeSplits;
     if (payouts) {

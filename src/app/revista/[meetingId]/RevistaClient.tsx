@@ -122,32 +122,31 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
   const col = posColor(h.finishPosition);
   const isWinner = h.finishPosition === 1;
   const diff = isWinner ? 'GANÓ' : (h.diffVsFirst ?? h.distanceMargin ?? '');
-  // Show: if winner → 2° secondName, else → 1° winnerName
   const refName = isWinner
     ? (h.secondName ? `2° ${h.secondName}` : '')
     : (h.winnerName ? `1° ${h.winnerName}` : '');
   return (
-    <div className="history-row flex items-center gap-1 text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
-      {/* Fecha con año */}
-      <span className="shrink-0 text-gray-500 w-[4rem]">{shortDate(h.date)}</span>
-      {/* Carrera anual con prefijo hipódromo */}
-      <span className="shrink-0 text-gray-600 w-[3rem] font-mono text-[9px]">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
-      {/* Posición */}
-      <span className="shrink-0 w-4 text-center font-extrabold" style={{ color: col }}>{pos}</span>
-      {/* Dist */}
-      <span className="shrink-0 text-gray-600 w-[2.6rem]">{h.distance}m</span>
-      {/* Tiempo ganador */}
-      <span className="shrink-0 font-mono w-[3.4rem] text-yellow-500/60" title="Tiempo del 1°">
-        {isWinner ? '' : (h.winnerTime ?? '—')}
-      </span>
-      {/* Tiempo del ejemplar */}
-      <span className="shrink-0 font-mono w-[3.4rem]" style={{ color: col }} title="Tiempo del ejemplar">
-        {h.officialTime ?? '—'}
-      </span>
-      {/* Diff vs 1° */}
-      <span className="shrink-0 text-gray-600 w-[2.8rem] truncate" title="Diferencia vs 1°">{diff}</span>
-      {/* Ganador o 2° según si ganó */}
-      <span className="flex-1 text-gray-700 truncate text-[9px]" title={refName}>{refName}</span>
+    <div className="history-row py-1.5 border-t border-gray-800/50 space-y-0.5">
+      {/* Línea 1: fecha · carrera · posición · distancia */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-gray-500 shrink-0">{shortDate(h.date)}</span>
+        <span className="text-[10px] font-mono text-gray-600 shrink-0">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
+        <span className="text-[11px] font-extrabold shrink-0" style={{ color: col }}>{pos}°</span>
+        <span className="text-[10px] text-gray-600 shrink-0">{h.distance}m</span>
+        {diff && <span className="text-[10px] text-gray-500 shrink-0">{diff}</span>}
+      </div>
+      {/* Línea 2: tiempos + nombre ganador/2° */}
+      <div className="flex items-center gap-2">
+        {!isWinner && h.winnerTime && (
+          <span className="text-[10px] font-mono text-yellow-500/60 shrink-0">1°:{h.winnerTime}</span>
+        )}
+        {h.officialTime && (
+          <span className="text-[10px] font-mono shrink-0" style={{ color: col }}>Ej:{h.officialTime}</span>
+        )}
+        {refName && (
+          <span className="text-[10px] text-gray-600 truncate">{refName}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -239,17 +238,6 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
         {/* ── Historial de carreras — siempre visible si existe ── */}
         {hasHistory && (
           <div className="mt-2 ml-10">
-            {/* Cabecera de columnas */}
-            <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-gray-700 pb-0.5">
-              <span className="w-[4rem]">Fecha</span>
-              <span className="w-[3rem]">Carrera</span>
-              <span className="w-4 text-center">Pos</span>
-              <span className="w-[2.6rem]">Dist</span>
-              <span className="w-[3.4rem] text-yellow-600/50">T.1°</span>
-              <span className="w-[3.4rem]">T.Ej</span>
-              <span className="w-[2.8rem]">Diff</span>
-              <span className="flex-1">Gan/2°</span>
-            </div>
             {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
           </div>
         )}
