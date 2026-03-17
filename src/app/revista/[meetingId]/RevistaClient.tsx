@@ -281,6 +281,10 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  function handlePrint() {
+    window.print();
+  }
+
   useEffect(() => {
     fetch(`/api/revista/${meetingId}`)
       .then(r => r.json())
@@ -321,6 +325,45 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
 
+      {/* ── Print styles ── */}
+      <style>{`
+        @media print {
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { background: #fff !important; color: #111 !important; }
+          .no-print { display: none !important; }
+          /* Show ALL races in print, not just selected */
+          .print-all-races > div { display: block !important; }
+          /* Expand all horse cards */
+          .horse-expanded { display: block !important; }
+          /* Race block: avoid cutting mid-horse */
+          .print-race-block { page-break-inside: avoid; margin-bottom: 1.5rem; }
+          .print-horse-row { page-break-inside: avoid; }
+          /* Force black text on white */
+          header, main { background: #fff !important; color: #111 !important; }
+          header { position: static !important; border-bottom: 1px solid #ccc !important; }
+          .bg-gray-950, .bg-gray-900, .bg-gray-800,
+          .bg-gray-900\/30, .bg-gray-800\/40, .bg-gray-900\/50 {
+            background: #fff !important;
+          }
+          .text-white, .text-gray-100, .text-gray-300, .text-gray-400 { color: #111 !important; }
+          .text-gray-500, .text-gray-600, .text-gray-700 { color: #555 !important; }
+          .border-gray-700, .border-gray-800, .border-gray-800\/40,
+          .border-gray-800\/60, .divide-gray-800\/40 > * {
+            border-color: #ddd !important;
+          }
+          /* Sticky header becomes static */
+          .sticky { position: static !important; }
+          /* Hide race selector pills and interactive UI */
+          .race-selector { display: none !important; }
+          .no-print { display: none !important; }
+          /* Hide the interactive single-race view */
+          .print-all-races { display: none !important; }
+          /* Show the full print block */
+          .print-races-full { display: block !important; }
+          /* Workout/history badges keep their colors for readability */
+        }
+      `}</style>
+
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center justify-between gap-3">
@@ -333,18 +376,26 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
               <p className="text-xs text-gray-500 truncate capitalize">{meetingDate}</p>
             </div>
           </div>
-          <Link href={`/programa/${meetingId}`}
-            className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold text-black"
-            style={{ backgroundColor: GOLD }}>
-            Inscritos →
-          </Link>
+          <div className="no-print flex items-center gap-2 shrink-0">
+            <button
+              onClick={handlePrint}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+              title="Imprimir / Guardar como PDF">
+              🖨 PDF
+            </button>
+            <Link href={`/programa/${meetingId}`}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-black"
+              style={{ backgroundColor: GOLD }}>
+              Inscritos →
+            </Link>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
 
         {/* Nota si no hay trabajos */}
-        {!hasWorkouts && (
+        {!hasWorkouts && !loading && (
           <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3 py-2.5 flex items-center gap-2">
             <span className="text-sm shrink-0">📋</span>
             <p className="text-xs text-gray-600">
@@ -354,7 +405,7 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
         )}
 
         {/* Selector de carreras */}
-        <div>
+        <div className="race-selector">
           <p className="text-[10px] text-gray-600 mb-2 font-bold uppercase tracking-wider">Carrera</p>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
             {races.map(race => {
@@ -382,9 +433,9 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
           </div>
         </div>
 
-        {/* Carrera seleccionada */}
+        {/* Carrera seleccionada — en pantalla muestra la seleccionada, en print muestra todas */}
         {currentRace && (
-          <div>
+          <div className="print-all-races">
             {/* Encabezado de carrera */}
             <div className="rounded-t-2xl border border-gray-700 bg-gray-900 px-4 py-3">
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -440,6 +491,73 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
             </div>
           </div>
         )}
+
+        {/* ── PRINT ONLY: todas las carreras completas ── */}
+        <div className="hidden print-races-full">
+          {races.map(race => (
+            <div key={race.raceId} className="print-race-block mb-6">
+              <div className="border-b-2 border-gray-300 pb-1 mb-2">
+                <span className="font-extrabold text-base">Carrera {race.raceNumber}</span>
+                {race.annualRaceNumber && <span className="text-xs text-gray-500 ml-2">C{race.annualRaceNumber}</span>}
+                <span className="text-sm text-gray-500 ml-2">{race.distance} mts</span>
+                {race.scheduledTime && <span className="text-xs text-gray-500 ml-2">{race.scheduledTime}</span>}
+                {race.conditions && <p className="text-xs text-gray-500 mt-0.5">{race.conditions}</p>}
+              </div>
+              {race.entries.map(entry => (
+                <div key={entry.dorsalNumber} className="print-horse-row border border-gray-200 rounded p-2 mb-1.5">
+                  <div className="flex items-start gap-2">
+                    <span className="font-extrabold text-base w-6 shrink-0 text-center">{entry.dorsalNumber}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm">{entry.horseName}</span>
+                        {entry.isScratched && <span className="text-xs text-red-600 font-bold">RETIRADO</span>}
+                        {entry.medication && <span className="text-xs text-blue-700 font-bold">{entry.medication}</span>}
+                        <span className="text-xs text-gray-500">{entry.weightDeclared} kg</span>
+                        <span className="text-xs text-gray-500">Jinete: {entry.jockeyName}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Ent: {entry.trainerName}{entry.studName ? ` · ${entry.studName}` : ''}</p>
+                      {entry.raceHistory.length > 0 && (
+                        <div className="mt-1">
+                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">Últimas carreras</p>
+                          <div className="flex flex-col gap-0.5">
+                            {entry.raceHistory.map((h, i) => (
+                              <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                                <span className="font-bold w-4 text-center">{h.isScratched ? 'R' : (h.finishPosition ?? '?')}</span>
+                                <span className="text-gray-500">{shortDate(h.date)}</span>
+                                <span className="text-gray-500">R{h.meetingNumber} C{h.raceNumber}</span>
+                                <span className="text-gray-500">{h.distance}m</span>
+                                {h.officialTime && <span className="font-mono text-gray-600">{h.officialTime}</span>}
+                                {h.distanceMargin && <span className="text-gray-500">{h.distanceMargin}</span>}
+                                <span className="text-gray-500 truncate">{h.jockeyName}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {entry.workouts.length > 0 && (
+                        <div className="mt-1">
+                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">Trabajos</p>
+                          <div className="flex flex-col gap-0.5">
+                            {entry.workouts.map((w, i) => (
+                              <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                                <span className="font-bold">{WORKOUT_LABELS[w.workoutType] ?? w.workoutType}</span>
+                                <span className="text-gray-500">{shortDate(w.workoutDate)}</span>
+                                {w.distance > 0 && <span className="text-gray-500">{w.distance}m</span>}
+                                {w.daysRest !== null && <span className="text-gray-500">{w.daysRest}D</span>}
+                                {w.splits && <span className="font-mono text-gray-600">{w.splits}</span>}
+                                {w.comment && <span className="text-gray-500 italic">{w.comment}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
 
         {!currentRace && (
           <div className="text-center py-10 text-gray-700">
