@@ -124,8 +124,8 @@ function parseMeeting(text: string, warnings: string[]): ExtractedMeeting {
 // ─── Race Header Parser ───────────────────────────────────────────────────────
 // pdf-parse format — labels and values on separate lines:
 //   "Distancia:\n1400 mts.1"  ← distance + raceNumber concatenated
-//   "Carrera Nro:Llamado:\n476"  ← raceNro + llamado concatenated
-//   "Carrera Anual Nro.:Hora:\n01:25 p. m."
+//   "Carrera Nro:Llamado:\n9"  ← raceNro del día (NOT annual)
+//   "Carrera Anual Nro.:Hora:\n122\n01:25 p. m."  ← annual number THEN time on next line
 //   "Premio Bs.:\n3600\nBono $:\n37180"
 
 function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
@@ -141,34 +141,26 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (dm) distance = parseInt(dm[1]);
   }
 
-  // "Carrera Nro:Llamado:\n2695" — the PDF concatenates llamado+raceNro+annualNro on one line.
-  // e.g. "2695" = llamado=26, raceNro=9, annual=5
-  //      "476"  = llamado=4,  raceNro=7, annual=6
-  // Strategy: if raceNumber already known from distLine ("1100 mts.9"), strip it from the end
-  // of the concatenated value to get llamado. Otherwise first 1-2 digits = raceNro.
+  // "Carrera Nro:Llamado:\n9" — value on next line is the daily raceNumber (llamado may be separate)
   const valLine = block.match(/Carrera\s+Nro:Llamado:\s*\n?(\d+)/i);
   if (valLine) {
-    const val = valLine[1];
-    if (raceNumber) {
-      // raceNumber already known — strip it from the right side of val to get llamado
-      const rnStr = raceNumber.toString();
-      const rnIdx = val.lastIndexOf(rnStr);
-      if (rnIdx > 0) {
-        llamado = parseInt(val.slice(0, rnIdx)) || 0;
-        annualRaceNumber = parseInt(val.slice(rnIdx + rnStr.length)) || 0;
-      }
-    } else {
-      // raceNumber unknown — first 1-2 digits = raceNro, next 1-2 = llamado
-      raceNumber = parseInt(val.slice(0, 1));
-      llamado = parseInt(val.slice(1, 3)) || 0;
-    }
+    const val = parseInt(valLine[1]);
+    if (!raceNumber) raceNumber = val;
+    else llamado = val; // if raceNumber already known from distLine, this is llamado
   }
 
-  // "Carrera Anual Nro.:Hora:\n01:25 p. m."
-  const horaLine = block.match(/Carrera\s+Anual\s+Nro\.:Hora:\s*\n?(\d{1,2}:\d{2}\s*[aApP]\.\s*[mM]\.)/i);
-  if (horaLine) {
-    scheduledTime = clean(horaLine[1]);
+  // "Carrera Anual Nro.:Hora:\n122\n01:25 p. m."
+  // The value on the SAME line (or next) is the annual number; time is on the FOLLOWING line.
+  // Pattern: label followed by a standalone integer (2-3 digits), then optionally time on next line.
+  const annualBlock = block.match(/Carrera\s+Anual\s+Nro\.?:?Hora:\s*\n?(\d{2,3})\b/i);
+  if (annualBlock) {
+    annualRaceNumber = parseInt(annualBlock[1]);
+    // Extract time from what follows the annual number
+    const afterAnnual = block.slice(block.indexOf(annualBlock[0]) + annualBlock[0].length);
+    const hmAfter = afterAnnual.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
+    if (hmAfter) scheduledTime = clean(hmAfter[1]);
   } else {
+    // Fallback: look for time anywhere
     const hm = block.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
     if (hm) scheduledTime = clean(hm[1]);
   }

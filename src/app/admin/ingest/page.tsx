@@ -577,10 +577,16 @@ function ResultsTab() {
             </select>
           </div>
           <div className="w-32">
-            <label className="text-xs text-gray-500 mb-1 block">N° Carrera</label>
+            <label className="text-xs text-gray-500 mb-1 block">N° Carrera del día</label>
             <input type="number" min="1" max="15" value={raceNumber} onChange={e => setRaceNumber(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
               placeholder="3" />
+          </div>
+          <div className="w-36">
+            <label className="text-xs text-gray-500 mb-1 block">N° Carrera Anual <span className="text-amber-600">(ej: 122)</span></label>
+            <input type="number" min="1" value={annualRaceNumber ?? ''} onChange={e => setAnnualRaceNumber(e.target.value ? parseInt(e.target.value) : null)}
+              className="w-full bg-gray-800 border border-amber-800/50 rounded-lg px-3 py-2 text-sm text-amber-200 focus:outline-none focus:border-amber-500"
+              placeholder="122" />
           </div>
         </div>
       </div>
