@@ -57,9 +57,9 @@ Devuelve JSON puro sin markdown:
   ]
 }`;
 
-async function extractWithGemini(pdfText: string): Promise<{ horseName: string; raceNumber: string | null; workoutDate: string; workoutType: string; distance: number | null; splits: string; comment: string; rm: number | null; jockeyName: string; trainerName: string }[]> {
-  if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY no configurada');
+type GeminiWorkout = { horseName: string; raceNumber: string | null; workoutDate: string; workoutType: string; distance: number | null; splits: string; comment: string; rm: number | null; jockeyName: string; trainerName: string };
 
+async function callGeminiChunk(chunkText: string): Promise<GeminiWorkout[]> {
   const res = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
@@ -72,10 +72,10 @@ async function extractWithGemini(pdfText: string): Promise<{ horseName: string; 
       model: OPENROUTER_MODEL,
       messages: [{
         role: 'user',
-        content: `${WORKOUTS_PROMPT}\n\nTexto extraído del PDF:\n\n${pdfText.slice(0, 25000)}`,
+        content: `${WORKOUTS_PROMPT}\n\nTexto extraído del PDF:\n\n${chunkText}`,
       }],
       temperature: 0.1,
-      max_tokens: 8192,
+      max_tokens: 16000,
     }),
   });
 
@@ -87,9 +87,43 @@ async function extractWithGemini(pdfText: string): Promise<{ horseName: string; 
   const raw: string = data?.choices?.[0]?.message?.content ?? '';
   const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Gemini no devolvió JSON válido');
-  const parsed = JSON.parse(jsonMatch[0]);
-  return parsed.workouts ?? [];
+  if (!jsonMatch) return [];
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return parsed.workouts ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function extractWithGemini(pdfText: string): Promise<GeminiWorkout[]> {
+  if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY no configurada');
+
+  const CHUNK_SIZE = 12000;
+  if (pdfText.length <= CHUNK_SIZE) {
+    return callGeminiChunk(pdfText);
+  }
+
+  // Split on line boundaries near CHUNK_SIZE to avoid cutting mid-row
+  const chunks: string[] = [];
+  let pos = 0;
+  while (pos < pdfText.length) {
+    let end = pos + CHUNK_SIZE;
+    if (end < pdfText.length) {
+      // Find last newline before end
+      const nl = pdfText.lastIndexOf('\n', end);
+      if (nl > pos) end = nl;
+    }
+    chunks.push(pdfText.slice(pos, end));
+    pos = end;
+  }
+
+  const allRows: GeminiWorkout[] = [];
+  for (const chunk of chunks) {
+    const rows = await callGeminiChunk(chunk);
+    allRows.push(...rows);
+  }
+  return allRows;
 }
 
 export async function POST(req: NextRequest) {
