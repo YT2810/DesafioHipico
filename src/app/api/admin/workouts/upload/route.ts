@@ -3,12 +3,96 @@ import connectMongo from '@/lib/mongodb';
 import WorkoutEntry from '@/models/WorkoutEntry';
 import Track from '@/models/Track';
 import Horse from '@/models/Horse';
-import { parseWorkoutsPdf, extractWorkoutDate } from '@/services/parsers/workouts';
+import { extractWorkoutDate } from '@/services/parsers/workouts';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+const WORKOUTS_PROMPT = `Eres un extractor de trabajos de entrenamiento de caballos del INH (Instituto Nacional de Hipismo) venezolano.
+
+El PDF tiene una tabla con estas columnas (de izquierda a derecha):
+1. N° de carrera (ej: "4D", "7D", "11D") — puede estar vacía si el caballo no corre esa semana
+2. Nombre del ejemplar
+3. Parciales y comentarios (ej: "14,1 27 39 (600MTS) (EP) 51,2 MUY COMODO", o "GALOPO SUAVE (EP)", o "UN PIQUE AL TIRO (EP)")
+4. RM — remate o tiempo final (número, ej: "12", "15,3") — puede estar vacío
+5. Jinete o TRAQUEADOR
+6. Entrenador
+
+Puede haber múltiples secciones de fechas distintas en el mismo PDF (ej: martes y miércoles). Extrae TODOS los trabajos de TODAS las fechas.
+Puede haber una sección especial llamada "APARATO" — extrae esos trabajos igual, con workoutType: "AP".
+
+Para cada fila extrae:
+- horseName: nombre del ejemplar (tal como aparece)
+- raceNumber: número de carrera si está (ej: "4D") o null
+- parciales: texto de parciales y comentarios completo (columna 3)
+- rm: remate (número o null)
+- jockeyName: jinete o "TRAQUEADOR" si dice eso
+- trainerName: entrenador
+- workoutDate: fecha de la sección en formato YYYY-MM-DD (si hay varias secciones, asigna la fecha correcta a cada fila)
+
+De los parciales deduce:
+- workoutType: "EP" si contiene (EP), "ES" si contiene (ES), "AP" si contiene (AP) o es sección APARATO, "galopo" si dice GALOPO
+- distance: número en metros si aparece (ej: 400, 600, 800, 1000) o null si es galopo/pique
+- splits: solo los números de tiempos parciales (ej: "14,1 27 39")
+- comment: texto descriptivo (ej: "MUY COMODO", "SE FUE LARGO", "UN PIQUE AL TIRO")
+
+Devuelve JSON puro sin markdown:
+{
+  "workouts": [
+    {
+      "horseName": "ALCALA",
+      "raceNumber": null,
+      "workoutDate": "2026-02-26",
+      "workoutType": "EP",
+      "distance": 600,
+      "splits": "14,1 27 39",
+      "comment": "SE FUE LARGO",
+      "rm": 12,
+      "jockeyName": "G.GONZALEZ",
+      "trainerName": "F.PARILLI.T"
+    }
+  ]
+}`;
+
+async function extractWithGemini(pdfText: string): Promise<{ horseName: string; raceNumber: string | null; workoutDate: string; workoutType: string; distance: number | null; splits: string; comment: string; rm: number | null; jockeyName: string; trainerName: string }[]> {
+  if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY no configurada');
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'https://desafiohipico.com',
+      'X-Title': 'Desafío Hípico',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [{
+        role: 'user',
+        content: `${WORKOUTS_PROMPT}\n\nTexto extraído del PDF:\n\n${pdfText.slice(0, 15000)}`,
+      }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Gemini error: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json();
+  const raw: string = data?.choices?.[0]?.message?.content ?? '';
+  const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Gemini no devolvió JSON válido');
+  const parsed = JSON.parse(jsonMatch[0]);
+  return parsed.workouts ?? [];
+}
+
+export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get('file') as File | null;
@@ -24,19 +108,20 @@ export async function POST(req: NextRequest) {
     const parsed = await pdfParse(buffer);
     const text: string = parsed.text;
 
-    const workoutDate = extractWorkoutDate(text, file.name);
-    if (!workoutDate) {
-      return NextResponse.json({ error: 'No se pudo extraer la fecha del PDF. Verifica el nombre del archivo (ej: TRABAJOS SABADO 14 DE MARZO 2026.pdf)' }, { status: 400 });
-    }
+    // Extraer fecha primaria del nombre del archivo o del texto (fallback)
+    const primaryDate = extractWorkoutDate(text, file.name);
 
-    const rows = parseWorkoutsPdf(text);
+    // Usar Gemini para extraer todos los trabajos con estructura correcta
+    const rows = await extractWithGemini(text);
+
     if (rows.length === 0) {
-      return NextResponse.json({ error: 'No se encontraron trabajos en el PDF' }, { status: 400 });
+      return NextResponse.json({ error: 'Gemini no encontró trabajos en el PDF' }, { status: 400 });
     }
 
     if (previewOnly) {
+      const previewDate = primaryDate?.toISOString() ?? (rows[0]?.workoutDate ? new Date(rows[0].workoutDate + 'T12:00:00Z').toISOString() : null);
       return NextResponse.json({
-        workoutDate: workoutDate.toISOString(),
+        workoutDate: previewDate,
         count: rows.length,
         preview: rows.slice(0, 10),
       });
@@ -44,34 +129,40 @@ export async function POST(req: NextRequest) {
 
     await connectMongo();
 
-    // Verificar que el track existe
     const track = await Track.findById(trackId).lean();
     if (!track) return NextResponse.json({ error: 'Track no encontrado' }, { status: 404 });
 
-    // Para cada workout, intentar linkear al Horse por nombre (fuzzy no — solo exacto normalizado)
-    const dateStart = new Date(workoutDate);
-    dateStart.setHours(0, 0, 0, 0);
-    const dateEnd = new Date(workoutDate);
-    dateEnd.setHours(23, 59, 59, 999);
-
     let inserted = 0;
-    let skipped = 0;
-
+    // Group by date for upsert window
     for (const row of rows) {
       const normalizedName = row.horseName.toUpperCase().trim();
+      if (!normalizedName) continue;
 
-      // Buscar caballo por nombre exacto normalizado
+      // Resolve workout date: prefer Gemini's per-row date, fallback to file date
+      let workoutDate: Date;
+      if (row.workoutDate) {
+        workoutDate = new Date(row.workoutDate + 'T12:00:00Z');
+      } else if (primaryDate) {
+        workoutDate = primaryDate;
+      } else {
+        continue; // skip if no date
+      }
+
+      if (isNaN(workoutDate.getTime())) {
+        workoutDate = primaryDate ?? new Date();
+      }
+
+      const dateStart = new Date(workoutDate); dateStart.setUTCHours(0, 0, 0, 0);
+      const dateEnd = new Date(workoutDate);   dateEnd.setUTCHours(23, 59, 59, 999);
+
       const horse = await Horse.findOne({
         name: { $regex: new RegExp(`^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       }).lean();
 
-      // Upsert: si ya existe un workout de este caballo en esta fecha y pista, actualizar
+      const wType = ['EP','ES','AP','galopo'].includes(row.workoutType) ? row.workoutType : 'galopo';
+
       await WorkoutEntry.findOneAndUpdate(
-        {
-          horseName: normalizedName,
-          trackId,
-          workoutDate: { $gte: dateStart, $lte: dateEnd },
-        },
+        { horseName: normalizedName, trackId, workoutDate: { $gte: dateStart, $lte: dateEnd } },
         {
           $set: {
             horseId: horse ? horse._id : undefined,
@@ -79,12 +170,11 @@ export async function POST(req: NextRequest) {
             trackId,
             workoutDate,
             distance: row.distance ?? 0,
-            workoutType: row.workoutType,
-            splits: row.splits,
-            comment: row.comment,
-            jockeyName: row.jockeyName,
-            trainerName: row.trainerName,
-            daysRest: row.daysRest ?? undefined,
+            workoutType: wType,
+            splits: row.splits ?? '',
+            comment: row.comment ?? '',
+            jockeyName: row.jockeyName ?? '',
+            trainerName: row.trainerName ?? '',
             sourceFile: file.name,
           },
         },
@@ -93,11 +183,14 @@ export async function POST(req: NextRequest) {
       inserted++;
     }
 
+    const firstDate = rows[0]?.workoutDate
+      ? new Date(rows[0].workoutDate + 'T12:00:00Z').toISOString()
+      : primaryDate?.toISOString() ?? new Date().toISOString();
+
     return NextResponse.json({
       success: true,
-      workoutDate: workoutDate.toISOString(),
+      workoutDate: firstDate,
       inserted,
-      skipped,
       total: rows.length,
       rows: rows.map(r => ({
         horseName: r.horseName,
@@ -107,7 +200,7 @@ export async function POST(req: NextRequest) {
         distance: r.distance,
         splits: r.splits,
         comment: r.comment,
-        daysRest: r.daysRest,
+        raceNumber: r.raceNumber,
       })),
     });
   } catch (e) {

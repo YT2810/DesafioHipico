@@ -1,24 +1,17 @@
 /**
  * Parser de PDFs de trabajos INH — La Rinconada
  *
- * Formatos soportados:
- *   AJUSTES MIERCOLES/MARTES/JUEVES DD DE MES YYYY.pdf
- *   TRABAJOS SABADO/MARTES DD DE MES YYYY.pdf
+ * Formato real del PDF (tabla con columnas):
+ *   Col 1: Número de carrera (ej: "4D", "7D") — puede estar vacía
+ *   Col 2: Nombre del ejemplar
+ *   Col 3: Parciales y comentarios (ej: "14,1 27 39 (600MTS) (EP) 51,2 MUY COMODO")
+ *   Col 4: RM (remate, número, ej: "12", "15,3") — puede estar vacío
+ *   Col 5: Jinete o TRAQUEADOR
+ *   Col 6: Entrenador
  *
- * Formato de cada entrada (una línea o bloque por caballo):
- *   [RM]NOMBRE_CABALLO\n
- *   PARCIALES (DISTANCIA) (TIPO) COMENTARIO TIEMPO_FINAL\n
- *   JINETE ENTRENADOR\n
- *
- * Ejemplo con tiempos:
- *   4DARCANO
- *   16 29 41,4 (600MTS) (ES) 54,2 2P 68,1/ 83,1// MUY COMODO Y SHN, JINETE PARADO EN LOS ESTRIBOS 12,4
- *   J.C.RODRIGUEZ  J.D.RIVAS
- *
- * Ejemplo galopo:
- *   8DFANTASTIC SHOT
- *   GALOPO SUAVE (EP)
- *   Y.LEON  R.GAMEZ
+ * El PDF puede contener múltiples secciones de fechas diferentes.
+ * Puede incluir una sección "APARATO" separada con ejercicios de aparato.
+ * Texto puede ser mayúsculas, minúsculas o mixto (Excel arcaico del hipódromo).
  */
 
 export interface ParsedWorkout {

@@ -138,9 +138,12 @@ export default function AdminWorkoutsPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="border-b border-gray-800 bg-gray-900 px-4 py-4">
-        <div className="mx-auto max-w-2xl">
-          <h1 className="text-lg font-extrabold text-white">📋 Subir Trabajos de Entrenamiento</h1>
-          <p className="text-xs text-gray-500 mt-0.5">PDFs de trabajos INH — ajustes y sábados</p>
+        <div className="mx-auto max-w-2xl flex items-center gap-4">
+          <a href="/admin" className="text-xs text-gray-500 hover:text-yellow-400 transition-colors">← Admin</a>
+          <div>
+            <h1 className="text-lg font-extrabold text-white">📋 Subir Trabajos de Entrenamiento</h1>
+            <p className="text-xs text-gray-500 mt-0.5">PDFs de trabajos INH — ajustes y sábados</p>
+          </div>
         </div>
       </header>
 
@@ -374,7 +377,56 @@ export default function AdminWorkoutsPage() {
           </ul>
         </div>
 
+        {/* Borrar trabajos */}
+        <DeleteSection />
+
       </main>
+    </div>
+  );
+}
+
+function DeleteSection() {
+  const [from, setFrom] = useState('2026-01-01');
+  const [to, setTo] = useState('2026-03-17');
+  const [deleting, setDeleting] = useState(false);
+  const [result, setResult] = useState('');
+
+  async function handleDelete() {
+    if (!confirm(`¿Borrar TODOS los trabajos entre ${from} y ${to}? Esta acción no se puede deshacer.`)) return;
+    setDeleting(true);
+    setResult('');
+    try {
+      const res = await fetch(`/api/admin/workouts/delete?from=${from}&to=${to}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) setResult(`Error: ${data.error}`);
+      else setResult(`✅ ${data.deleted} trabajos eliminados`);
+    } catch {
+      setResult('Error de red');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-red-900/30 bg-red-950/10 p-4 space-y-3">
+      <p className="text-xs font-bold text-red-500/80 uppercase tracking-wide">⚠️ Borrar trabajos por rango de fecha</p>
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="block text-[10px] text-gray-600 mb-1">Desde</label>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-600" />
+        </div>
+        <div className="flex-1">
+          <label className="block text-[10px] text-gray-600 mb-1">Hasta</label>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-600" />
+        </div>
+        <button onClick={handleDelete} disabled={deleting}
+          className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-800/60 border border-red-700/40 hover:bg-red-700/60 disabled:opacity-40 transition-colors">
+          {deleting ? 'Borrando...' : 'Borrar'}
+        </button>
+      </div>
+      {result && <p className="text-xs text-gray-400">{result}</p>}
     </div>
   );
 }
