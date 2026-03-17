@@ -170,35 +170,6 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* ── Top 3 ranking ── */}
-        {topRanking.length > 0 && (
-          <div className="w-full space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">🏆 Top expertos</p>
-              <Link href="/ranking" className="text-xs font-bold text-yellow-500 hover:text-yellow-400 transition-colors">Ver ranking completo →</Link>
-            </div>
-            {topRanking.map((entry, idx) => (
-              <Link key={entry.id} href={`/handicapper/${entry.id}`}
-                className="flex items-center gap-3 bg-gray-900 border border-gray-800 hover:border-yellow-800/40 rounded-2xl px-4 py-3 transition-colors group">
-                <span className="text-lg shrink-0">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                <div
-                  className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-extrabold"
-                  style={{ backgroundColor: 'rgba(212,175,55,0.12)', color: GOLD, border: '1.5px solid rgba(212,175,55,0.2)' }}
-                >
-                  {entry.pseudonym[0].toUpperCase()}
-                </div>
-                <span className="flex-1 text-sm font-bold text-white truncate group-hover:text-yellow-400 transition-colors">{entry.pseudonym}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {entry.e1 !== null && (
-                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-300 border border-yellow-700/40 font-mono">E1 {entry.e1}%</span>
-                  )}
-                  <span className="text-xs font-mono text-gray-500">{entry.eGeneral}%</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-
         {/* ── Upcoming meetings — shown first for SEO and UX ── */}
         {meetings.length > 0 && (
           <div className="w-full space-y-2">
@@ -226,6 +197,35 @@ export default function HomePage() {
                 </Link>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Top 3 ranking ── */}
+        {topRanking.length > 0 && (
+          <div className="w-full space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">🏆 Top expertos</p>
+              <Link href="/ranking" className="text-xs font-bold text-yellow-500 hover:text-yellow-400 transition-colors">Ver ranking completo →</Link>
+            </div>
+            {topRanking.map((entry, idx) => (
+              <Link key={entry.id} href={`/handicapper/${entry.id}`}
+                className="flex items-center gap-3 bg-gray-900 border border-gray-800 hover:border-yellow-800/40 rounded-2xl px-4 py-3 transition-colors group">
+                <span className="text-lg shrink-0">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                <div
+                  className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-extrabold"
+                  style={{ backgroundColor: 'rgba(212,175,55,0.12)', color: GOLD, border: '1.5px solid rgba(212,175,55,0.2)' }}
+                >
+                  {entry.pseudonym[0].toUpperCase()}
+                </div>
+                <span className="flex-1 text-sm font-bold text-white truncate group-hover:text-yellow-400 transition-colors">{entry.pseudonym}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {entry.e1 !== null && (
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-300 border border-yellow-700/40 font-mono">E1 {entry.e1}%</span>
+                  )}
+                  <span className="text-xs font-mono text-gray-500">{entry.eGeneral}%</span>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
 
