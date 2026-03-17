@@ -72,7 +72,7 @@ async function extractWithGemini(pdfText: string): Promise<{ horseName: string; 
       model: OPENROUTER_MODEL,
       messages: [{
         role: 'user',
-        content: `${WORKOUTS_PROMPT}\n\nTexto extraído del PDF:\n\n${pdfText.slice(0, 15000)}`,
+        content: `${WORKOUTS_PROMPT}\n\nTexto extraído del PDF:\n\n${pdfText.slice(0, 25000)}`,
       }],
       temperature: 0.1,
       max_tokens: 8192,
