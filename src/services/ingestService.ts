@@ -62,7 +62,28 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
   let racesUpserted = 0;
   let entriesUpserted = 0;
 
+  // Auto-calculate annualRaceNumber base:
+  // Count all races from earlier meetings of the same track in the same calendar year.
+  const yearStart = new Date(meetingDate.getFullYear(), 0, 1);
+  const earlierMeetings = await Meeting.find({
+    trackId: track._id,
+    date: { $gte: yearStart, $lt: meetingDate },
+  }).select('_id').lean() as any[];
+  const earlierMeetingIds = earlierMeetings.map((m: any) => m._id);
+  const racesBeforeThisMeeting = earlierMeetingIds.length > 0
+    ? await Race.countDocuments({ meetingId: { $in: earlierMeetingIds } })
+    : 0;
+
   for (const raceBlock of doc.races) {
+    // Determine annualRaceNumber: use extracted value, else auto-calculate from count
+    const extractedAnnual = raceBlock.race.annualRaceNumber;
+    const computedAnnual = racesBeforeThisMeeting + raceBlock.race.raceNumber;
+    const annualRaceNumber = extractedAnnual ?? computedAnnual;
+
+    // Check if race already exists with annualRaceNumber set — don't overwrite
+    const existingRace = await Race.findOne({ meetingId: meeting._id, raceNumber: raceBlock.race.raceNumber }).select('annualRaceNumber').lean() as any;
+    const finalAnnual = existingRace?.annualRaceNumber ?? annualRaceNumber;
+
     // 3. Upsert Race
     const race = await Race.findOneAndUpdate(
       { meetingId: meeting._id, raceNumber: raceBlock.race.raceNumber },
@@ -70,7 +91,7 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
         $set: {
           meetingId: meeting._id,
           raceNumber: raceBlock.race.raceNumber,
-          annualRaceNumber: raceBlock.race.annualRaceNumber,
+          annualRaceNumber: finalAnnual,
           llamado: raceBlock.race.llamado,
           distance: raceBlock.race.distance,
           scheduledTime: raceBlock.race.scheduledTime,
