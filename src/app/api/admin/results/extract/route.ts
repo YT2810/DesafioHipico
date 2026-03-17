@@ -12,11 +12,12 @@ Extrae cada puesto con:
 - finishPosition: número de puesto oficial (1, 2, 3...)
 - dorsalNumber: número de dorsal/camisilla
 - horseName: nombre del ejemplar
-- distanceMargin: cuerpos de diferencia respecto al anterior (ej: "1 cpo", "2 cpos", "Pzo", "Tz", "pescuezo", "nariz", "hocico"). null si no aparece.
+- distanceMargin: cuerpos de diferencia respecto al ejemplar inmediatamente ANTERIOR en la llegada (ej: "1 cpo", "2 cpos", "Pzo", "Tz", "pescuezo", "nariz", "hocico"). SIEMPRE null para el 1° puesto (ganador) — el ganador no tiene diferencia respecto a nadie. null también si no aparece en la imagen.
 - isDistanced: true si el ejemplar fue DISTANCIADO (llegó en una posición pero fue relegado oficialmente). Esto aparece como "Dist." o "Distanciado" en la imagen.
 - isScratched: true si el ejemplar aparece como RETIRADO/NO CORRIÓ. false por defecto.
 
 IMPORTANTE sobre distanciados: el orden en la imagen es el orden de cruce de meta. Si hay un distanciado, su posición OFICIAL cambia pero los dividendos ya son los oficiales. Marca isDistanced:true en el ejemplar distanciado.
+IMPORTANTE sobre el ganador: el 1° puesto SIEMPRE tiene distanceMargin: null. No leas los cuerpos de ventaja del ganador como su propio distanceMargin.
 
 ═══ DIVIDENDOS OFICIALES ═══
 Extrae los pagos para cada tipo de apuesta del INH venezolano:
