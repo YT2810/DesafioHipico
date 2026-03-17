@@ -18,13 +18,14 @@ export async function GET(
 
     const races = await Race.find({ meetingId: new Types.ObjectId(id) })
       .sort({ raceNumber: 1 })
-      .select('raceNumber distance status games scheduledTime conditions prizePool')
+      .select('raceNumber distance status games scheduledTime conditions prizePool annualRaceNumber')
       .lean();
 
     return NextResponse.json({
-      races: races.map(r => ({
+      races: races.map((r: any) => ({
         id: r._id.toString(),
         raceNumber: r.raceNumber,
+        annualRaceNumber: r.annualRaceNumber ?? null,
         distance: r.distance ?? null,
         status: r.status ?? 'scheduled',
         games: r.games ?? [],

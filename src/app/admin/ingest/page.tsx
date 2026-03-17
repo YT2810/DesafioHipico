@@ -445,12 +445,14 @@ function emptyPayouts(): PayoutsEdit {
   return { winner: [], place: [], exacta: [], trifecta: [], superfecta: [], tripleApuesta: [], poolDe4: [], cincoYSeis: [], lotoHipico: [] };
 }
 
+type RaceOption = { raceNumber: number; annualRaceNumber: number | null; distance: number | null; status: string; games: string[] };
+
 function ResultsTab() {
   const [meetings, setMeetings] = useState<{ _id: string; meetingNumber: number; date: string; trackName?: string }[]>([]);
   const [meetingId, setMeetingId] = useState('');
   const [raceNumber, setRaceNumber] = useState('');
   const [raceDistance, setRaceDistance] = useState<number | null>(null);
-  const [races, setRaces] = useState<{ raceNumber: number; distance: number; status?: string; games?: string[] }[]>([]);
+  const [races, setRaces] = useState<RaceOption[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -463,6 +465,7 @@ function ResultsTab() {
   const [extracted, setExtracted] = useState(false);
   const [tokensUsed, setTokensUsed] = useState<number | null>(null);
   const [annualRaceNumber, setAnnualRaceNumber] = useState<number | null>(null);
+  const [annualEditing, setAnnualEditing] = useState(false);
   const imgInputRef = useRef<HTMLInputElement>(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -477,9 +480,18 @@ function ResultsTab() {
   useEffect(() => {
     if (!meetingId) return;
     fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()).then(d => {
-      const list = (d.races ?? []).map((r: any) => ({ raceNumber: r.raceNumber, distance: r.distance ?? null, status: r.status ?? '', games: r.games ?? [] }));
+      const list: RaceOption[] = (d.races ?? []).map((r: any) => ({
+        raceNumber: r.raceNumber,
+        annualRaceNumber: r.annualRaceNumber ?? null,
+        distance: r.distance ?? null,
+        status: r.status ?? '',
+        games: r.games ?? [],
+      }));
       setRaces(list);
+      setRaceNumber('');
       setRaceDistance(null);
+      setAnnualRaceNumber(null);
+      setAnnualEditing(false);
     });
   }, [meetingId]);
 
@@ -487,6 +499,9 @@ function ResultsTab() {
     if (!raceNumber || !races.length) return;
     const found = races.find(r => r.raceNumber === parseInt(raceNumber));
     setRaceDistance(found?.distance ?? null);
+    // Auto-populate annualRaceNumber from DB — user can override
+    setAnnualRaceNumber(found?.annualRaceNumber ?? null);
+    setAnnualEditing(false);
   }, [raceNumber, races]);
 
   useEffect(() => {
@@ -512,13 +527,13 @@ function ResultsTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error extrayendo resultados');
       const r = data.result;
-      // Store annual race number from Gemini (e.g. C089 → 89) without overwriting daily raceNumber
-      if (r.raceNumber) {
-        if (String(r.raceNumber) !== String(raceNumber)) {
-          setAnnualRaceNumber(r.raceNumber);
-          setError(`ℹ️ La IA leyó "${r.raceNumber}" en la imagen (número anual). Se usará Carrera ${raceNumber} de jornada. Verifica si la imagen es correcta.`);
-        } else {
-          setAnnualRaceNumber(null);
+      // If Gemini reads a number that differs from selected raceNumber, it's likely the annual number
+      // Only update annualRaceNumber if it wasn't already set from DB and looks like an annual number
+      if (r.raceNumber && !annualRaceNumber) {
+        const aiNum = parseInt(String(r.raceNumber));
+        const dailyNum = parseInt(raceNumber);
+        if (!isNaN(aiNum) && aiNum !== dailyNum && aiNum > 20) {
+          setAnnualRaceNumber(aiNum);
         }
       }
       const winTime: string = r.officialTime ?? '';
@@ -608,6 +623,7 @@ function ResultsTab() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">1. Reunión y carrera</p>
         <div className="flex flex-wrap gap-4">
+          {/* Reunión */}
           <div className="flex-1 min-w-48">
             <label className="text-xs text-gray-500 mb-1 block">Reunión</label>
             <select value={meetingId} onChange={e => setMeetingId(e.target.value)}
@@ -619,19 +635,52 @@ function ResultsTab() {
               ))}
             </select>
           </div>
-          <div className="w-32">
-            <label className="text-xs text-gray-500 mb-1 block">N° Carrera del día</label>
-            <input type="number" min="1" max="15" value={raceNumber} onChange={e => setRaceNumber(e.target.value)}
+          {/* Carrera — dropdown poblado desde BD */}
+          <div className="w-52">
+            <label className="text-xs text-gray-500 mb-1 block">Carrera</label>
+            <select
+              value={raceNumber}
+              onChange={e => setRaceNumber(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
-              placeholder="3" />
-          </div>
-          <div className="w-36">
-            <label className="text-xs text-gray-500 mb-1 block">N° Carrera Anual <span className="text-amber-600">(ej: 122)</span></label>
-            <input type="number" min="1" value={annualRaceNumber ?? ''} onChange={e => setAnnualRaceNumber(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full bg-gray-800 border border-amber-800/50 rounded-lg px-3 py-2 text-sm text-amber-200 focus:outline-none focus:border-amber-500"
-              placeholder="122" />
+            >
+              <option value="">— Selecciona —</option>
+              {races.map(r => (
+                <option key={r.raceNumber} value={r.raceNumber}>
+                  C{r.raceNumber}{r.distance ? ` · ${r.distance}m` : ''}{r.status === 'finished' ? ' ✓' : ''}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
+        {/* N° Anual — solo lectura, editable si se necesita corregir */}
+        {raceNumber && (
+          <div className="flex items-center gap-3 pt-1">
+            <span className="text-xs text-gray-600">N° Anual:</span>
+            {annualEditing ? (
+              <input
+                type="number" min="1"
+                value={annualRaceNumber ?? ''}
+                onChange={e => setAnnualRaceNumber(e.target.value ? parseInt(e.target.value) : null)}
+                onBlur={() => setAnnualEditing(false)}
+                autoFocus
+                className="w-24 bg-gray-800 border border-amber-600 rounded px-2 py-1 text-xs text-amber-200 focus:outline-none"
+                placeholder="ej: 122"
+              />
+            ) : (
+              <span
+                className={`text-xs font-mono px-2 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity ${
+                  annualRaceNumber
+                    ? 'bg-amber-950/40 border-amber-700/50 text-amber-300'
+                    : 'bg-gray-800 border-gray-700 text-gray-600'
+                }`}
+                title="Haz clic para editar"
+                onClick={() => setAnnualEditing(true)}
+              >
+                {annualRaceNumber ? `C${annualRaceNumber}` : 'se calculará al guardar'} ✎
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Step 2 */}
