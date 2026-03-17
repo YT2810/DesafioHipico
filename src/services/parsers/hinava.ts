@@ -53,7 +53,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   const premioMatch  = block.match(/^Bs\s+([\d.,]+)/m);
   // Conditions: from HANDICAP/PESOS/etc. up to (but not including) PREMIO BS.
   const condMatch    = block.match(/^((?:HANDICAP|PESOS|P E\.|COPA)[\s\S]+?)(?=\nPREMIO BS\.)/m);
-  const anualMatch   = block.match(/^CARRERA DEL AÑO:\s*\n(\d+)/m);
+  const anualMatch   = block.match(/^CARRERA\s+DEL\s+(?:A[ÑN]O|ANUAL)[:\s]*\n?\s*(\d+)/im);
 
   const raceNumber = carreraMatch ? parseInt(carreraMatch[1]) : 0;
   if (!raceNumber) { warnings.push('HINAVA: no se detectó número de carrera.'); return null; }
