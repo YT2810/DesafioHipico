@@ -28,6 +28,7 @@ export default function AdminWorkoutsPage() {
   const [bulkFiles, setBulkFiles] = useState<FileItem[]>([]);
   const [bulkRunning, setBulkRunning] = useState(false);
   const bulkRef = useRef<HTMLInputElement>(null);
+  const stopRef = useRef(false);
   // single
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
@@ -60,9 +61,11 @@ export default function AdminWorkoutsPage() {
 
   async function handleBulkUpload() {
     if (!trackId || bulkFiles.length === 0) return;
+    stopRef.current = false;
     setBulkRunning(true);
     const files = bulkFiles.map(f => f.file); // capture before async loop
     for (let i = 0; i < files.length; i++) {
+      if (stopRef.current) break;
       setBulkFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'uploading' } : f));
       try {
         const form = new FormData();
@@ -84,6 +87,7 @@ export default function AdminWorkoutsPage() {
       }
     }
     setBulkRunning(false);
+    stopRef.current = false;
   }
 
   async function handlePreview() {
@@ -195,15 +199,23 @@ export default function AdminWorkoutsPage() {
               <input ref={bulkRef} type="file" accept=".pdf" multiple onChange={handleBulkSelect}
                 className="w-full text-sm text-gray-300 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:text-black cursor-pointer" />
               {bulkFiles.length > 0 && (
-                <button id="bulk-upload-btn" onClick={handleBulkUpload} disabled={bulkRunning || !trackId}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-black disabled:opacity-40"
-                  style={{ backgroundColor: GOLD }}>
-                  {bulkRunning
-                    ? `Subiendo ${bulkDone + 1} de ${bulkFiles.length}...`
-                    : bulkDone === bulkFiles.length && bulkFiles.length > 0
-                    ? `✅ Completado — ${bulkTotalInserted} trabajos importados`
-                    : `⬆️ Subir ${bulkFiles.length} archivos`}
-                </button>
+                <div className="flex gap-2">
+                  <button id="bulk-upload-btn" onClick={handleBulkUpload} disabled={bulkRunning || !trackId}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold text-black disabled:opacity-40"
+                    style={{ backgroundColor: GOLD }}>
+                    {bulkRunning
+                      ? `Subiendo ${bulkDone + 1} de ${bulkFiles.length}...`
+                      : bulkDone === bulkFiles.length && bulkFiles.length > 0
+                      ? `✅ Completado — ${bulkTotalInserted} trabajos importados`
+                      : `⬆️ Subir ${bulkFiles.length} archivos`}
+                  </button>
+                  {bulkRunning && (
+                    <button onClick={() => { stopRef.current = true; }}
+                      className="px-4 py-3 rounded-xl text-sm font-bold text-white bg-red-800/70 border border-red-700/50 hover:bg-red-700/70 transition-colors">
+                      ⏹ Parar
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             {bulkFiles.length > 0 && (
