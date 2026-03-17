@@ -24,3 +24,64 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Revista: print styles ── */
+@media print {
+  @page { margin: 1cm 1.2cm; }
+
+  html, body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    color-scheme: light !important;
+    font-size: 10px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  * {
+    background: transparent !important;
+    color: #111 !important;
+    border-color: #ccc !important;
+    box-sizing: border-box;
+  }
+
+  .no-print { display: none !important; }
+  .screen-only { display: none !important; }
+  .print-races-full { display: block !important; }
+
+  .print-watermark {
+    display: block !important;
+    position: fixed;
+    bottom: 0.4cm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 8px;
+    color: #aaa !important;
+    letter-spacing: 0.05em;
+    border-top: 1px solid #ddd;
+    padding-top: 3px;
+  }
+
+  .print-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #D4AF37;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+  }
+
+  .print-race-block { page-break-inside: avoid; margin-bottom: 14px; }
+  .print-horse-row { page-break-inside: avoid; border-bottom: 1px solid #eee; padding: 5px 0; }
+
+  .font-mono { font-family: monospace !important; }
+
+  .history-row, .workout-row {
+    border-top: 1px solid #eee !important;
+  }
+
+  .print-badge-med { color: #1d4ed8 !important; border: 1px solid #93c5fd !important; background: transparent !important; }
+  .print-badge-ret { color: #dc2626 !important; font-weight: bold !important; background: transparent !important; }
+}
