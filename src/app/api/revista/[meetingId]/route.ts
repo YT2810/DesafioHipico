@@ -12,6 +12,38 @@ import { Types } from 'mongoose';
 
 export const dynamic = 'force-dynamic';
 
+// ── Module-level helpers ──
+function resolveTrackCode(t: any): string {
+  if (!t) return '';
+  if (t.code) return String(t.code).toUpperCase();
+  const n = (t.name ?? '').toLowerCase();
+  if (n.includes('rinconada') || n.includes('caracas')) return 'C';
+  if (n.includes('valencia')) return 'V';
+  return (t.name ?? '').slice(0, 1).toUpperCase();
+}
+
+function parseRaceTime(t: string | null | undefined): number | null {
+  if (!t) return null;
+  const s = t.trim();
+  const colonIdx = s.indexOf(':');
+  if (colonIdx !== -1) {
+    const mins = parseFloat(s.slice(0, colonIdx));
+    const secs = parseFloat(s.slice(colonIdx + 1));
+    return isNaN(mins) || isNaN(secs) ? null : mins * 60 + secs;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function calcDiffVsFirst(ownTime: string | null, wTime: string | null, pos: number | null): string | null {
+  if (pos === 1) return null;
+  const own = parseRaceTime(ownTime);
+  const win = parseRaceTime(wTime);
+  if (own === null || win === null || own <= win) return null;
+  const cuerpos = Math.round(((own - win) / 0.2) * 10) / 10;
+  return `${cuerpos} c`;
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ meetingId: string }> }
@@ -85,39 +117,6 @@ export async function GET(
       .lean() as any[];
     const pastMeetingMap = new Map(pastMeetings.map((m: any) => [m._id.toString(), m]));
 
-    // Helper: resolve track code (C = Rinconada/Caracas, V = Valencia)
-    function trackCode(t: any): string {
-      if (!t) return '';
-      if (t.code) return t.code.toUpperCase();
-      const n = (t.name ?? '').toLowerCase();
-      if (n.includes('rinconada') || n.includes('caracas')) return 'C';
-      if (n.includes('valencia')) return 'V';
-      return (t.name ?? '').slice(0, 1).toUpperCase();
-    }
-
-    // Helper: parse Venezuelan time string (e.g. "65.2" or "1:05.2") to seconds
-    function parseTime(t: string | null | undefined): number | null {
-      if (!t) return null;
-      const s = t.trim();
-      const colonIdx = s.indexOf(':');
-      if (colonIdx !== -1) {
-        const mins = parseFloat(s.slice(0, colonIdx));
-        const secs = parseFloat(s.slice(colonIdx + 1));
-        return mins * 60 + secs;
-      }
-      return parseFloat(s) || null;
-    }
-
-    // Helper: compute diff vs 1st in cuerpos (1 cuerpo = 0.2s)
-    function diffVsFirst(ownTime: string | null, wTime: string | null, pos: number | null): string | null {
-      if (pos === 1) return null; // winner
-      const own = parseTime(ownTime);
-      const win = parseTime(wTime);
-      if (own === null || win === null || own <= win) return null;
-      const cuerpos = Math.round((own - win) / 0.2 * 10) / 10;
-      return cuerpos % 1 === 0 ? `${cuerpos} c` : `${cuerpos} c`;
-    }
-
     // Build final history map: horseId → last 4 finished races before this meeting
     const finalHistoryMap = new Map<string, any[]>();
     for (const [hid, entries] of historyByHorse) {
@@ -142,14 +141,14 @@ export async function GET(
             finishPosition: pe.result?.finishPosition ?? null,
             officialTime: pe.result?.officialTime ?? null,
             winnerTime: winnerTimeByRace.get(race._id?.toString()) ?? null,
-            diffVsFirst: diffVsFirst(
+            diffVsFirst: calcDiffVsFirst(
               pe.result?.officialTime ?? null,
               winnerTimeByRace.get(race._id?.toString()) ?? null,
               pe.result?.finishPosition ?? null
             ),
             distanceMargin: pe.result?.distanceMargin ?? null,
             annualRaceNumber: race.annualRaceNumber ?? null,
-            trackCode: trackCode((pm as any).trackId),
+            trackCode: resolveTrackCode((pm as any).trackId),
             isScratched: pe.result?.isScratched ?? false,
           };
         })
@@ -255,7 +254,7 @@ export async function GET(
         status: meeting.status,
         trackName: track?.name ?? '',
         trackLocation: track?.location ?? '',
-        trackCode: trackCode(track),
+        trackCode: resolveTrackCode(track),
         isValencia: (track?.name ?? '').toLowerCase().includes('valencia'),
       },
       races: racesOut,
