@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 const GOLD = '#D4AF37';
+const SITE = 'desafiohipico.com';
 
 interface RaceHistoryItem {
   date: string;
@@ -97,178 +98,146 @@ function shortDate(iso: string) {
   return d.toLocaleDateString('es-VE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-// ── Horse card: dorsal header + history rows + workout rows ──
+// ── Historial inline (últimas 4 carreras) — siempre visible ──
+function HistoryRow({ h }: { h: RaceHistoryItem }) {
+  const pos = h.isScratched ? 'R' : (h.finishPosition ?? '?');
+  const col = posColor(h.finishPosition);
+  return (
+    <div className="history-row flex items-center gap-1 text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
+      {/* Posición */}
+      <span className="shrink-0 w-5 text-center font-extrabold" style={{ color: col }}>{pos}</span>
+      {/* Fecha */}
+      <span className="shrink-0 text-gray-500 w-[3.2rem]">{shortDate(h.date)}</span>
+      {/* Dist */}
+      <span className="shrink-0 text-gray-600 w-[2.8rem]">{h.distance}m</span>
+      {/* Dorsal */}
+      <span className="shrink-0 text-gray-700 w-4">#{h.dorsalNumber}</span>
+      {/* Tiempo */}
+      <span className="shrink-0 font-mono text-yellow-600/80 w-[3.5rem]">{h.officialTime ?? '—'}</span>
+      {/* Margen */}
+      <span className="shrink-0 text-gray-600 w-[2.5rem] truncate">{h.distanceMargin ?? ''}</span>
+      {/* Jinete */}
+      <span className="flex-1 text-gray-600 truncate">{h.jockeyName}</span>
+      {/* Medicación */}
+      {h.medication && (
+        <span className="shrink-0 text-[8px] font-bold text-blue-400 border border-blue-800/40 rounded px-0.5">{h.medication}</span>
+      )}
+    </div>
+  );
+}
+
+// ── Trabajos inline ──
+function WorkoutRow({ w }: { w: WorkoutItem }) {
+  return (
+    <div className="workout-row flex items-start gap-1 text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
+      <span className={`shrink-0 text-[8px] font-bold px-1 py-0.5 rounded border leading-none ${WORKOUT_COLORS[w.workoutType] ?? WORKOUT_COLORS.galopo}`}>
+        {WORKOUT_LABELS[w.workoutType] ?? w.workoutType}
+      </span>
+      <span className="shrink-0 text-gray-500 w-[3.2rem]">{shortDate(w.workoutDate)}</span>
+      {w.distance > 0 && <span className="shrink-0 text-gray-600 w-[2.8rem]">{w.distance}m</span>}
+      {w.daysRest !== null && (
+        <span className={`shrink-0 font-bold w-5 ${
+          (w.daysRest ?? 99) <= 3 ? 'text-green-400' : (w.daysRest ?? 99) <= 7 ? 'text-yellow-500' : 'text-gray-600'
+        }`}>{w.daysRest}d</span>
+      )}
+      {w.splits && <span className="shrink-0 font-mono text-yellow-600/80 w-[3.5rem] truncate">{w.splits}</span>}
+      <span className="flex-1 text-gray-600 italic truncate">{w.comment || w.jockeyName}</span>
+    </div>
+  );
+}
+
+// ── Horse card: programa clásico — datos siempre visibles, historial siempre visible ──
 function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: boolean }) {
-  const [open, setOpen] = useState(false);
   const hasHistory = entry.raceHistory.length > 0;
   const hasWork = entry.workouts.length > 0;
+  const scratched = entry.isScratched;
 
   return (
-    <div className={`border-b border-gray-800/60 last:border-0 ${entry.isScratched ? 'opacity-40' : ''}`}>
+    <div className={`horse-card border-b border-gray-800/60 last:border-0 ${scratched ? 'opacity-50' : ''}`}>
 
-      {/* ── Header row — always visible ── */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-gray-800/30 transition-colors"
-      >
-        {/* Dorsal / result */}
-        <div className="shrink-0 flex flex-col items-center w-7">
-          {entry.finishPosition ? (
-            <>
-              <span className="text-[9px] font-extrabold leading-none" style={{ color: posColor(entry.finishPosition) }}>
+      {/* ── Fila principal: dorsal · nombre · peso · jinete ── */}
+      <div className="px-3 pt-2.5 pb-1">
+        <div className="flex items-start gap-2.5">
+
+          {/* Dorsal */}
+          <div className="shrink-0 flex flex-col items-center pt-0.5">
+            {entry.finishPosition && (
+              <span className="text-[9px] font-extrabold leading-none mb-0.5" style={{ color: posColor(entry.finishPosition) }}>
                 {entry.finishPosition}°
               </span>
-              <span className="w-7 h-7 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-extrabold text-white mt-0.5">
-                {entry.dorsalNumber}
-              </span>
-            </>
-          ) : (
-            <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-extrabold border ${
-              entry.isScratched ? 'bg-red-950/30 border-red-800/30 text-red-400' : 'bg-gray-800 border-gray-700 text-white'
+            )}
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-extrabold border-2 ${
+              scratched
+                ? 'bg-gray-900 border-red-800/40 text-red-400'
+                : entry.finishPosition === 1 ? 'border-yellow-500 text-yellow-400 bg-yellow-950/30'
+                : entry.finishPosition === 2 ? 'border-gray-500 text-gray-300 bg-gray-800'
+                : entry.finishPosition === 3 ? 'border-yellow-700 text-yellow-600 bg-gray-900'
+                : 'border-gray-700 text-white bg-gray-800'
             }`}>
               {entry.dorsalNumber}
             </span>
-          )}
-        </div>
+          </div>
 
-        {/* Horse name + trainer */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`text-sm font-bold leading-tight ${entry.isScratched ? 'line-through text-gray-500' : 'text-white'}`}>
-              {entry.horseName}
-            </span>
-            {entry.isScratched && (
-              <span className="text-[9px] font-bold px-1 py-0.5 rounded border bg-red-950/40 border-red-800/40 text-red-300">RET</span>
-            )}
-            {entry.medication && (
-              <span className="text-[9px] font-bold px-1 py-0.5 rounded border bg-blue-950/40 border-blue-800/40 text-blue-300">
-                {entry.medication.replace('-', '+')}
+          {/* Datos del caballo */}
+          <div className="flex-1 min-w-0">
+            {/* Nombre + badges */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`text-[15px] font-extrabold leading-tight tracking-tight ${scratched ? 'line-through text-gray-600' : 'text-white'}`}>
+                {entry.horseName}
               </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] text-gray-600 truncate">{entry.trainerName}</span>
-            {entry.studName && <span className="text-[9px] text-gray-700 truncate">· {entry.studName}</span>}
-          </div>
-        </div>
-
-        {/* Weight + jockey */}
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-bold text-white">{entry.weightDeclared || '—'}</p>
-          <p className="text-[10px] text-gray-500 truncate max-w-[5rem]">{entry.jockeyName}</p>
-        </div>
-
-        {/* Indicators + chevron */}
-        <div className="shrink-0 flex flex-col items-end gap-0.5 ml-1">
-          <div className="flex gap-1">
-            {hasHistory && <span className="text-[9px] text-gray-600">🏁{entry.raceHistory.length}</span>}
-            {hasWork && <span className="text-[9px] text-gray-600">📋{entry.workouts.length}</span>}
-          </div>
-          <span className={`text-gray-600 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
-        </div>
-      </button>
-
-      {/* ── Expanded: history + workouts ── */}
-      {open && (
-        <div className="px-3 pb-3 space-y-3 bg-gray-900/30">
-
-          {/* Last 4 races */}
-          {hasHistory ? (
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1.5 pt-1">
-                🏁 Últimas carreras
-              </p>
-              <div className="space-y-1">
-                {entry.raceHistory.map((h, i) => (
-                  <div key={i} className="flex items-start gap-2 bg-gray-800/40 rounded-xl px-2 py-1.5">
-                    {/* Position */}
-                    <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-xs font-extrabold border"
-                      style={{
-                        color: posColor(h.finishPosition),
-                        borderColor: 'rgba(75,85,99,0.4)',
-                        backgroundColor: 'rgba(17,24,39,0.6)',
-                      }}>
-                      {h.isScratched ? 'R' : (h.finishPosition ?? '?')}
-                    </span>
-                    {/* Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-bold text-gray-300">{shortDate(h.date)}</span>
-                        <span className="text-[9px] text-gray-600">R{h.meetingNumber} C{h.raceNumber}</span>
-                        <span className="text-[9px] text-gray-600">{h.distance}m</span>
-                        <span className="text-[9px] text-gray-700">D{h.dorsalNumber}</span>
-                        {h.trackName && h.trackName !== entry.trainerName && (
-                          <span className="text-[9px] text-gray-700 truncate">{h.trackName.includes('alencia') ? 'Val' : 'LR'}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        {h.officialTime && (
-                          <span className="text-[9px] font-mono text-yellow-500/70">{h.officialTime}</span>
-                        )}
-                        {h.distanceMargin && (
-                          <span className="text-[9px] text-gray-600">{h.distanceMargin}</span>
-                        )}
-                        {h.jockeyName && (
-                          <span className="text-[9px] text-gray-600 truncate">{h.jockeyName}</span>
-                        )}
-                        {h.medication && (
-                          <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-blue-950/40 border border-blue-800/40 text-blue-400">
-                            {h.medication.replace('-', '+')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-[9px] text-gray-700 pt-1 italic">Sin historial de carreras disponible.</p>
-          )}
-
-          {/* Workouts since last race */}
-          {hasWorkouts && (
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1.5">
-                📋 Trabajos desde última carrera
-              </p>
-              {hasWork ? (
-                <div className="space-y-1">
-                  {entry.workouts.map((w, i) => (
-                    <div key={i} className="flex items-start gap-2 bg-gray-800/40 rounded-xl px-2 py-1.5">
-                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${WORKOUT_COLORS[w.workoutType] ?? WORKOUT_COLORS.galopo}`}>
-                        {WORKOUT_LABELS[w.workoutType] ?? w.workoutType}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold text-gray-300">{shortDate(w.workoutDate)}</span>
-                          {w.distance > 0 && <span className="text-[9px] text-gray-600">{w.distance}m</span>}
-                          {w.daysRest !== null && (
-                            <span className={`text-[9px] font-bold px-1 py-0 rounded border ${
-                              (w.daysRest ?? 99) <= 3 ? 'text-green-400 border-green-800/40 bg-green-950/30'
-                              : (w.daysRest ?? 99) <= 7 ? 'text-yellow-400 border-yellow-800/40 bg-yellow-950/30'
-                              : 'text-gray-500 border-gray-700'
-                            }`}>{w.daysRest}D</span>
-                          )}
-                          {w.jockeyName && <span className="text-[9px] text-gray-600 truncate">{w.jockeyName}</span>}
-                        </div>
-                        {w.splits && (
-                          <p className="text-[9px] font-mono text-yellow-500/70 leading-tight mt-0.5">{w.splits}</p>
-                        )}
-                        {w.comment && (
-                          <p className="text-[9px] text-gray-500 italic leading-tight">{w.comment}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[9px] text-gray-700 italic">Sin trabajos registrados desde su última carrera.</p>
+              {scratched && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-950/60 border border-red-800/50 text-red-300 uppercase tracking-wide">Retirado</span>}
+              {entry.medication && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-950/40 border-blue-800/40 text-blue-300">
+                  {entry.medication}
+                </span>
+              )}
+              {entry.implements && (
+                <span className="text-[9px] text-gray-600 border border-gray-800 rounded px-1">{entry.implements}</span>
               )}
             </div>
-          )}
+
+            {/* Entrenador · Cuadra */}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[11px] text-gray-500">Ent: <span className="text-gray-400">{entry.trainerName || '—'}</span></span>
+              {entry.studName && <span className="text-[11px] text-gray-600">· {entry.studName}</span>}
+            </div>
+          </div>
+
+          {/* Peso + Jinete */}
+          <div className="shrink-0 text-right min-w-[4.5rem]">
+            <p className="text-base font-extrabold text-white leading-tight">{entry.weightDeclared || '—'} <span className="text-xs font-normal text-gray-600">kg</span></p>
+            <p className="text-[11px] text-gray-400 leading-tight">{entry.jockeyName || '—'}</p>
+          </div>
         </div>
-      )}
+
+        {/* ── Historial de carreras — siempre visible si existe ── */}
+        {hasHistory && (
+          <div className="mt-2 ml-10">
+            {/* Cabecera de columnas */}
+            <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-gray-700 pb-0.5">
+              <span className="w-5 text-center">Pos</span>
+              <span className="w-[3.2rem]">Fecha</span>
+              <span className="w-[2.8rem]">Dist</span>
+              <span className="w-4">D#</span>
+              <span className="w-[3.5rem]">Tiempo</span>
+              <span className="w-[2.5rem]">Marg</span>
+              <span className="flex-1">Jinete</span>
+            </div>
+            {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
+          </div>
+        )}
+        {!hasHistory && (
+          <p className="text-[10px] text-gray-800 italic ml-10 mt-1">Sin historial registrado</p>
+        )}
+
+        {/* ── Trabajos — siempre visibles si existen ── */}
+        {hasWorkouts && hasWork && (
+          <div className="mt-1.5 ml-10">
+            <p className="text-[8px] font-bold uppercase tracking-widest text-gray-700 pb-0.5">Trabajos</p>
+            {entry.workouts.map((w, i) => <WorkoutRow key={i} w={w} />)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -328,44 +297,68 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
       {/* ── Print styles ── */}
       <style>{`
         @media print {
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { background: #fff !important; color: #111 !important; }
+          @page { margin: 1cm 1.2cm; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
+          body { background: #fff !important; color: #111 !important; font-size: 10px; }
+
+          /* Ocultar todo excepto el bloque de impresión */
           .no-print { display: none !important; }
-          /* Show ALL races in print, not just selected */
-          .print-all-races > div { display: block !important; }
-          /* Expand all horse cards */
-          .horse-expanded { display: block !important; }
-          /* Race block: avoid cutting mid-horse */
-          .print-race-block { page-break-inside: avoid; margin-bottom: 1.5rem; }
-          .print-horse-row { page-break-inside: avoid; }
-          /* Force black text on white */
-          header, main { background: #fff !important; color: #111 !important; }
-          header { position: static !important; border-bottom: 1px solid #ccc !important; }
-          .bg-gray-950, .bg-gray-900, .bg-gray-800,
-          .bg-gray-900\/30, .bg-gray-800\/40, .bg-gray-900\/50 {
-            background: #fff !important;
-          }
-          .text-white, .text-gray-100, .text-gray-300, .text-gray-400 { color: #111 !important; }
-          .text-gray-500, .text-gray-600, .text-gray-700 { color: #555 !important; }
-          .border-gray-700, .border-gray-800, .border-gray-800\/40,
-          .border-gray-800\/60, .divide-gray-800\/40 > * {
-            border-color: #ddd !important;
-          }
-          /* Sticky header becomes static */
-          .sticky { position: static !important; }
-          /* Hide race selector pills and interactive UI */
-          .race-selector { display: none !important; }
-          .no-print { display: none !important; }
-          /* Hide the interactive single-race view */
-          .print-all-races { display: none !important; }
-          /* Show the full print block */
+          .screen-only { display: none !important; }
           .print-races-full { display: block !important; }
-          /* Workout/history badges keep their colors for readability */
+
+          /* Watermark de marca en cada página */
+          .print-watermark {
+            display: block !important;
+            position: fixed;
+            bottom: 0.4cm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 8px;
+            color: #aaa !important;
+            letter-spacing: 0.05em;
+            border-top: 1px solid #ddd;
+            padding-top: 3px;
+          }
+
+          /* Cabecera de marca en primera página */
+          .print-header {
+            display: flex !important;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #D4AF37;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+          }
+
+          /* Bloques de carrera */
+          .print-race-block { page-break-inside: avoid; margin-bottom: 14px; }
+          .print-horse-row { page-break-inside: avoid; border-bottom: 1px solid #eee; padding: 5px 0; }
+
+          /* Textos */
+          * { color: #111 !important; }
+          .text-gray-400, .text-gray-500, .text-gray-600, .text-gray-700 { color: #555 !important; }
+          .font-mono { font-family: monospace; }
+
+          /* Historial / trabajos inline */
+          .history-row, .workout-row {
+            border-top: 1px solid #eee !important;
+            color: #444 !important;
+          }
+
+          /* Badges de medicación y workout */
+          .print-badge-med { color: #1d4ed8 !important; border: 1px solid #93c5fd !important; }
+          .print-badge-ret { color: #dc2626 !important; font-weight: bold; }
         }
       `}</style>
 
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
+      {/* Watermark siempre en DOM pero solo visible en print */}
+      <div className="print-watermark hidden">
+        Revista Hípica Oficial · {SITE} · Datos INH/HINAVA · Distribución gratuita
+      </div>
+
+      {/* ── Header pantalla ── */}
+      <header className="screen-only sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="text-gray-400 hover:text-white text-lg leading-none shrink-0">←</Link>
@@ -376,7 +369,7 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
               <p className="text-xs text-gray-500 truncate capitalize">{meetingDate}</p>
             </div>
           </div>
-          <div className="no-print flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handlePrint}
               className="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
@@ -392,40 +385,41 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
+      {/* ── Contenido pantalla ── */}
+      <main className="screen-only mx-auto max-w-2xl px-4 py-4 space-y-4">
 
-        {/* Nota si no hay trabajos */}
-        {!hasWorkouts && !loading && (
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3 py-2.5 flex items-center gap-2">
-            <span className="text-sm shrink-0">📋</span>
-            <p className="text-xs text-gray-600">
-              <strong className="text-gray-500">Trabajos no disponibles aún.</strong> Se cargan entre martes y sábado. El historial de carreras sí está activo.
+        {/* Aviso trabajos */}
+        {!hasWorkouts && (
+          <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 px-3 py-2 flex items-center gap-2">
+            <span className="text-xs shrink-0">📋</span>
+            <p className="text-[11px] text-gray-600">
+              <strong className="text-gray-500">Trabajos aún no disponibles.</strong> Se cargan entre martes y sábado.
             </p>
           </div>
         )}
 
-        {/* Selector de carreras */}
-        <div className="race-selector">
-          <p className="text-[10px] text-gray-600 mb-2 font-bold uppercase tracking-wider">Carrera</p>
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+        {/* Selector de carrera */}
+        <div>
+          <p className="text-[9px] text-gray-700 mb-2 font-bold uppercase tracking-wider">Selecciona una carrera</p>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
             {races.map(race => {
               const isSelected = selectedRace === race.raceNumber;
               const hasResult = race.entries.some(e => e.finishPosition !== null);
-              const hasWork = race.entries.some(e => e.workouts.length > 0);
-              const hasHist = race.entries.some(e => e.raceHistory.length > 0);
+              const hasWork   = race.entries.some(e => e.workouts.length > 0);
+              const hasHist   = race.entries.some(e => e.raceHistory.length > 0);
               return (
                 <button key={race.raceId}
                   onClick={() => setSelectedRace(race.raceNumber)}
-                  className={`flex flex-col items-center py-2 px-1 rounded-xl border text-xs font-bold transition-all active:scale-95 ${
-                    isSelected ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-white hover:border-gray-500'
+                  className={`relative flex flex-col items-center py-2 px-1 rounded-xl border text-xs font-bold transition-all active:scale-95 ${
+                    isSelected ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-800 text-white hover:border-gray-600'
                   }`}
                   style={isSelected ? { backgroundColor: GOLD } : {}}>
-                  <span className="text-sm font-extrabold">C{race.raceNumber}</span>
-                  <span className={`text-[9px] ${isSelected ? 'text-black/60' : 'text-gray-500'}`}>{race.distance}m</span>
+                  <span className="text-sm font-extrabold">{race.raceNumber}</span>
+                  <span className={`text-[9px] ${isSelected ? 'text-black/60' : 'text-gray-600'}`}>{race.distance}m</span>
                   <div className="flex gap-0.5 mt-0.5">
-                    {hasHist && <span className="text-[8px] leading-none">🏁</span>}
-                    {hasWork && <span className="text-[8px] leading-none">📋</span>}
-                    {hasResult && <span className="text-[8px] leading-none">✅</span>}
+                    {hasHist   && <span className="text-[7px]">🏁</span>}
+                    {hasWork   && <span className="text-[7px]">📋</span>}
+                    {hasResult && <span className="text-[7px]">✅</span>}
                   </div>
                 </button>
               );
@@ -433,58 +427,51 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
           </div>
         </div>
 
-        {/* Carrera seleccionada — en pantalla muestra la seleccionada, en print muestra todas */}
+        {/* Carrera seleccionada */}
         {currentRace && (
-          <div className="print-all-races">
-            {/* Encabezado de carrera */}
-            <div className="rounded-t-2xl border border-gray-700 bg-gray-900 px-4 py-3">
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
+
+            {/* Cabecera carrera */}
+            <div className="px-4 py-3 border-b border-gray-800">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-extrabold text-white">Carrera {currentRace.raceNumber}</span>
+                    <span className="text-lg font-extrabold text-white leading-none">C{currentRace.raceNumber}</span>
                     {currentRace.annualRaceNumber && (
-                      <span className="text-xs text-gray-600">C{currentRace.annualRaceNumber}</span>
+                      <span className="text-xs text-gray-700 border border-gray-800 rounded px-1">Anual {currentRace.annualRaceNumber}</span>
                     )}
-                    <span className="text-sm text-gray-400">{currentRace.distance} mts</span>
+                    <span className="text-sm font-bold text-gray-300">{currentRace.distance} mts</span>
                     {currentRace.scheduledTime && (
-                      <span className="text-xs text-gray-600">{currentRace.scheduledTime}</span>
+                      <span className="text-xs text-gray-600">· {currentRace.scheduledTime}</span>
+                    )}
+                    {currentRace.status === 'finished' && (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-950/50 border border-green-700/40 text-green-300">✓ Finalizada</span>
                     )}
                   </div>
                   {currentRace.conditions && (
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{currentRace.conditions}</p>
+                    <p className="text-[11px] text-gray-500 mt-1 leading-snug">{currentRace.conditions}</p>
                   )}
-                  {currentRace.prizePool?.bs > 0 && (
-                    <p className="text-xs font-semibold mt-1" style={{ color: GOLD }}>
-                      Premio Bs. {currentRace.prizePool.bs.toLocaleString('es-VE')}
-                      {currentRace.prizePool.usd > 0 && ` · US$ ${currentRace.prizePool.usd.toLocaleString()}`}
+                  {(currentRace.prizePool?.bs > 0 || currentRace.prizePool?.usd > 0) && (
+                    <p className="text-xs font-bold mt-1" style={{ color: GOLD }}>
+                      {currentRace.prizePool.bs > 0 && `Bs. ${currentRace.prizePool.bs.toLocaleString('es-VE')}`}
+                      {currentRace.prizePool.usd > 0 && `  US$ ${currentRace.prizePool.usd.toLocaleString()}`}
                     </p>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1 shrink-0 items-center">
-                  {currentRace.status === 'finished' && (
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-950/50 border border-green-700/40 text-green-300">
-                      🏁 Finalizada
-                    </span>
-                  )}
-                  {currentRace.games.map(g => (
-                    <span key={g} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-500">
-                      {g.replace('_', ' ')}
-                    </span>
-                  ))}
-                </div>
+                {currentRace.games.length > 0 && (
+                  <div className="flex flex-wrap gap-1 shrink-0">
+                    {currentRace.games.map(g => (
+                      <span key={g} className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700/50 text-gray-500 uppercase">
+                        {g.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Columna header */}
-            <div className="border-x border-gray-700 bg-gray-900 px-3 py-1.5 border-y border-gray-800 grid grid-cols-[2rem_1fr_4rem_5rem] gap-x-2 text-[9px] font-bold uppercase tracking-widest text-gray-600">
-              <span className="text-center">#</span>
-              <span>Ejemplar · Entrenador</span>
-              <span className="text-right">Kg · Jinete</span>
-              <span className="text-right">Historial</span>
-            </div>
-
-            {/* Ejemplares — cada uno expandible */}
-            <div className="border-x border-b border-gray-700 bg-gray-900 rounded-b-2xl overflow-hidden divide-y divide-gray-800/40">
+            {/* Participantes */}
+            <div className="divide-y divide-gray-800/50">
               {currentRace.entries.map(entry => (
                 <HorseCard key={entry.dorsalNumber} entry={entry} hasWorkouts={hasWorkouts} />
               ))}
@@ -492,85 +479,141 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
           </div>
         )}
 
-        {/* ── PRINT ONLY: todas las carreras completas ── */}
-        <div className="hidden print-races-full">
-          {races.map(race => (
-            <div key={race.raceId} className="print-race-block mb-6">
-              <div className="border-b-2 border-gray-300 pb-1 mb-2">
-                <span className="font-extrabold text-base">Carrera {race.raceNumber}</span>
-                {race.annualRaceNumber && <span className="text-xs text-gray-500 ml-2">C{race.annualRaceNumber}</span>}
-                <span className="text-sm text-gray-500 ml-2">{race.distance} mts</span>
-                {race.scheduledTime && <span className="text-xs text-gray-500 ml-2">{race.scheduledTime}</span>}
-                {race.conditions && <p className="text-xs text-gray-500 mt-0.5">{race.conditions}</p>}
-              </div>
-              {race.entries.map(entry => (
-                <div key={entry.dorsalNumber} className="print-horse-row border border-gray-200 rounded p-2 mb-1.5">
-                  <div className="flex items-start gap-2">
-                    <span className="font-extrabold text-base w-6 shrink-0 text-center">{entry.dorsalNumber}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm">{entry.horseName}</span>
-                        {entry.isScratched && <span className="text-xs text-red-600 font-bold">RETIRADO</span>}
-                        {entry.medication && <span className="text-xs text-blue-700 font-bold">{entry.medication}</span>}
-                        <span className="text-xs text-gray-500">{entry.weightDeclared} kg</span>
-                        <span className="text-xs text-gray-500">Jinete: {entry.jockeyName}</span>
-                      </div>
-                      <p className="text-xs text-gray-500">Ent: {entry.trainerName}{entry.studName ? ` · ${entry.studName}` : ''}</p>
-                      {entry.raceHistory.length > 0 && (
-                        <div className="mt-1">
-                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">Últimas carreras</p>
-                          <div className="flex flex-col gap-0.5">
-                            {entry.raceHistory.map((h, i) => (
-                              <div key={i} className="flex items-center gap-1.5 text-[10px]">
-                                <span className="font-bold w-4 text-center">{h.isScratched ? 'R' : (h.finishPosition ?? '?')}</span>
-                                <span className="text-gray-500">{shortDate(h.date)}</span>
-                                <span className="text-gray-500">R{h.meetingNumber} C{h.raceNumber}</span>
-                                <span className="text-gray-500">{h.distance}m</span>
-                                {h.officialTime && <span className="font-mono text-gray-600">{h.officialTime}</span>}
-                                {h.distanceMargin && <span className="text-gray-500">{h.distanceMargin}</span>}
-                                <span className="text-gray-500 truncate">{h.jockeyName}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {entry.workouts.length > 0 && (
-                        <div className="mt-1">
-                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">Trabajos</p>
-                          <div className="flex flex-col gap-0.5">
-                            {entry.workouts.map((w, i) => (
-                              <div key={i} className="flex items-start gap-1.5 text-[10px]">
-                                <span className="font-bold">{WORKOUT_LABELS[w.workoutType] ?? w.workoutType}</span>
-                                <span className="text-gray-500">{shortDate(w.workoutDate)}</span>
-                                {w.distance > 0 && <span className="text-gray-500">{w.distance}m</span>}
-                                {w.daysRest !== null && <span className="text-gray-500">{w.daysRest}D</span>}
-                                {w.splits && <span className="font-mono text-gray-600">{w.splits}</span>}
-                                {w.comment && <span className="text-gray-500 italic">{w.comment}</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
         {!currentRace && (
-          <div className="text-center py-10 text-gray-700">
-            <p className="text-4xl mb-3">☝️</p>
-            <p className="text-sm">Selecciona una carrera</p>
+          <div className="text-center py-12 text-gray-800">
+            <p className="text-3xl mb-2">☝️</p>
+            <p className="text-sm">Selecciona una carrera arriba</p>
           </div>
         )}
 
-        <p className="text-center text-[10px] text-gray-700 pb-4">
-          Datos oficiales INH/HINAVA · Desafío Hípico · Toca cada caballo para ver historial y trabajos
+        <p className="text-center text-[10px] text-gray-800 pb-4">
+          {SITE} · Datos oficiales INH/HINAVA
         </p>
-
       </main>
+
+      {/* ── BLOQUE IMPRESIÓN: todas las carreras, diseño blanco/negro con marca ── */}
+      <div className="print-races-full hidden">
+
+        {/* Cabecera de la revista impresa */}
+        <div className="print-header">
+          <div>
+            <p style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.5px' }}>REVISTA HÍPICA DIGITAL</p>
+            <p style={{ fontSize: '11px', color: '#555' }}>
+              {trackEmoji} {meeting.trackName} · Reunión {meeting.meetingNumber} · <span style={{ textTransform: 'capitalize' }}>{meetingDate}</span>
+            </p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: '#D4AF37' }}>{SITE}</p>
+            <p style={{ fontSize: '9px', color: '#888' }}>Datos oficiales INH/HINAVA</p>
+          </div>
+        </div>
+
+        {races.map(race => (
+          <div key={race.raceId} className="print-race-block">
+            {/* Cabecera de carrera */}
+            <div style={{ borderBottom: '1.5px solid #222', paddingBottom: '4px', marginBottom: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: 900 }}>CARRERA {race.raceNumber}</span>
+                {race.annualRaceNumber && <span style={{ fontSize: '10px', color: '#666', marginLeft: '6px' }}>· Anual {race.annualRaceNumber}</span>}
+                <span style={{ fontSize: '11px', fontWeight: 700, marginLeft: '8px' }}>{race.distance} mts</span>
+                {race.scheduledTime && <span style={{ fontSize: '10px', color: '#666', marginLeft: '6px' }}>{race.scheduledTime}</span>}
+                {race.conditions && <p style={{ fontSize: '9px', color: '#666', marginTop: '1px' }}>{race.conditions}</p>}
+              </div>
+              {(race.prizePool?.bs > 0 || race.prizePool?.usd > 0) && (
+                <div style={{ textAlign: 'right' }}>
+                  {race.prizePool.bs > 0 && <p style={{ fontSize: '10px', fontWeight: 700 }}>Bs. {race.prizePool.bs.toLocaleString('es-VE')}</p>}
+                  {race.prizePool.usd > 0 && <p style={{ fontSize: '10px', fontWeight: 700 }}>US$ {race.prizePool.usd.toLocaleString()}</p>}
+                </div>
+              )}
+            </div>
+
+            {/* Caballos */}
+            {race.entries.map(entry => (
+              <div key={entry.dorsalNumber} className="print-horse-row">
+                {/* Fila principal */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  {/* Dorsal */}
+                  <span style={{ width: '20px', textAlign: 'center', fontWeight: 900, fontSize: '14px', flexShrink: 0, paddingTop: '1px',
+                    color: entry.finishPosition === 1 ? '#b7860a' : entry.finishPosition === 2 ? '#555' : '#111' }}>
+                    {entry.dorsalNumber}
+                  </span>
+                  {/* Datos */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800, textDecoration: entry.isScratched ? 'line-through' : 'none', color: entry.isScratched ? '#888' : '#000' }}>
+                        {entry.horseName}
+                      </span>
+                      {entry.isScratched && <span className="print-badge-ret" style={{ fontSize: '9px' }}>RETIRADO</span>}
+                      {entry.medication && <span className="print-badge-med" style={{ fontSize: '8px', padding: '0 3px', borderRadius: '2px' }}>{entry.medication}</span>}
+                      {entry.implements && <span style={{ fontSize: '8px', color: '#666' }}>{entry.implements}</span>}
+                    </div>
+                    <p style={{ fontSize: '9px', color: '#555', margin: '1px 0 0' }}>
+                      Ent: {entry.trainerName || '—'}{entry.studName ? ` · ${entry.studName}` : ''}
+                    </p>
+                    {/* Historial */}
+                    {entry.raceHistory.length > 0 && (
+                      <div style={{ marginTop: '3px', paddingLeft: '4px', borderLeft: '2px solid #eee' }}>
+                        <p style={{ fontSize: '7px', fontWeight: 700, textTransform: 'uppercase', color: '#888', letterSpacing: '0.05em', marginBottom: '1px' }}>Últimas carreras</p>
+                        {entry.raceHistory.map((h, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '6px', fontSize: '9px', color: '#444', padding: '1px 0', borderTop: i > 0 ? '1px solid #f0f0f0' : 'none' }}>
+                            <span style={{ width: '14px', textAlign: 'center', fontWeight: 800,
+                              color: h.finishPosition === 1 ? '#b7860a' : h.finishPosition === 2 ? '#666' : '#222' }}>
+                              {h.isScratched ? 'R' : (h.finishPosition ?? '?')}
+                            </span>
+                            <span style={{ width: '46px', color: '#666' }}>{shortDate(h.date)}</span>
+                            <span style={{ width: '40px', color: '#666' }}>{h.distance}m</span>
+                            <span style={{ width: '16px', color: '#888' }}>#{h.dorsalNumber}</span>
+                            <span style={{ width: '50px', fontFamily: 'monospace', color: '#444' }}>{h.officialTime ?? '—'}</span>
+                            <span style={{ width: '36px', color: '#666' }}>{h.distanceMargin ?? ''}</span>
+                            <span style={{ flex: 1, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.jockeyName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Trabajos */}
+                    {entry.workouts.length > 0 && (
+                      <div style={{ marginTop: '3px', paddingLeft: '4px', borderLeft: '2px solid #dbeafe' }}>
+                        <p style={{ fontSize: '7px', fontWeight: 700, textTransform: 'uppercase', color: '#888', letterSpacing: '0.05em', marginBottom: '1px' }}>Trabajos</p>
+                        {entry.workouts.map((w, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '6px', fontSize: '9px', color: '#444', padding: '1px 0', borderTop: i > 0 ? '1px solid #f0f0f0' : 'none' }}>
+                            <span style={{ width: '44px', fontWeight: 700, color: '#1d4ed8' }}>{WORKOUT_LABELS[w.workoutType] ?? w.workoutType}</span>
+                            <span style={{ width: '46px', color: '#666' }}>{shortDate(w.workoutDate)}</span>
+                            {w.distance > 0 && <span style={{ width: '36px', color: '#666' }}>{w.distance}m</span>}
+                            {w.daysRest !== null && <span style={{ width: '24px', fontWeight: 700, color: (w.daysRest ?? 99) <= 7 ? '#15803d' : '#666' }}>{w.daysRest}d</span>}
+                            {w.splits && <span style={{ width: '50px', fontFamily: 'monospace', color: '#444' }}>{w.splits}</span>}
+                            <span style={{ flex: 1, color: '#666', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {w.comment || w.jockeyName}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Peso + Jinete alineados derecha */}
+                  <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '70px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 900, margin: 0 }}>{entry.weightDeclared || '—'} <span style={{ fontSize: '9px', fontWeight: 400, color: '#666' }}>kg</span></p>
+                    <p style={{ fontSize: '9px', color: '#555', margin: '1px 0 0' }}>{entry.jockeyName || '—'}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Juegos de esta carrera */}
+            {race.games.length > 0 && (
+              <p style={{ fontSize: '8px', color: '#888', marginTop: '4px', textAlign: 'right' }}>
+                Juegos: {race.games.map(g => g.replace(/_/g, ' ')).join(' · ')}
+              </p>
+            )}
+          </div>
+        ))}
+
+        {/* Pie de página de marca */}
+        <div style={{ borderTop: '1px solid #ddd', marginTop: '16px', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '8px', color: '#aaa' }}>
+          <span>Generado por {SITE} · Datos oficiales INH/HINAVA</span>
+          <span>Distribución gratuita — {new Date().toLocaleDateString('es-VE')}</span>
+        </div>
+      </div>
+
     </div>
   );
 }
