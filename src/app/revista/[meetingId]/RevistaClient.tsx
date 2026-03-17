@@ -135,8 +135,11 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
         <span className="text-[10px] text-gray-600 shrink-0">{h.distance}m</span>
         {diff && <span className="text-[10px] text-gray-500 shrink-0">{diff}</span>}
       </div>
-      {/* Línea 2: tiempos + nombre ganador/2° */}
+      {/* Línea 2: jinete · tiempos + nombre ganador/2° */}
       <div className="flex items-center gap-2">
+        {h.jockeyName && (
+          <span className="text-[10px] text-gray-500 shrink-0 italic">{h.jockeyName}</span>
+        )}
         {!isWinner && h.winnerTime && (
           <span className="text-[10px] font-mono text-yellow-500/60 shrink-0">1°:{h.winnerTime}</span>
         )}
@@ -532,6 +535,9 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
                               {h.officialTime ?? '—'}
                             </span>
                             <span style={{ width: '36px', color: '#666' }} title="Dif vs 1°">{diff2}</span>
+                            <span style={{ width: '80px', color: '#777', fontSize: '8px', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {h.jockeyName ?? ''}
+                            </span>
                             <span style={{ flex: 1, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '8px' }}>
                               {isW2 ? (h.secondName ? `2° ${h.secondName}` : '') : (h.winnerName ? `1° ${h.winnerName}` : '')}
                             </span>
