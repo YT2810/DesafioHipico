@@ -11,6 +11,8 @@ interface RaceHistoryItem {
   trackName: string;
   meetingNumber: number;
   raceNumber: number;
+  annualRaceNumber: string | null;
+  trackCode: string;
   distance: number;
   conditions: string;
   dorsalNumber: number;
@@ -20,6 +22,7 @@ interface RaceHistoryItem {
   finishPosition: number | null;
   officialTime: string | null;
   winnerTime: string | null;
+  diffVsFirst: string | null;
   distanceMargin: string | null;
   isScratched: boolean;
 }
@@ -73,6 +76,7 @@ interface MeetingData {
   status: string;
   trackName: string;
   trackLocation: string;
+  trackCode: string;
   isValencia: boolean;
 }
 
@@ -99,17 +103,31 @@ function shortDate(iso: string) {
   return d.toLocaleDateString('es-VE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
+// ── Race label helper: C089, V012, etc. ──
+function raceLabel(trackCode: string, annualRaceNumber: string | null, raceNumber: number): string {
+  const prefix = trackCode || '';
+  if (annualRaceNumber) {
+    // annualRaceNumber may already contain letters like "C089" or just "089"
+    const clean = annualRaceNumber.replace(/^[a-zA-Z]+/, '');
+    return `${prefix}${clean}`;
+  }
+  return `${prefix}${raceNumber}`;
+}
+
 // ── Historial inline (últimas 4 carreras) — siempre visible ──
 function HistoryRow({ h }: { h: RaceHistoryItem }) {
   const pos = h.isScratched ? 'R' : (h.finishPosition ?? '?');
   const col = posColor(h.finishPosition);
   const isWinner = h.finishPosition === 1;
+  const diff = isWinner ? 'GANÓ' : (h.diffVsFirst ?? h.distanceMargin ?? '');
   return (
     <div className="history-row flex items-center gap-1 text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
-      {/* Posición */}
-      <span className="shrink-0 w-5 text-center font-extrabold" style={{ color: col }}>{pos}</span>
       {/* Fecha */}
       <span className="shrink-0 text-gray-500 w-[3.2rem]">{shortDate(h.date)}</span>
+      {/* Carrera anual con prefijo hipódromo */}
+      <span className="shrink-0 text-gray-600 w-[3rem] font-mono text-[9px]">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
+      {/* Posición */}
+      <span className="shrink-0 w-4 text-center font-extrabold" style={{ color: col }}>{pos}</span>
       {/* Dist */}
       <span className="shrink-0 text-gray-600 w-[2.6rem]">{h.distance}m</span>
       {/* Dorsal */}
@@ -122,8 +140,8 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
       <span className="shrink-0 font-mono w-[3.4rem]" style={{ color: col }} title="Tiempo del ejemplar">
         {h.officialTime ?? '—'}
       </span>
-      {/* Margen vs 1° */}
-      <span className="shrink-0 text-gray-600 w-[2.5rem] truncate" title="Diferencia vs 1°">{isWinner ? 'GANÓ' : (h.distanceMargin ?? '')}</span>
+      {/* Diff vs 1° calculada desde tiempos */}
+      <span className="shrink-0 text-gray-600 w-[3rem] truncate" title="Diferencia vs 1°">{diff}</span>
       {/* Jinete */}
       <span className="flex-1 text-gray-600 truncate">{h.jockeyName}</span>
       {/* Medicación */}
@@ -223,13 +241,14 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
           <div className="mt-2 ml-10">
             {/* Cabecera de columnas */}
             <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-gray-700 pb-0.5">
-              <span className="w-5 text-center">Pos</span>
               <span className="w-[3.2rem]">Fecha</span>
+              <span className="w-[3rem]">Carrera</span>
+              <span className="w-4 text-center">Pos</span>
               <span className="w-[2.6rem]">Dist</span>
               <span className="w-4">D#</span>
               <span className="w-[3.4rem] text-yellow-600/50">T.1°</span>
               <span className="w-[3.4rem]">T.Ej</span>
-              <span className="w-[2.5rem]">Diff</span>
+              <span className="w-[3rem]">Diff</span>
               <span className="flex-1">Jinete</span>
             </div>
             {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
@@ -575,13 +594,17 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
                         <p style={{ fontSize: '7px', fontWeight: 700, textTransform: 'uppercase', color: '#888', letterSpacing: '0.05em', marginBottom: '1px' }}>Últimas carreras</p>
                         {entry.raceHistory.map((h, i) => {
                           const isW2 = h.finishPosition === 1;
+                          const diff2 = isW2 ? 'GANÓ' : (h.diffVsFirst ?? h.distanceMargin ?? '');
                           return (
                           <div key={i} style={{ display: 'flex', gap: '5px', fontSize: '9px', color: '#444', padding: '1px 0', borderTop: i > 0 ? '1px solid #f0f0f0' : 'none' }}>
+                            <span style={{ width: '44px', color: '#666' }}>{shortDate(h.date)}</span>
+                            <span style={{ width: '36px', fontFamily: 'monospace', color: '#555' }}>
+                              {raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}
+                            </span>
                             <span style={{ width: '14px', textAlign: 'center', fontWeight: 800,
                               color: isW2 ? '#b7860a' : h.finishPosition === 2 ? '#666' : '#222' }}>
                               {h.isScratched ? 'R' : (h.finishPosition ?? '?')}
                             </span>
-                            <span style={{ width: '44px', color: '#666' }}>{shortDate(h.date)}</span>
                             <span style={{ width: '38px', color: '#666' }}>{h.distance}m</span>
                             <span style={{ width: '16px', color: '#999' }}>#{h.dorsalNumber}</span>
                             <span style={{ width: '48px', fontFamily: 'monospace', color: '#999' }} title="T. Ganador">
@@ -590,9 +613,7 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
                             <span style={{ width: '48px', fontFamily: 'monospace', color: isW2 ? '#b7860a' : '#333', fontWeight: isW2 ? 700 : 400 }} title="T. Ejemplar">
                               {h.officialTime ?? '—'}
                             </span>
-                            <span style={{ width: '34px', color: '#666' }} title="Dif vs 1°">
-                              {isW2 ? 'GANÓ' : (h.distanceMargin ?? '')}
-                            </span>
+                            <span style={{ width: '38px', color: '#666' }} title="Dif vs 1°">{diff2}</span>
                             <span style={{ flex: 1, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.jockeyName}</span>
                           </div>
                           );
