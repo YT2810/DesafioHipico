@@ -6,8 +6,7 @@ import Track from '@/models/Track';
 import Horse from '@/models/Horse';
 import { parseWorkoutsPdf, extractWorkoutDate } from '@/services/parsers/workouts';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   const token = await getToken({ req });
@@ -29,6 +28,8 @@ export async function POST(req: NextRequest) {
     if (!trackId) return NextResponse.json({ error: 'Falta trackId' }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
     const parsed = await pdfParse(buffer);
     const text: string = parsed.text;
 
