@@ -26,22 +26,19 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
     const trackIdFilter = searchParams.get('trackId');
 
-    // Find meetings that have at least one finished race — regardless of meeting.status
-    // (status may still be 'scheduled' even when results have been loaded)
-    // Also include races where entries have finishPosition set (in case race.status was not updated)
-    const [meetingsFromStatus, meetingsFromEntries] = await Promise.all([
+    // Find meetings that have at least one race with results.
+    // Primary: hasResults:true flag (set when results are saved).
+    // Fallback: status:finished OR entries with finishPosition (legacy data without the flag).
+    const [meetingsFromFlag, meetingsFromStatus, meetingsFromEntries] = await Promise.all([
+      Race.distinct('meetingId', { hasResults: true }),
       Race.distinct('meetingId', { status: 'finished' }),
-      Entry.distinct('raceId').then(async (raceIds: any[]) => {
-        // Get raceIds that have at least one entry with a finishPosition
-        const racesWithResults = await Entry.distinct('raceId', {
-          'result.finishPosition': { $exists: true, $ne: null },
-        });
-        if (!racesWithResults.length) return [];
-        const races = await Race.find({ _id: { $in: racesWithResults } }).distinct('meetingId');
-        return races;
+      Entry.distinct('raceId', { 'result.finishPosition': { $exists: true, $ne: null } }).then(async (raceIds: any[]) => {
+        if (!raceIds.length) return [];
+        return Race.distinct('meetingId', { _id: { $in: raceIds } });
       }),
     ]);
     const allMeetingIds = [...new Set([
+      ...meetingsFromFlag.map((id: any) => id.toString()),
       ...meetingsFromStatus.map((id: any) => id.toString()),
       ...meetingsFromEntries.map((id: any) => id.toString()),
     ])];

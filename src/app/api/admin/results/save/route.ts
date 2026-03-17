@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
 
     // Update race: status, time, splits, payouts
     race.status = 'finished';
+    race.hasResults = true;
     if (annualRaceNumber) race.annualRaceNumber = annualRaceNumber;
     if (officialTime) race.officialTime = officialTime;
     if (timeSplits?.length) race.timeSplits = timeSplits;
