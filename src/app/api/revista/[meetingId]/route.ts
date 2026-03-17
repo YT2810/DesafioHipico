@@ -83,16 +83,29 @@ export async function GET(
       .populate({ path: 'raceId', model: Race })
       .lean() as any[];
 
-    // Fetch winner (pos=1) entries for all past races to get winner times
+    // Fetch winner (pos=1) and 2nd place entries for all past races
     const pastRaceIds = [...new Set(pastEntries.map((pe: any) => pe.raceId?._id?.toString()).filter(Boolean))];
-    const winnerEntries = await Entry.find({
+    const top2Entries = await Entry.find({
       raceId: { $in: pastRaceIds },
-      'result.finishPosition': 1,
-    }).select('raceId result').lean() as any[];
+      'result.finishPosition': { $in: [1, 2] },
+    })
+      .select('raceId result horseId')
+      .populate({ path: 'horseId', model: Horse, select: 'name' })
+      .lean() as any[];
+
+    // Maps: raceId → { winnerTime, winnerName, secondName }
     const winnerTimeByRace = new Map<string, string>();
-    for (const w of winnerEntries) {
-      if (w.result?.officialTime) {
-        winnerTimeByRace.set(w.raceId?.toString(), w.result.officialTime);
+    const winnerNameByRace = new Map<string, string>();
+    const secondNameByRace = new Map<string, string>();
+    for (const e of top2Entries) {
+      const rid = e.raceId?.toString();
+      if (!rid) continue;
+      const horseName = (e.horseId as any)?.name ?? '';
+      if (e.result?.finishPosition === 1) {
+        if (e.result?.officialTime) winnerTimeByRace.set(rid, e.result.officialTime);
+        winnerNameByRace.set(rid, horseName);
+      } else if (e.result?.finishPosition === 2) {
+        secondNameByRace.set(rid, horseName);
       }
     }
 
@@ -149,6 +162,8 @@ export async function GET(
             distanceMargin: pe.result?.distanceMargin ?? null,
             annualRaceNumber: race.annualRaceNumber ?? null,
             trackCode: resolveTrackCode((pm as any).trackId),
+            winnerName: winnerNameByRace.get(race._id?.toString()) ?? null,
+            secondName: secondNameByRace.get(race._id?.toString()) ?? null,
             isScratched: pe.result?.isScratched ?? false,
           };
         })
