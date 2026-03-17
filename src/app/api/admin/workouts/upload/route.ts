@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
 import connectMongo from '@/lib/mongodb';
 import WorkoutEntry from '@/models/WorkoutEntry';
 import Track from '@/models/Track';
@@ -9,14 +8,6 @@ import { parseWorkoutsPdf, extractWorkoutDate } from '@/services/parsers/workout
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const token = await getToken({ req });
-  if (!token || !['admin', 'staff'].includes((token.roles as string[] | undefined)?.[0] ?? '')) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
-  const roles = token.roles as string[] | undefined;
-  if (!roles?.some(r => ['admin', 'staff'].includes(r))) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
 
   try {
     const form = await req.formData();
