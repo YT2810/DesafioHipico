@@ -182,8 +182,7 @@ export default function HomePage() {
               const isValencia = m.trackName.toLowerCase().includes('valencia');
               const trackLabel = isValencia ? '🏟 Valencia' : '🏇 La Rinconada';
               return (
-                <Link key={m.id} href={`/programa/${m.id}`}
-                  className="flex items-center gap-3 bg-gray-900 border border-gray-800 hover:border-yellow-800/40 rounded-2xl px-4 py-3 transition-colors group">
+                <div key={m.id} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
                   <div className="shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-black font-bold text-xs"
                     style={{ backgroundColor: GOLD }}>
                     <span className="text-base font-extrabold leading-none">{d.getUTCDate()}</span>
@@ -191,10 +190,19 @@ export default function HomePage() {
                   </div>
                   <div className="flex-1 text-left min-w-0">
                     <p className="text-sm font-bold text-white truncate">{trackLabel} · Reunión {m.meetingNumber}</p>
-                    <p className="text-xs text-gray-500">{m.raceCount} carreras programadas · Ver inscritos</p>
+                    <p className="text-xs text-gray-500">{m.raceCount} carreras programadas</p>
                   </div>
-                  <span className="text-gray-700 group-hover:text-yellow-600 transition-colors text-lg">›</span>
-                </Link>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Link href={`/revista/${m.id}`}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold border border-yellow-700/40 text-yellow-400 hover:bg-yellow-900/20 transition-colors">
+                      📰 Revista
+                    </Link>
+                    <Link href={`/programa/${m.id}`}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold border border-gray-700 text-gray-400 hover:border-gray-500 transition-colors">
+                      Inscritos
+                    </Link>
+                  </div>
+                </div>
               );
             })}
           </div>
