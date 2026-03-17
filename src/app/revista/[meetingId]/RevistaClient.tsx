@@ -108,7 +108,7 @@ function raceLabel(trackCode: string, annualRaceNumber: string | null, raceNumbe
   const prefix = trackCode || '';
   if (annualRaceNumber) {
     // annualRaceNumber may already contain letters like "C089" or just "089"
-    const clean = annualRaceNumber.replace(/^[a-zA-Z]+/, '');
+    const clean = String(annualRaceNumber).replace(/^[a-zA-Z]+/, '');
     return `${prefix}${clean}`;
   }
   return `${prefix}${raceNumber}`;
