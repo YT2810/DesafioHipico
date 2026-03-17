@@ -6,7 +6,8 @@ import Track from '@/models/Track';
 import Horse from '@/models/Horse';
 import { parseWorkoutsPdf, extractWorkoutDate } from '@/services/parsers/workouts';
 
-const pdfParse = require('@/lib/pdf-parse.js');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse');
 
 export async function POST(req: NextRequest) {
   const token = await getToken({ req });
