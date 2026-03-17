@@ -28,10 +28,29 @@ export async function GET(req: Request) {
 
     // Find meetings that have at least one finished race — regardless of meeting.status
     // (status may still be 'scheduled' even when results have been loaded)
-    const meetingsWithResults = await Race.distinct('meetingId', { status: 'finished' });
-    if (meetingsWithResults.length === 0) {
+    // Also include races where entries have finishPosition set (in case race.status was not updated)
+    const [meetingsFromStatus, meetingsFromEntries] = await Promise.all([
+      Race.distinct('meetingId', { status: 'finished' }),
+      Entry.distinct('raceId').then(async (raceIds: any[]) => {
+        // Get raceIds that have at least one entry with a finishPosition
+        const racesWithResults = await Entry.distinct('raceId', {
+          'result.finishPosition': { $exists: true, $ne: null },
+        });
+        if (!racesWithResults.length) return [];
+        const races = await Race.find({ _id: { $in: racesWithResults } }).distinct('meetingId');
+        return races;
+      }),
+    ]);
+    const allMeetingIds = [...new Set([
+      ...meetingsFromStatus.map((id: any) => id.toString()),
+      ...meetingsFromEntries.map((id: any) => id.toString()),
+    ])];
+    if (allMeetingIds.length === 0) {
       return NextResponse.json({ meetings: [], total: 0, page, totalPages: 0 });
     }
+    // Convert back to ObjectIds for MongoDB query
+    const { Types } = await import('mongoose');
+    const meetingsWithResults = allMeetingIds.map(id => new Types.ObjectId(id));
 
     const meetingFilter: any = { _id: { $in: meetingsWithResults } };
     if (trackIdFilter) meetingFilter.trackId = trackIdFilter;
@@ -50,8 +69,14 @@ export async function GET(req: Request) {
       meetings.map(async (m: any) => {
         const track = m.trackId as any;
 
-        // Fetch finished races for this meeting
-        const races = await Race.find({ meetingId: m._id, status: 'finished' })
+        // Fetch races that are finished OR have entries with results
+        const finishedRaceIds = await Entry.distinct('raceId', {
+          'result.finishPosition': { $exists: true, $ne: null },
+        });
+        const races = await Race.find({
+          meetingId: m._id,
+          $or: [{ status: 'finished' }, { _id: { $in: finishedRaceIds } }],
+        })
           .sort({ raceNumber: 1 })
           .lean() as any[];
 
