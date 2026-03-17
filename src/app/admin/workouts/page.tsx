@@ -39,14 +39,18 @@ export default function AdminWorkoutsPage() {
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [trackError, setTrackError] = useState('');
+
   useEffect(() => {
-    fetch('/api/admin/tracks')
+    fetch('/api/tracks')
       .then(r => r.json())
       .then(d => {
+        if (d.error) { setTrackError(d.error); return; }
         setTracks(d.tracks ?? []);
         if (d.tracks?.length > 0) setTrackId(d.tracks[0]._id);
+        if ((d.tracks ?? []).length === 0) setTrackError('No hay hipódromos en la base de datos.');
       })
-      .catch(() => {});
+      .catch(() => setTrackError('No se pudo cargar la lista de hipódromos. Verifica tu sesión.'));
   }, []);
 
   function handleBulkSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -57,11 +61,12 @@ export default function AdminWorkoutsPage() {
   async function handleBulkUpload() {
     if (!trackId || bulkFiles.length === 0) return;
     setBulkRunning(true);
-    for (let i = 0; i < bulkFiles.length; i++) {
+    const files = bulkFiles.map(f => f.file); // capture before async loop
+    for (let i = 0; i < files.length; i++) {
       setBulkFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'uploading' } : f));
       try {
         const form = new FormData();
-        form.append('file', bulkFiles[i].file);
+        form.append('file', files[i]);
         form.append('trackId', trackId);
         const res = await fetch('/api/admin/workouts/upload', { method: 'POST', body: form });
         const data = await res.json();
@@ -144,10 +149,28 @@ export default function AdminWorkoutsPage() {
         {/* Hipódromo */}
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
           <label className="block text-xs font-semibold text-gray-400 mb-1">Hipódromo</label>
-          <select value={trackId} onChange={e => setTrackId(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-600">
-            {tracks.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-          </select>
+          {tracks.length > 0 ? (
+            <select value={trackId} onChange={e => setTrackId(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-600">
+              {tracks.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+            </select>
+          ) : trackError ? (
+            <div className="space-y-2">
+              <div className="rounded-xl bg-red-950/30 border border-red-800/40 px-3 py-2">
+                <p className="text-xs text-red-400">⚠️ {trackError}</p>
+                <p className="text-[10px] text-red-400/60 mt-0.5">Escribe el nombre manualmente para continuar:</p>
+              </div>
+              <input
+                type="text"
+                placeholder="ej: La Rinconada"
+                value={trackId}
+                onChange={e => setTrackId(e.target.value)}
+                className="w-full bg-gray-800 border border-red-700/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-600"
+              />
+            </div>
+          ) : (
+            <div className="rounded-xl bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-500 animate-pulse">Cargando...</div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -169,10 +192,14 @@ export default function AdminWorkoutsPage() {
               <input ref={bulkRef} type="file" accept=".pdf" multiple onChange={handleBulkSelect}
                 className="w-full text-sm text-gray-300 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:text-black cursor-pointer" />
               {bulkFiles.length > 0 && (
-                <button onClick={handleBulkUpload} disabled={bulkRunning || !trackId}
+                <button id="bulk-upload-btn" onClick={handleBulkUpload} disabled={bulkRunning || !trackId}
                   className="w-full py-3 rounded-xl text-sm font-bold text-black disabled:opacity-40"
                   style={{ backgroundColor: GOLD }}>
-                  {bulkRunning ? `Subiendo... (${bulkDone}/${bulkFiles.length})` : `⬆️ Subir ${bulkFiles.length} archivos`}
+                  {bulkRunning
+                    ? `Subiendo ${bulkDone + 1} de ${bulkFiles.length}...`
+                    : bulkDone === bulkFiles.length && bulkFiles.length > 0
+                    ? `✅ Completado — ${bulkTotalInserted} trabajos importados`
+                    : `⬆️ Subir ${bulkFiles.length} archivos`}
                 </button>
               )}
             </div>
