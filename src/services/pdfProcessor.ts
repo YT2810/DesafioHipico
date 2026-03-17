@@ -141,30 +141,41 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (dm) distance = parseInt(dm[1]);
   }
 
-  // "Carrera Nro:Llamado:\n9" — value on next line is the daily raceNumber (llamado may be separate)
+  // "Carrera Nro:Llamado:\n476" — pdf-parse concatenates llamado+raceNumber on one line
+  // e.g. "476" = llamado=47, raceNro=6 (raceNumber already known from distLine)
+  // e.g. "387" = llamado=38, raceNro=7
   const valLine = block.match(/Carrera\s+Nro:Llamado:\s*\n?(\d+)/i);
   if (valLine) {
-    const val = parseInt(valLine[1]);
-    if (!raceNumber) raceNumber = val;
-    else llamado = val; // if raceNumber already known from distLine, this is llamado
+    const val = valLine[1];
+    if (raceNumber) {
+      // raceNumber already known — strip it from the RIGHT of val to get llamado
+      const rnStr = raceNumber.toString();
+      if (val.endsWith(rnStr) && val.length > rnStr.length) {
+        llamado = parseInt(val.slice(0, val.length - rnStr.length)) || 0;
+      } else {
+        llamado = parseInt(val) || 0;
+      }
+    } else {
+      raceNumber = parseInt(val.slice(-2)) || parseInt(val.slice(-1)) || 0;
+      llamado = parseInt(val.slice(0, val.length - raceNumber.toString().length)) || 0;
+    }
   }
 
-  // pdf-parse renders the INH table header as two possible formats:
-  // A) Labels concatenated: "Carrera Anual Nro.:Hora:\n1\n06:30 p. m."
-  // B) Labels separated:    "Carrera Anual Nro.:\n1\nHora:\n06:30 p. m."
-  // In both cases the annual number is an integer on its own line between the labels.
-  const annualBlockA = block.match(/Carrera\s+Anual\s+Nro\.?:Hora:\s*\n(\d{1,3})(?!\d)/i);
-  const annualBlockB = block.match(/Carrera\s+Anual\s+Nro\.?:\s*\n(\d{1,3})(?!\d)/i);
+  // pdf-parse renders the INH table as:
+  // With annual number:    "Carrera Anual Nro.:Hora:\n122\n01:25 p. m." (number on its own line, NOT followed by ':')
+  // Without annual number: "Carrera Anual Nro.:Hora:\n01:25 p. m."      (hour directly, digits followed by ':')
+  // Also format B:         "Carrera Anual Nro.:\n122\nHora:\n01:25 p. m."
+  // Key: annual number is NEVER followed by ':' on the same line (hours are 'HH:MM')
+  const annualBlockA = block.match(/Carrera\s+Anual\s+Nro\.?:Hora:\s*\n(\d{1,3})\n/i);
+  const annualBlockB = block.match(/Carrera\s+Anual\s+Nro\.?:\s*\n(\d{1,3})\nHora:/i);
   const annualMatch2 = annualBlockA ?? annualBlockB;
   if (annualMatch2) {
     annualRaceNumber = parseInt(annualMatch2[1]);
-    warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber extraído = ${annualRaceNumber} (formato ${annualBlockA ? 'A' : 'B'})`);
-    // Extract time from what follows
+    warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber = ${annualRaceNumber} (formato ${annualBlockA ? 'A' : 'B'})`);
     const afterAnnual = block.slice(block.indexOf(annualMatch2[0]) + annualMatch2[0].length);
     const hmAfter = afterAnnual.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
     if (hmAfter) scheduledTime = clean(hmAfter[1]);
   } else {
-    // Fallback: look for time anywhere
     const hm = block.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
     if (hm) scheduledTime = clean(hm[1]);
   }
