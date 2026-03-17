@@ -19,6 +19,7 @@ interface RaceHistoryItem {
   jockeyName: string;
   finishPosition: number | null;
   officialTime: string | null;
+  winnerTime: string | null;
   distanceMargin: string | null;
   isScratched: boolean;
 }
@@ -102,6 +103,7 @@ function shortDate(iso: string) {
 function HistoryRow({ h }: { h: RaceHistoryItem }) {
   const pos = h.isScratched ? 'R' : (h.finishPosition ?? '?');
   const col = posColor(h.finishPosition);
+  const isWinner = h.finishPosition === 1;
   return (
     <div className="history-row flex items-center gap-1 text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
       {/* Posición */}
@@ -109,13 +111,19 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
       {/* Fecha */}
       <span className="shrink-0 text-gray-500 w-[3.2rem]">{shortDate(h.date)}</span>
       {/* Dist */}
-      <span className="shrink-0 text-gray-600 w-[2.8rem]">{h.distance}m</span>
+      <span className="shrink-0 text-gray-600 w-[2.6rem]">{h.distance}m</span>
       {/* Dorsal */}
       <span className="shrink-0 text-gray-700 w-4">#{h.dorsalNumber}</span>
-      {/* Tiempo */}
-      <span className="shrink-0 font-mono text-yellow-600/80 w-[3.5rem]">{h.officialTime ?? '—'}</span>
-      {/* Margen */}
-      <span className="shrink-0 text-gray-600 w-[2.5rem] truncate">{h.distanceMargin ?? ''}</span>
+      {/* Tiempo ganador */}
+      <span className="shrink-0 font-mono w-[3.4rem] text-yellow-500/60" title="Tiempo del 1°">
+        {isWinner ? '' : (h.winnerTime ?? '—')}
+      </span>
+      {/* Tiempo del ejemplar */}
+      <span className="shrink-0 font-mono w-[3.4rem]" style={{ color: col }} title="Tiempo del ejemplar">
+        {h.officialTime ?? '—'}
+      </span>
+      {/* Margen vs 1° */}
+      <span className="shrink-0 text-gray-600 w-[2.5rem] truncate" title="Diferencia vs 1°">{isWinner ? 'GANÓ' : (h.distanceMargin ?? '')}</span>
       {/* Jinete */}
       <span className="flex-1 text-gray-600 truncate">{h.jockeyName}</span>
       {/* Medicación */}
@@ -217,10 +225,11 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
             <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-gray-700 pb-0.5">
               <span className="w-5 text-center">Pos</span>
               <span className="w-[3.2rem]">Fecha</span>
-              <span className="w-[2.8rem]">Dist</span>
+              <span className="w-[2.6rem]">Dist</span>
               <span className="w-4">D#</span>
-              <span className="w-[3.5rem]">Tiempo</span>
-              <span className="w-[2.5rem]">Marg</span>
+              <span className="w-[3.4rem] text-yellow-600/50">T.1°</span>
+              <span className="w-[3.4rem]">T.Ej</span>
+              <span className="w-[2.5rem]">Diff</span>
               <span className="flex-1">Jinete</span>
             </div>
             {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
@@ -297,9 +306,22 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
       {/* ── Print styles ── */}
       <style>{`
         @media print {
-          @page { margin: 1cm 1.2cm; }
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
-          body { background: #fff !important; color: #111 !important; font-size: 10px; }
+          @page { margin: 1cm 1.2cm; color-scheme: light; }
+          html, body {
+            background: #ffffff !important;
+            background-color: #ffffff !important;
+            color: #111111 !important;
+            color-scheme: light !important;
+            font-size: 10px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          * {
+            background: transparent !important;
+            color: #111 !important;
+            border-color: #ccc !important;
+            box-sizing: border-box;
+          }
 
           /* Ocultar todo excepto el bloque de impresión */
           .no-print { display: none !important; }
@@ -335,20 +357,17 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
           .print-race-block { page-break-inside: avoid; margin-bottom: 14px; }
           .print-horse-row { page-break-inside: avoid; border-bottom: 1px solid #eee; padding: 5px 0; }
 
-          /* Textos */
-          * { color: #111 !important; }
-          .text-gray-400, .text-gray-500, .text-gray-600, .text-gray-700 { color: #555 !important; }
-          .font-mono { font-family: monospace; }
+          /* Asegurar fuente legible */
+          .font-mono { font-family: monospace !important; }
 
           /* Historial / trabajos inline */
           .history-row, .workout-row {
             border-top: 1px solid #eee !important;
-            color: #444 !important;
           }
 
-          /* Badges de medicación y workout */
-          .print-badge-med { color: #1d4ed8 !important; border: 1px solid #93c5fd !important; }
-          .print-badge-ret { color: #dc2626 !important; font-weight: bold; }
+          /* Badges */
+          .print-badge-med { color: #1d4ed8 !important; border: 1px solid #93c5fd !important; background: transparent !important; }
+          .print-badge-ret { color: #dc2626 !important; font-weight: bold !important; background: transparent !important; }
         }
       `}</style>
 
@@ -554,20 +573,30 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
                     {entry.raceHistory.length > 0 && (
                       <div style={{ marginTop: '3px', paddingLeft: '4px', borderLeft: '2px solid #eee' }}>
                         <p style={{ fontSize: '7px', fontWeight: 700, textTransform: 'uppercase', color: '#888', letterSpacing: '0.05em', marginBottom: '1px' }}>Últimas carreras</p>
-                        {entry.raceHistory.map((h, i) => (
-                          <div key={i} style={{ display: 'flex', gap: '6px', fontSize: '9px', color: '#444', padding: '1px 0', borderTop: i > 0 ? '1px solid #f0f0f0' : 'none' }}>
+                        {entry.raceHistory.map((h, i) => {
+                          const isW2 = h.finishPosition === 1;
+                          return (
+                          <div key={i} style={{ display: 'flex', gap: '5px', fontSize: '9px', color: '#444', padding: '1px 0', borderTop: i > 0 ? '1px solid #f0f0f0' : 'none' }}>
                             <span style={{ width: '14px', textAlign: 'center', fontWeight: 800,
-                              color: h.finishPosition === 1 ? '#b7860a' : h.finishPosition === 2 ? '#666' : '#222' }}>
+                              color: isW2 ? '#b7860a' : h.finishPosition === 2 ? '#666' : '#222' }}>
                               {h.isScratched ? 'R' : (h.finishPosition ?? '?')}
                             </span>
-                            <span style={{ width: '46px', color: '#666' }}>{shortDate(h.date)}</span>
-                            <span style={{ width: '40px', color: '#666' }}>{h.distance}m</span>
-                            <span style={{ width: '16px', color: '#888' }}>#{h.dorsalNumber}</span>
-                            <span style={{ width: '50px', fontFamily: 'monospace', color: '#444' }}>{h.officialTime ?? '—'}</span>
-                            <span style={{ width: '36px', color: '#666' }}>{h.distanceMargin ?? ''}</span>
+                            <span style={{ width: '44px', color: '#666' }}>{shortDate(h.date)}</span>
+                            <span style={{ width: '38px', color: '#666' }}>{h.distance}m</span>
+                            <span style={{ width: '16px', color: '#999' }}>#{h.dorsalNumber}</span>
+                            <span style={{ width: '48px', fontFamily: 'monospace', color: '#999' }} title="T. Ganador">
+                              {isW2 ? '' : (h.winnerTime ?? '—')}
+                            </span>
+                            <span style={{ width: '48px', fontFamily: 'monospace', color: isW2 ? '#b7860a' : '#333', fontWeight: isW2 ? 700 : 400 }} title="T. Ejemplar">
+                              {h.officialTime ?? '—'}
+                            </span>
+                            <span style={{ width: '34px', color: '#666' }} title="Dif vs 1°">
+                              {isW2 ? 'GANÓ' : (h.distanceMargin ?? '')}
+                            </span>
                             <span style={{ flex: 1, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.jockeyName}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                     {/* Trabajos */}

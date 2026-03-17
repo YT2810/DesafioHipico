@@ -51,6 +51,19 @@ export async function GET(
       .populate({ path: 'raceId', model: Race })
       .lean() as any[];
 
+    // Fetch winner (pos=1) entries for all past races to get winner times
+    const pastRaceIds = [...new Set(pastEntries.map((pe: any) => pe.raceId?._id?.toString()).filter(Boolean))];
+    const winnerEntries = await Entry.find({
+      raceId: { $in: pastRaceIds },
+      'result.finishPosition': 1,
+    }).select('raceId result').lean() as any[];
+    const winnerTimeByRace = new Map<string, string>();
+    for (const w of winnerEntries) {
+      if (w.result?.officialTime) {
+        winnerTimeByRace.set(w.raceId?.toString(), w.result.officialTime);
+      }
+    }
+
     // Only keep entries whose race date < this meeting date
     // Build horseId → sorted history (newest first, max 4)
     const historyByHorse = new Map<string, any[]>();
@@ -95,6 +108,7 @@ export async function GET(
             jockeyName: (pe.jockeyId as any)?.name ?? '',
             finishPosition: pe.result?.finishPosition ?? null,
             officialTime: pe.result?.officialTime ?? null,
+            winnerTime: winnerTimeByRace.get(race._id?.toString()) ?? null,
             distanceMargin: pe.result?.distanceMargin ?? null,
             isScratched: pe.result?.isScratched ?? false,
           };
