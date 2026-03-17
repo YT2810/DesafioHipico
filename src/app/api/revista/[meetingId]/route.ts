@@ -8,6 +8,7 @@ import Person from '@/models/Person';
 import Stud from '@/models/Stud';
 import Track from '@/models/Track';
 import WorkoutEntry from '@/models/WorkoutEntry';
+import { Types } from 'mongoose';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,60 +25,155 @@ export async function GET(
 
     const track = await Track.findById(meeting.trackId).lean() as any;
     const races = await Race.find({ meetingId }).sort({ raceNumber: 1 }).lean() as any[];
-
-    // Fetch workouts for this track in a window of 10 days before the meeting
     const meetingDate = new Date(meeting.date);
-    const windowStart = new Date(meetingDate);
-    windowStart.setDate(windowStart.getDate() - 10);
 
-    const workoutsRaw = await WorkoutEntry.find({
-      trackId: meeting.trackId,
-      workoutDate: { $gte: windowStart, $lte: meetingDate },
-    }).sort({ workoutDate: -1 }).lean() as any[];
+    // ── Collect all horseIds across all races in this meeting ──
+    const allEntries = await Entry.find({
+      raceId: { $in: races.map((r: any) => r._id) },
+    })
+      .sort({ dorsalNumber: 1 })
+      .populate({ path: 'horseId', model: Horse })
+      .populate({ path: 'jockeyId', model: Person })
+      .populate({ path: 'trainerId', model: Person })
+      .populate({ path: 'studId', model: Stud })
+      .lean() as any[];
 
-    // Index workouts by normalised horse name → take most recent per horse
-    const workoutMap = new Map<string, any>();
-    for (const w of workoutsRaw) {
-      const key = w.horseName.toUpperCase().trim();
-      if (!workoutMap.has(key)) workoutMap.set(key, w);
+    const horseIds: Types.ObjectId[] = allEntries
+      .map((e: any) => e.horseId?._id)
+      .filter(Boolean);
+
+    // ── Fetch last race history for all horses in one query ──
+    // Get all past entries for these horses (races before this meeting date)
+    const pastEntries = await Entry.find({
+      horseId: { $in: horseIds },
+      'result.finishPosition': { $exists: true },
+    })
+      .populate({ path: 'raceId', model: Race })
+      .lean() as any[];
+
+    // Only keep entries whose race date < this meeting date
+    // Build horseId → sorted history (newest first, max 4)
+    const historyByHorse = new Map<string, any[]>();
+    for (const pe of pastEntries) {
+      const race = pe.raceId as any;
+      if (!race?.meetingId) continue;
+      // We need the meeting date for this race — fetch lazily below
+      const hid = pe.horseId?.toString() ?? pe.horseId;
+      if (!hid) continue;
+      if (!historyByHorse.has(hid)) historyByHorse.set(hid, []);
+      historyByHorse.get(hid)!.push(pe);
     }
 
-    const racesOut = await Promise.all(races.map(async (race: any) => {
-      const entries = await Entry.find({ raceId: race._id })
-        .sort({ dorsalNumber: 1 })
-        .populate({ path: 'horseId', model: Horse })
-        .populate({ path: 'jockeyId', model: Person })
-        .populate({ path: 'trainerId', model: Person })
-        .populate({ path: 'studId', model: Stud })
-        .lean() as any[];
+    // Fetch meeting dates for all referenced meetingIds
+    const pastRaceList = pastEntries.map((pe: any) => pe.raceId).filter(Boolean) as any[];
+    const pastMeetingIds = [...new Set(pastRaceList.map((r: any) => r.meetingId?.toString()).filter(Boolean))];
+    const pastMeetings = await Meeting.find({ _id: { $in: pastMeetingIds } })
+      .populate({ path: 'trackId', model: Track })
+      .lean() as any[];
+    const pastMeetingMap = new Map(pastMeetings.map((m: any) => [m._id.toString(), m]));
 
-      const entriesOut = entries.map((e: any) => {
-        const horseName: string = e.horseId?.name ?? '';
-        const workout = workoutMap.get(horseName.toUpperCase().trim()) ?? null;
+    // Build final history map: horseId → last 4 finished races before this meeting
+    const finalHistoryMap = new Map<string, any[]>();
+    for (const [hid, entries] of historyByHorse) {
+      const withDate = entries
+        .map((pe: any) => {
+          const race = pe.raceId as any;
+          const pm = pastMeetingMap.get(race?.meetingId?.toString());
+          if (!pm) return null;
+          const raceDate = new Date(pm.date);
+          if (raceDate >= meetingDate) return null; // exclude current meeting
+          return {
+            date: pm.date,
+            trackName: (pm.trackId as any)?.name ?? '',
+            meetingNumber: pm.meetingNumber,
+            raceNumber: race.raceNumber,
+            distance: race.distance,
+            conditions: race.conditions ?? '',
+            dorsalNumber: pe.dorsalNumber,
+            weight: pe.weightRaw ?? (pe.weight ? String(pe.weight) : ''),
+            medication: pe.medication ?? null,
+            jockeyName: (pe.jockeyId as any)?.name ?? '',
+            finishPosition: pe.result?.finishPosition ?? null,
+            officialTime: pe.result?.officialTime ?? null,
+            distanceMargin: pe.result?.distanceMargin ?? null,
+            isScratched: pe.result?.isScratched ?? false,
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 4);
+      finalHistoryMap.set(hid, withDate as any[]);
+    }
+
+    // ── Fetch workouts for all horses — from 60 days ago up to meeting date ──
+    const workoutWindowStart = new Date(meetingDate);
+    workoutWindowStart.setDate(workoutWindowStart.getDate() - 60);
+
+    const allWorkouts = await WorkoutEntry.find({
+      trackId: meeting.trackId,
+      workoutDate: { $gte: workoutWindowStart, $lte: meetingDate },
+    }).sort({ workoutDate: -1 }).lean() as any[];
+
+    // Index workouts by normalised horse name → all workouts per horse sorted desc
+    const workoutsByName = new Map<string, any[]>();
+    for (const w of allWorkouts) {
+      const key = w.horseName.toUpperCase().trim();
+      if (!workoutsByName.has(key)) workoutsByName.set(key, []);
+      workoutsByName.get(key)!.push(w);
+    }
+
+    // ── Build per-race response ──
+    const raceMap = new Map(races.map((r: any) => [r._id.toString(), r]));
+
+    const racesOut = races.map((race: any) => {
+      const raceEntries = allEntries.filter(
+        (e: any) => e.raceId?.toString() === race._id.toString()
+      );
+
+      const entriesOut = raceEntries.map((e: any) => {
+        const horse = e.horseId as any;
+        const horseName: string = horse?.name ?? '';
+        const horseIdStr: string = horse?._id?.toString() ?? '';
+
+        // Last 4 race results
+        const raceHistory = finalHistoryMap.get(horseIdStr) ?? [];
+
+        // Last race date for this horse (to filter workouts)
+        const lastRaceDate = raceHistory.length > 0
+          ? new Date(raceHistory[0].date)
+          : null;
+
+        // Workouts since last race (or last 60 days if no race), max 4
+        const horseWorkouts = (workoutsByName.get(horseName.toUpperCase().trim()) ?? [])
+          .filter((w: any) => !lastRaceDate || new Date(w.workoutDate) > lastRaceDate)
+          .slice(0, 4)
+          .map((w: any) => ({
+            workoutDate: w.workoutDate,
+            distance: w.distance,
+            workoutType: w.workoutType,
+            splits: w.splits,
+            comment: w.comment,
+            jockeyName: w.jockeyName,
+            trainerName: w.trainerName,
+            daysRest: w.daysRest ?? null,
+          }));
 
         return {
           dorsalNumber: e.dorsalNumber,
           postPosition: e.postPosition,
           horseName,
-          jockeyName: e.jockeyId?.name ?? '',
-          trainerName: e.trainerId?.name ?? '',
-          studName: e.studId?.name ?? '',
+          horseId: horseIdStr,
+          jockeyName: (e.jockeyId as any)?.name ?? '',
+          trainerName: (e.trainerId as any)?.name ?? '',
+          studName: (e.studId as any)?.name ?? '',
           weightDeclared: e.weightRaw ?? (e.weight ? String(e.weight) : ''),
           medication: e.medication ?? null,
           implements: e.implements ?? null,
           status: e.status,
           finishPosition: e.result?.finishPosition ?? null,
           isScratched: e.result?.isScratched ?? false,
-          workout: workout ? {
-            workoutDate: workout.workoutDate,
-            distance: workout.distance,
-            workoutType: workout.workoutType,
-            splits: workout.splits,
-            comment: workout.comment,
-            jockeyName: workout.jockeyName,
-            trainerName: workout.trainerName,
-            daysRest: workout.daysRest ?? null,
-          } : null,
+          raceHistory,
+          workouts: horseWorkouts,
         };
       });
 
@@ -93,7 +189,9 @@ export async function GET(
         status: race.status,
         entries: entriesOut,
       };
-    }));
+    });
+
+    const hasWorkouts = allWorkouts.length > 0;
 
     return NextResponse.json({
       meeting: {
@@ -106,8 +204,7 @@ export async function GET(
         isValencia: (track?.name ?? '').toLowerCase().includes('valencia'),
       },
       races: racesOut,
-      hasWorkouts: workoutsRaw.length > 0,
-      workoutCount: workoutMap.size,
+      hasWorkouts,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido';

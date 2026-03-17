@@ -5,10 +5,27 @@ import Link from 'next/link';
 
 const GOLD = '#D4AF37';
 
-interface Workout {
+interface RaceHistoryItem {
+  date: string;
+  trackName: string;
+  meetingNumber: number;
+  raceNumber: number;
+  distance: number;
+  conditions: string;
+  dorsalNumber: number;
+  weight: string;
+  medication: string | null;
+  jockeyName: string;
+  finishPosition: number | null;
+  officialTime: string | null;
+  distanceMargin: string | null;
+  isScratched: boolean;
+}
+
+interface WorkoutItem {
   workoutDate: string;
   distance: number;
-  workoutType: 'EP' | 'ES' | 'AP' | 'galopo';
+  workoutType: string;
   splits: string;
   comment: string;
   jockeyName: string;
@@ -20,6 +37,7 @@ interface EntryItem {
   dorsalNumber: number;
   postPosition: number;
   horseName: string;
+  horseId: string;
   jockeyName: string;
   trainerName: string;
   studName: string;
@@ -29,7 +47,8 @@ interface EntryItem {
   status: string;
   finishPosition: number | null;
   isScratched: boolean;
-  workout: Workout | null;
+  raceHistory: RaceHistoryItem[];
+  workouts: WorkoutItem[];
 }
 
 interface RaceItem {
@@ -55,38 +74,202 @@ interface MeetingData {
   isValencia: boolean;
 }
 
-const WORKOUT_TYPE_LABEL: Record<string, { label: string; color: string }> = {
-  EP: { label: 'En Pelo',  color: 'bg-blue-950/50 border-blue-700/40 text-blue-300' },
-  ES: { label: 'En Silla', color: 'bg-purple-950/50 border-purple-700/40 text-purple-300' },
-  AP: { label: 'Aparato',  color: 'bg-orange-950/50 border-orange-700/40 text-orange-300' },
-  galopo: { label: 'Galopo', color: 'bg-gray-800 border-gray-700 text-gray-400' },
+const WORKOUT_COLORS: Record<string, string> = {
+  EP:     'bg-blue-950/50 border-blue-700/40 text-blue-300',
+  ES:     'bg-purple-950/50 border-purple-700/40 text-purple-300',
+  AP:     'bg-orange-950/50 border-orange-700/40 text-orange-300',
+  galopo: 'bg-gray-800 border-gray-700 text-gray-400',
+};
+const WORKOUT_LABELS: Record<string, string> = {
+  EP: 'En Pelo', ES: 'En Silla', AP: 'Aparato', galopo: 'Galopo',
 };
 
-function WorkoutBadge({ type }: { type: string }) {
-  const def = WORKOUT_TYPE_LABEL[type] ?? WORKOUT_TYPE_LABEL.galopo;
-  return (
-    <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${def.color}`}>
-      {def.label}
-    </span>
-  );
+function posColor(pos: number | null) {
+  if (!pos) return '#6b7280';
+  if (pos === 1) return GOLD;
+  if (pos === 2) return '#9ca3af';
+  if (pos === 3) return '#c4a96b';
+  return '#6b7280';
 }
 
-function MedBadge({ med }: { med: string }) {
-  return (
-    <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-950/40 border-blue-800/40 text-blue-300">
-      {med.replace('-', '+')}
-    </span>
-  );
+function shortDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-VE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-function DaysChip({ days }: { days: number }) {
-  const color = days <= 3 ? 'text-green-400 border-green-800/40 bg-green-950/30'
-    : days <= 7 ? 'text-yellow-400 border-yellow-800/40 bg-yellow-950/30'
-    : 'text-gray-500 border-gray-700 bg-gray-800/30';
+// ── Horse card: dorsal header + history rows + workout rows ──
+function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: boolean }) {
+  const [open, setOpen] = useState(false);
+  const hasHistory = entry.raceHistory.length > 0;
+  const hasWork = entry.workouts.length > 0;
+
   return (
-    <span className={`inline-block text-[9px] font-bold px-1 py-0.5 rounded border ${color}`}>
-      {days}D
-    </span>
+    <div className={`border-b border-gray-800/60 last:border-0 ${entry.isScratched ? 'opacity-40' : ''}`}>
+
+      {/* ── Header row — always visible ── */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-gray-800/30 transition-colors"
+      >
+        {/* Dorsal / result */}
+        <div className="shrink-0 flex flex-col items-center w-7">
+          {entry.finishPosition ? (
+            <>
+              <span className="text-[9px] font-extrabold leading-none" style={{ color: posColor(entry.finishPosition) }}>
+                {entry.finishPosition}°
+              </span>
+              <span className="w-7 h-7 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-extrabold text-white mt-0.5">
+                {entry.dorsalNumber}
+              </span>
+            </>
+          ) : (
+            <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-extrabold border ${
+              entry.isScratched ? 'bg-red-950/30 border-red-800/30 text-red-400' : 'bg-gray-800 border-gray-700 text-white'
+            }`}>
+              {entry.dorsalNumber}
+            </span>
+          )}
+        </div>
+
+        {/* Horse name + trainer */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`text-sm font-bold leading-tight ${entry.isScratched ? 'line-through text-gray-500' : 'text-white'}`}>
+              {entry.horseName}
+            </span>
+            {entry.isScratched && (
+              <span className="text-[9px] font-bold px-1 py-0.5 rounded border bg-red-950/40 border-red-800/40 text-red-300">RET</span>
+            )}
+            {entry.medication && (
+              <span className="text-[9px] font-bold px-1 py-0.5 rounded border bg-blue-950/40 border-blue-800/40 text-blue-300">
+                {entry.medication.replace('-', '+')}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] text-gray-600 truncate">{entry.trainerName}</span>
+            {entry.studName && <span className="text-[9px] text-gray-700 truncate">· {entry.studName}</span>}
+          </div>
+        </div>
+
+        {/* Weight + jockey */}
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold text-white">{entry.weightDeclared || '—'}</p>
+          <p className="text-[10px] text-gray-500 truncate max-w-[5rem]">{entry.jockeyName}</p>
+        </div>
+
+        {/* Indicators + chevron */}
+        <div className="shrink-0 flex flex-col items-end gap-0.5 ml-1">
+          <div className="flex gap-1">
+            {hasHistory && <span className="text-[9px] text-gray-600">🏁{entry.raceHistory.length}</span>}
+            {hasWork && <span className="text-[9px] text-gray-600">📋{entry.workouts.length}</span>}
+          </div>
+          <span className={`text-gray-600 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
+        </div>
+      </button>
+
+      {/* ── Expanded: history + workouts ── */}
+      {open && (
+        <div className="px-3 pb-3 space-y-3 bg-gray-900/30">
+
+          {/* Last 4 races */}
+          {hasHistory ? (
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1.5 pt-1">
+                🏁 Últimas carreras
+              </p>
+              <div className="space-y-1">
+                {entry.raceHistory.map((h, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-gray-800/40 rounded-xl px-2 py-1.5">
+                    {/* Position */}
+                    <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-xs font-extrabold border"
+                      style={{
+                        color: posColor(h.finishPosition),
+                        borderColor: 'rgba(75,85,99,0.4)',
+                        backgroundColor: 'rgba(17,24,39,0.6)',
+                      }}>
+                      {h.isScratched ? 'R' : (h.finishPosition ?? '?')}
+                    </span>
+                    {/* Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold text-gray-300">{shortDate(h.date)}</span>
+                        <span className="text-[9px] text-gray-600">R{h.meetingNumber} C{h.raceNumber}</span>
+                        <span className="text-[9px] text-gray-600">{h.distance}m</span>
+                        <span className="text-[9px] text-gray-700">D{h.dorsalNumber}</span>
+                        {h.trackName && h.trackName !== entry.trainerName && (
+                          <span className="text-[9px] text-gray-700 truncate">{h.trackName.includes('alencia') ? 'Val' : 'LR'}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        {h.officialTime && (
+                          <span className="text-[9px] font-mono text-yellow-500/70">{h.officialTime}</span>
+                        )}
+                        {h.distanceMargin && (
+                          <span className="text-[9px] text-gray-600">{h.distanceMargin}</span>
+                        )}
+                        {h.jockeyName && (
+                          <span className="text-[9px] text-gray-600 truncate">{h.jockeyName}</span>
+                        )}
+                        {h.medication && (
+                          <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-blue-950/40 border border-blue-800/40 text-blue-400">
+                            {h.medication.replace('-', '+')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[9px] text-gray-700 pt-1 italic">Sin historial de carreras disponible.</p>
+          )}
+
+          {/* Workouts since last race */}
+          {hasWorkouts && (
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1.5">
+                📋 Trabajos desde última carrera
+              </p>
+              {hasWork ? (
+                <div className="space-y-1">
+                  {entry.workouts.map((w, i) => (
+                    <div key={i} className="flex items-start gap-2 bg-gray-800/40 rounded-xl px-2 py-1.5">
+                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${WORKOUT_COLORS[w.workoutType] ?? WORKOUT_COLORS.galopo}`}>
+                        {WORKOUT_LABELS[w.workoutType] ?? w.workoutType}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold text-gray-300">{shortDate(w.workoutDate)}</span>
+                          {w.distance > 0 && <span className="text-[9px] text-gray-600">{w.distance}m</span>}
+                          {w.daysRest !== null && (
+                            <span className={`text-[9px] font-bold px-1 py-0 rounded border ${
+                              (w.daysRest ?? 99) <= 3 ? 'text-green-400 border-green-800/40 bg-green-950/30'
+                              : (w.daysRest ?? 99) <= 7 ? 'text-yellow-400 border-yellow-800/40 bg-yellow-950/30'
+                              : 'text-gray-500 border-gray-700'
+                            }`}>{w.daysRest}D</span>
+                          )}
+                          {w.jockeyName && <span className="text-[9px] text-gray-600 truncate">{w.jockeyName}</span>}
+                        </div>
+                        {w.splits && (
+                          <p className="text-[9px] font-mono text-yellow-500/70 leading-tight mt-0.5">{w.splits}</p>
+                        )}
+                        {w.comment && (
+                          <p className="text-[9px] text-gray-500 italic leading-tight">{w.comment}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[9px] text-gray-700 italic">Sin trabajos registrados desde su última carrera.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -94,7 +277,6 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
   const [meeting, setMeeting] = useState<MeetingData | null>(null);
   const [races, setRaces] = useState<RaceItem[]>([]);
   const [hasWorkouts, setHasWorkouts] = useState(false);
-  const [workoutCount, setWorkoutCount] = useState(0);
   const [selectedRace, setSelectedRace] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -107,7 +289,6 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
         setMeeting(d.meeting);
         setRaces(d.races ?? []);
         setHasWorkouts(d.hasWorkouts ?? false);
-        setWorkoutCount(d.workoutCount ?? 0);
         if (d.races?.length > 0) setSelectedRace(d.races[0].raceNumber);
       })
       .catch(() => setError('Error al cargar la revista'))
@@ -121,7 +302,6 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
       </div>
     );
   }
-
   if (error || !meeting) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col items-center justify-center gap-4">
@@ -136,79 +316,65 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
   });
   const trackEmoji = meeting.isValencia ? '🏟' : '🏇';
   const trackColor = meeting.isValencia ? 'text-blue-400' : 'text-yellow-400';
-
   const currentRace = races.find(r => r.raceNumber === selectedRace) ?? null;
-  const isFinished = meeting.status === 'finished';
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="text-gray-400 hover:text-white text-lg leading-none shrink-0">←</Link>
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-white truncate">
-                {trackEmoji} Revista · <span className={trackColor}>{meeting.trackName}</span> Reunión {meeting.meetingNumber}
+                {trackEmoji} Revista · <span className={trackColor}>{meeting.trackName}</span> R{meeting.meetingNumber}
               </h1>
               <p className="text-xs text-gray-500 truncate capitalize">{meetingDate}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {hasWorkouts && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-950/50 border border-green-700/40 text-green-300">
-                {workoutCount} trabajos
-              </span>
-            )}
-            <Link href={`/programa/${meetingId}`}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-black"
-              style={{ backgroundColor: GOLD }}>
-              Inscritos →
-            </Link>
-          </div>
+          <Link href={`/programa/${meetingId}`}
+            className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold text-black"
+            style={{ backgroundColor: GOLD }}>
+            Inscritos →
+          </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
 
-        {/* ── Aviso si no hay trabajos ── */}
+        {/* Nota si no hay trabajos */}
         {!hasWorkouts && (
-          <div className="rounded-2xl border border-yellow-800/30 bg-yellow-950/20 px-4 py-3 flex items-start gap-3">
-            <span className="text-lg shrink-0">📋</span>
-            <div>
-              <p className="text-sm font-bold text-yellow-300">Trabajos aún no disponibles</p>
-              <p className="text-xs text-yellow-200/60 mt-0.5">
-                Los tiempos de entrenamiento se publican entre martes y sábado. Cuando el staff los suba, aparecerán aquí junto a cada ejemplar.
-              </p>
-            </div>
+          <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3 py-2.5 flex items-center gap-2">
+            <span className="text-sm shrink-0">📋</span>
+            <p className="text-xs text-gray-600">
+              <strong className="text-gray-500">Trabajos no disponibles aún.</strong> Se cargan entre martes y sábado. El historial de carreras sí está activo.
+            </p>
           </div>
         )}
 
-        {/* ── Selector de carreras ── */}
+        {/* Selector de carreras */}
         <div>
-          <p className="text-xs text-gray-600 mb-2 font-medium uppercase tracking-wide">Selecciona una carrera</p>
+          <p className="text-[10px] text-gray-600 mb-2 font-bold uppercase tracking-wider">Carrera</p>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
             {races.map(race => {
               const isSelected = selectedRace === race.raceNumber;
               const hasResult = race.entries.some(e => e.finishPosition !== null);
-              const hasWork = race.entries.some(e => e.workout !== null);
+              const hasWork = race.entries.some(e => e.workouts.length > 0);
+              const hasHist = race.entries.some(e => e.raceHistory.length > 0);
               return (
                 <button key={race.raceId}
-                  onClick={() => setSelectedRace(isSelected ? null : race.raceNumber)}
-                  className={`flex flex-col items-center gap-0.5 py-2.5 px-1 rounded-xl border text-xs font-bold transition-all active:scale-95 ${
-                    isSelected
-                      ? 'text-black border-yellow-600'
-                      : 'bg-gray-900 border-gray-700 text-white hover:border-gray-500'
+                  onClick={() => setSelectedRace(race.raceNumber)}
+                  className={`flex flex-col items-center py-2 px-1 rounded-xl border text-xs font-bold transition-all active:scale-95 ${
+                    isSelected ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-white hover:border-gray-500'
                   }`}
                   style={isSelected ? { backgroundColor: GOLD } : {}}>
                   <span className="text-sm font-extrabold">C{race.raceNumber}</span>
-                  <span className={`text-[10px] ${isSelected ? 'text-black/60' : 'text-gray-500'}`}>
-                    {race.distance}m
-                  </span>
-                  <div className="flex gap-0.5">
-                    {hasWork && <span className="text-[8px]" title="Tiene trabajos">🏋️</span>}
-                    {hasResult && <span className="text-[8px]" title="Con resultados">🏁</span>}
+                  <span className={`text-[9px] ${isSelected ? 'text-black/60' : 'text-gray-500'}`}>{race.distance}m</span>
+                  <div className="flex gap-0.5 mt-0.5">
+                    {hasHist && <span className="text-[8px] leading-none">🏁</span>}
+                    {hasWork && <span className="text-[8px] leading-none">📋</span>}
+                    {hasResult && <span className="text-[8px] leading-none">✅</span>}
                   </div>
                 </button>
               );
@@ -216,11 +382,10 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
           </div>
         </div>
 
-        {/* ── Detalle de carrera ── */}
+        {/* Carrera seleccionada */}
         {currentRace && (
-          <div className="space-y-0">
-
-            {/* Encabezado */}
+          <div>
+            {/* Encabezado de carrera */}
             <div className="rounded-t-2xl border border-gray-700 bg-gray-900 px-4 py-3">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
@@ -244,177 +409,48 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
                     </p>
                   )}
                 </div>
-                {currentRace.status === 'finished' && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-950/50 border border-green-700/40 text-green-300 shrink-0">
-                    🏁 Finalizada
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Tabla de ejemplares */}
-            <div className="border-x border-gray-700 bg-gray-900 overflow-hidden">
-
-              {/* Cabecera de columnas — cambia si hay trabajos */}
-              <div className={`grid px-3 py-1.5 border-y border-gray-800 text-[10px] font-semibold text-gray-600 uppercase tracking-wide ${
-                hasWorkouts ? 'grid-cols-[2rem_1fr_3rem_4rem_1fr]' : 'grid-cols-[2rem_1fr_3rem_1fr]'
-              }`}>
-                <span className="text-center">#</span>
-                <span>Ejemplar · Entrenador</span>
-                <span className="text-center">Kg</span>
-                {hasWorkouts && <span className="text-center">Trabajo</span>}
-                <span>Jinete</span>
-              </div>
-
-              <div className="divide-y divide-gray-800/40">
-                {currentRace.entries.map(entry => (
-                  <div key={entry.dorsalNumber}
-                    className={`grid px-3 py-2.5 gap-x-2 items-start ${
-                      hasWorkouts ? 'grid-cols-[2rem_1fr_3rem_4rem_1fr]' : 'grid-cols-[2rem_1fr_3rem_1fr]'
-                    } ${entry.isScratched ? 'opacity-40' : ''}`}>
-
-                    {/* Dorsal — si hay resultado, muestra posición */}
-                    <div className="flex flex-col items-center gap-0.5 pt-0.5">
-                      {entry.finishPosition ? (
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-extrabold" style={{
-                            color: entry.finishPosition === 1 ? GOLD
-                              : entry.finishPosition === 2 ? '#9ca3af'
-                              : entry.finishPosition === 3 ? '#c4a96b' : '#6b7280'
-                          }}>
-                            {entry.finishPosition}°
-                          </span>
-                          <span className="w-7 h-7 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-extrabold text-white">
-                            {entry.dorsalNumber}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-extrabold border ${
-                          entry.isScratched
-                            ? 'bg-red-950/30 border-red-800/30 text-red-400'
-                            : 'bg-gray-800 border-gray-700 text-white'
-                        }`}>
-                          {entry.dorsalNumber}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Caballo + entrenador + cuadra */}
-                    <div className="min-w-0">
-                      <p className={`text-sm font-bold leading-tight truncate ${entry.isScratched ? 'text-gray-500 line-through' : 'text-white'}`}>
-                        {entry.horseName}
-                      </p>
-                      <p className="text-xs text-gray-600 truncate">{entry.trainerName}</p>
-                      {entry.studName && (
-                        <p className="text-[9px] text-gray-700 truncate">{entry.studName}</p>
-                      )}
-                      <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {entry.medication && <MedBadge med={entry.medication} />}
-                        {entry.isScratched && (
-                          <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-950/40 border-red-800/40 text-red-300">RET</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Peso */}
-                    <div className="text-center pt-0.5">
-                      <p className="text-sm font-bold text-white">{entry.weightDeclared || '—'}</p>
-                      {entry.implements && (
-                        <p className="text-[8px] text-gray-700 leading-tight break-all mt-0.5">{entry.implements}</p>
-                      )}
-                    </div>
-
-                    {/* Trabajo */}
-                    {hasWorkouts && (
-                      <div className="min-w-0">
-                        {entry.workout ? (
-                          <div className="space-y-0.5">
-                            <WorkoutBadge type={entry.workout.workoutType} />
-                            {entry.workout.daysRest !== null && entry.workout.daysRest !== undefined && (
-                              <DaysChip days={entry.workout.daysRest} />
-                            )}
-                            {entry.workout.distance > 0 && (
-                              <p className="text-[9px] text-gray-600">{entry.workout.distance}m</p>
-                            )}
-                            {entry.workout.splits && (
-                              <p className="text-[9px] font-mono text-yellow-500/80 leading-tight break-all">
-                                {entry.workout.splits}
-                              </p>
-                            )}
-                            {entry.workout.comment && (
-                              <p className="text-[9px] text-gray-500 leading-tight italic">
-                                {entry.workout.comment}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[9px] text-gray-700">—</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Jinete */}
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-xs font-semibold text-gray-300 leading-tight truncate">{entry.jockeyName}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Resultado de carrera si está finalizada */}
-            {currentRace.status === 'finished' && (() => {
-              const finished = currentRace.entries
-                .filter(e => e.finishPosition !== null)
-                .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99));
-              return finished.length > 0 ? (
-                <div className="border-x border-gray-700 bg-gray-900/30 px-3 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-1.5">🏁 Orden de llegada</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {finished.slice(0, 5).map((e, i) => (
-                      <div key={e.dorsalNumber} className="flex items-center gap-1">
-                        <span className="text-xs font-extrabold" style={{
-                          color: i === 0 ? GOLD : i === 1 ? '#9ca3af' : i === 2 ? '#c4a96b' : '#6b7280'
-                        }}>{i + 1}°</span>
-                        <span className="text-xs font-bold text-white">{e.horseName}</span>
-                        {i < Math.min(finished.length, 5) - 1 && <span className="text-gray-700 text-xs">·</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-            })()}
-
-            {/* Footer de carrera */}
-            <div className="rounded-b-2xl border border-t-0 border-gray-700 bg-gray-900/10 px-3 py-1.5 flex items-center gap-2">
-              {currentRace.games.length > 0 && (
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1 shrink-0 items-center">
+                  {currentRace.status === 'finished' && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-950/50 border border-green-700/40 text-green-300">
+                      🏁 Finalizada
+                    </span>
+                  )}
                   {currentRace.games.map(g => (
                     <span key={g} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-500">
                       {g.replace('_', ' ')}
                     </span>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
 
+            {/* Columna header */}
+            <div className="border-x border-gray-700 bg-gray-900 px-3 py-1.5 border-y border-gray-800 grid grid-cols-[2rem_1fr_4rem_5rem] gap-x-2 text-[9px] font-bold uppercase tracking-widest text-gray-600">
+              <span className="text-center">#</span>
+              <span>Ejemplar · Entrenador</span>
+              <span className="text-right">Kg · Jinete</span>
+              <span className="text-right">Historial</span>
+            </div>
+
+            {/* Ejemplares — cada uno expandible */}
+            <div className="border-x border-b border-gray-700 bg-gray-900 rounded-b-2xl overflow-hidden divide-y divide-gray-800/40">
+              {currentRace.entries.map(entry => (
+                <HorseCard key={entry.dorsalNumber} entry={entry} hasWorkouts={hasWorkouts} />
+              ))}
+            </div>
           </div>
         )}
 
         {!currentRace && (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>
-            <p className="text-sm">Selecciona una carrera para ver los detalles</p>
+            <p className="text-sm">Selecciona una carrera</p>
           </div>
         )}
 
-        {/* Disclaimer */}
-        <div className="rounded-2xl border border-gray-800 bg-gray-900/40 px-4 py-3 text-center">
-          <p className="text-[10px] text-gray-700 leading-relaxed">
-            Datos basados en el programa oficial INH/HINAVA. Los trabajos se publican entre martes y sábado.
-            Los resultados y dividendos se actualizan tras la jornada. · <strong className="text-gray-600">Desafío Hípico</strong>
-          </p>
-        </div>
+        <p className="text-center text-[10px] text-gray-700 pb-4">
+          Datos oficiales INH/HINAVA · Desafío Hípico · Toca cada caballo para ver historial y trabajos
+        </p>
 
       </main>
     </div>
