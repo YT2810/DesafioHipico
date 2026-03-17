@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# PDFs en la raíz (documentos de trabajo, no deben ir al repo)
+/*.pdf
+/*.pdf:Zone.Identifier
+*:Zone.Identifier
