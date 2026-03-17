@@ -151,10 +151,11 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
 
   // "Carrera Anual Nro.:Hora:\n122\n01:25 p. m."
   // The value on the SAME line (or next) is the annual number; time is on the FOLLOWING line.
-  // Pattern: label followed by a standalone integer (2-3 digits), then optionally time on next line.
-  const annualBlock = block.match(/Carrera\s+Anual\s+Nro\.?:?Hora:\s*\n?(\d{2,3})\b/i);
+  // Pattern: label followed by a standalone integer (1-3 digits), then optionally time on next line.
+  const annualBlock = block.match(/Carrera\s+Anual\s+Nro\.?:?Hora:\s*\n?(\d{1,3})(?![:.|\d])\b/i);
   if (annualBlock) {
     annualRaceNumber = parseInt(annualBlock[1]);
+    warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber extraído = ${annualRaceNumber}`);
     // Extract time from what follows the annual number
     const afterAnnual = block.slice(block.indexOf(annualBlock[0]) + annualBlock[0].length);
     const hmAfter = afterAnnual.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
@@ -171,6 +172,7 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (rm) raceNumber = parseInt(rm[1]);
   }
   if (!raceNumber) warnings.push('No se detectó número de carrera en un bloque.');
+  if (annualRaceNumber) warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber extraído = ${annualRaceNumber}, llamado = ${llamado}`);
 
   // Conditions
   const condMatch = block.match(/Condici[oó]n:\s*\n?([\s\S]+?)(?=Reuni[oó]n:|Premio\s+Bs\.|N[°o]Ejemplar)/i);
