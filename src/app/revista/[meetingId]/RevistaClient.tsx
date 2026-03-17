@@ -40,6 +40,12 @@ interface WorkoutItem {
   daysRest: number | null;
 }
 
+interface YearStats {
+  starts: number;
+  wins: number;
+  winless: number;
+}
+
 interface EntryItem {
   dorsalNumber: number;
   postPosition: number;
@@ -56,6 +62,7 @@ interface EntryItem {
   isScratched: boolean;
   raceHistory: RaceHistoryItem[];
   workouts: WorkoutItem[];
+  yearStats: YearStats | null;
 }
 
 interface RaceItem {
@@ -239,6 +246,15 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
               Ent: <span className="text-gray-400">{entry.trainerName || '—'}</span>
               {entry.studName && <span className="text-gray-600"> · {entry.studName}</span>}
             </p>
+            {entry.yearStats && entry.yearStats.starts > 0 && (
+              <p className="text-[10px] mt-0.5 leading-tight">
+                <span className="text-gray-600">2026: </span>
+                <span className="font-bold text-gray-400">{entry.yearStats.starts}-{entry.yearStats.wins}</span>
+                {entry.yearStats.winless > 0 && (
+                  <span className="text-gray-600"> ({entry.yearStats.winless})</span>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Peso + Jinete — alineados derecha */}

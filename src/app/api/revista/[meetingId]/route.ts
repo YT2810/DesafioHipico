@@ -130,6 +130,51 @@ export async function GET(
       .lean() as any[];
     const pastMeetingMap = new Map(pastMeetings.map((m: any) => [m._id.toString(), m]));
 
+    // ── Year stats: starts, wins, current winless streak (year of this meeting) ──
+    const currentYear = meetingDate.getFullYear();
+    const yearStatsByHorse = new Map<string, { starts: number; wins: number; winless: number }>();
+    for (const pe of pastEntries) {
+      const race = pe.raceId as any;
+      const pm = pastMeetingMap.get(race?.meetingId?.toString());
+      if (!pm) continue;
+      const raceDate = new Date(pm.date);
+      if (raceDate >= meetingDate) continue;
+      if (raceDate.getFullYear() !== currentYear) continue;
+      const hid = pe.horseId?.toString();
+      if (!hid) continue;
+      const isScratched = pe.result?.isScratched ?? false;
+      if (isScratched) continue;
+      const pos = pe.result?.finishPosition ?? null;
+      if (pos === null) continue;
+      if (!yearStatsByHorse.has(hid)) yearStatsByHorse.set(hid, { starts: 0, wins: 0, winless: 0 });
+      const s = yearStatsByHorse.get(hid)!;
+      s.starts++;
+      if (pos === 1) s.wins++;
+    }
+    // Calculate current winless streak (consecutive races without winning, most recent first)
+    for (const [hid, entries] of historyByHorse) {
+      const sortedDesc = entries
+        .map((pe: any) => {
+          const race = pe.raceId as any;
+          const pm = pastMeetingMap.get(race?.meetingId?.toString());
+          if (!pm) return null;
+          const raceDate = new Date(pm.date);
+          if (raceDate >= meetingDate) return null;
+          return { date: raceDate, pos: pe.result?.finishPosition ?? null, scratched: pe.result?.isScratched ?? false };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => b.date - a.date);
+      let streak = 0;
+      for (const r of sortedDesc as any[]) {
+        if (r.scratched) continue;
+        if (r.pos === 1) break;
+        streak++;
+      }
+      const s = yearStatsByHorse.get(hid);
+      if (s) s.winless = streak;
+      else yearStatsByHorse.set(hid, { starts: 0, wins: 0, winless: streak });
+    }
+
     // Build final history map: horseId → last 4 finished races before this meeting
     const finalHistoryMap = new Map<string, any[]>();
     for (const [hid, entries] of historyByHorse) {
@@ -226,6 +271,8 @@ export async function GET(
             daysRest: w.daysRest ?? null,
           }));
 
+        const ys = yearStatsByHorse.get(horseIdStr) ?? null;
+
         return {
           dorsalNumber: e.dorsalNumber,
           postPosition: e.postPosition,
@@ -242,6 +289,7 @@ export async function GET(
           isScratched: e.result?.isScratched ?? false,
           raceHistory,
           workouts: horseWorkouts,
+          yearStats: ys ? { starts: ys.starts, wins: ys.wins, winless: ys.winless } : null,
         };
       });
 
