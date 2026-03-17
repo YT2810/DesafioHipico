@@ -402,6 +402,8 @@ function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
     if (row.finishPosition === 1) {
       timeMap[row.dorsalNumber] = winnerTime;
       bodiesMap[row.dorsalNumber] = '—';
+      // Never use winner's distanceMargin in accumulation
+      accBodies = 0;
       continue;
     }
     const bodies = marginToBodies(row.distanceMargin);
@@ -539,7 +541,9 @@ function ResultsTab() {
       const winTime: string = r.officialTime ?? '';
       const rawRows: FinishRow[] = (r.finishOrder ?? []).map((e: any) => ({
         dorsalNumber: e.dorsalNumber ?? 0, horseName: e.horseName ?? '',
-        finishPosition: e.finishPosition ?? 0, distanceMargin: e.distanceMargin ?? '',
+        finishPosition: e.finishPosition ?? 0,
+        // Winner's distanceMargin from Gemini = gap over 2nd place, not relevant for time calc
+        distanceMargin: (e.finishPosition === 1) ? '' : (e.distanceMargin ?? ''),
         isDistanced: e.isDistanced ?? false, isScratched: e.isScratched ?? false,
         scratchReason: '', estimatedTime: '', accumulatedBodies: '',
       }));
