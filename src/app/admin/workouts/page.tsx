@@ -17,7 +17,8 @@ interface PreviewRow {
 }
 
 type FileStatus = 'pending' | 'uploading' | 'done' | 'error';
-interface FileItem { file: File; status: FileStatus; message: string; inserted: number; total: number; workoutDate: string; }
+interface WorkoutRow { horseName: string; trainerName: string; jockeyName: string; workoutType: string; distance: number | null; splits: string; comment: string; daysRest: number | null; }
+interface FileItem { file: File; status: FileStatus; message: string; inserted: number; total: number; workoutDate: string; rows: WorkoutRow[]; expanded: boolean; }
 
 export default function AdminWorkoutsPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -50,7 +51,7 @@ export default function AdminWorkoutsPage() {
 
   function handleBulkSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    setBulkFiles(files.map(f => ({ file: f, status: 'pending', message: '', inserted: 0, total: 0, workoutDate: '' })));
+    setBulkFiles(files.map(f => ({ file: f, status: 'pending', message: '', inserted: 0, total: 0, workoutDate: '', rows: [], expanded: false })));
   }
 
   async function handleBulkUpload() {
@@ -67,7 +68,11 @@ export default function AdminWorkoutsPage() {
         if (!res.ok) {
           setBulkFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', message: data.error ?? 'Error' } : f));
         } else {
-          setBulkFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'done', inserted: data.inserted, total: data.total, workoutDate: data.workoutDate, message: `${data.inserted}/${data.total}` } : f));
+          setBulkFiles(prev => prev.map((f, idx) => idx === i ? {
+            ...f, status: 'done', inserted: data.inserted, total: data.total,
+            workoutDate: data.workoutDate, message: `${data.inserted}/${data.total}`,
+            rows: data.rows ?? [],
+          } : f));
         }
       } catch {
         setBulkFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', message: 'Error de red' } : f));
@@ -179,20 +184,56 @@ export default function AdminWorkoutsPage() {
                     {bulkErrors > 0 && <span className="text-red-400 ml-2">· {bulkErrors} con error</span>}
                   </div>
                 )}
-                <div className="divide-y divide-gray-800/40 max-h-96 overflow-y-auto">
+                <div className="divide-y divide-gray-800/40 max-h-[32rem] overflow-y-auto">
                   {bulkFiles.map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-                      <span className="text-lg shrink-0">
-                        {item.status === 'pending' && '⏳'}
-                        {item.status === 'uploading' && <span className="inline-block w-4 h-4 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />}
-                        {item.status === 'done' && '✅'}
-                        {item.status === 'error' && '❌'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{item.file.name}</p>
-                        {item.status === 'done' && <p className="text-[10px] text-green-400">{item.message} trabajos · {new Date(item.workoutDate).toLocaleDateString('es-VE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</p>}
-                        {item.status === 'error' && <p className="text-[10px] text-red-400">{item.message}</p>}
+                    <div key={i}>
+                      <div className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-800/30"
+                        onClick={() => item.status === 'done' && setBulkFiles(prev => prev.map((f, idx) => idx === i ? { ...f, expanded: !f.expanded } : f))}>
+                        <span className="text-base shrink-0">
+                          {item.status === 'pending' && '⏳'}
+                          {item.status === 'uploading' && <span className="inline-block w-4 h-4 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />}
+                          {item.status === 'done' && '✅'}
+                          {item.status === 'error' && '❌'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-white truncate">{item.file.name}</p>
+                          {item.status === 'done' && (
+                            <p className="text-[10px] text-green-400">
+                              {item.message} trabajos · {new Date(item.workoutDate).toLocaleDateString('es-VE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                              <span className="text-gray-600 ml-1">{item.expanded ? '▲ ocultar' : '▼ ver caballos'}</span>
+                            </p>
+                          )}
+                          {item.status === 'error' && <p className="text-[10px] text-red-400">{item.message}</p>}
+                        </div>
                       </div>
+                      {item.expanded && item.rows.length > 0 && (
+                        <div className="bg-gray-950 border-t border-gray-800/40 divide-y divide-gray-800/20">
+                          {item.rows.map((row, j) => {
+                            const wType = row.workoutType === 'galopo' ? 'GAL' : row.workoutType;
+                            const parts = [
+                              row.distance ? `${row.distance}m` : '',
+                              `(${wType})`,
+                              row.splits,
+                              row.comment,
+                            ].filter(Boolean).join(' ');
+                            const copyText = `${row.horseName} — ${parts}${row.trainerName ? ` [${row.trainerName}]` : ''}`;
+                            return (
+                              <div key={j} className="px-4 py-1.5 flex items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[11px] font-bold text-white">{row.horseName}</span>
+                                  {row.trainerName && <span className="text-[10px] text-gray-500 ml-1.5">Ent: {row.trainerName}</span>}
+                                  <p className="text-[10px] text-yellow-600/70 font-mono">{parts}</p>
+                                </div>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(copyText)}
+                                  className="shrink-0 text-[9px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 transition-colors">
+                                  copiar
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

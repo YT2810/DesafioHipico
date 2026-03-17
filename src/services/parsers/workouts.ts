@@ -33,25 +33,64 @@ export interface ParsedWorkout {
   rawBlock: string;
 }
 
-// Extrae la fecha del nombre del archivo o del encabezado del texto
+const MONTH_MAP: Record<string, string> = {
+  enero: '01', ene: '01',
+  febrero: '02', feb: '02',
+  marzo: '03', mar: '03',
+  abril: '04', abr: '04',
+  mayo: '05',
+  junio: '06', jun: '06',
+  julio: '07', jul: '07',
+  agosto: '08', ago: '08',
+  septiembre: '09', sep: '09', sept: '09',
+  octubre: '10', oct: '10',
+  noviembre: '11', nov: '11',
+  diciembre: '12', dic: '12',
+};
+
+function tryParseDate(day: string, monthToken: string, year: string): Date | null {
+  const m = MONTH_MAP[monthToken.toLowerCase()];
+  if (!m) return null;
+  const d = day.padStart(2, '0');
+  const y = year.length === 2 ? `20${year}` : year;
+  return new Date(`${y}-${m}-${d}T12:00:00Z`);
+}
+
+// Extrae la fecha del nombre del archivo o del contenido del PDF — tolerante a mayúsculas/minúsculas y variantes
 export function extractWorkoutDate(text: string, filename: string): Date | null {
-  // Intenta desde el encabezado: "FECHA= MIERCOLES 11/03 DEL 2026"
-  const headerMatch = text.match(/FECHA=\s*\w+\s+(\d{1,2})\/(\d{2})\s+DEL?\s+(\d{4})/i);
-  if (headerMatch) {
-    const [, day, month, year] = headerMatch;
-    return new Date(`${year}-${month}-${day.padStart(2, '0')}T12:00:00Z`);
+  // Prueba en texto del PDF primero: "FECHA= MIERCOLES 11/03 DEL 2026" o "FECHA= 11/03/2026"
+  const hdrSlash = text.match(/FECHA[=:\s]+(?:\w+\s+)?(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/i);
+  if (hdrSlash) {
+    const [, d, m, y] = hdrSlash;
+    const yr = y.length === 2 ? `20${y}` : y;
+    return new Date(`${yr}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T12:00:00Z`);
   }
-  // Intenta desde el nombre del archivo: "14 DE MARZO 2026"
-  const fileMatch = filename.match(/(\d{1,2})\s+DE\s+(\w+)\s+(\d{4})/i);
-  if (fileMatch) {
-    const [, day, monthName, year] = fileMatch;
-    const months: Record<string, string> = {
-      enero: '01', febrero: '02', marzo: '03', abril: '04',
-      mayo: '05', junio: '06', julio: '07', agosto: '08',
-      septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
-    };
-    const month = months[monthName.toLowerCase()];
-    if (month) return new Date(`${year}-${month}-${day.padStart(2, '0')}T12:00:00Z`);
+  const hdrText = text.match(/FECHA[=:\s]+(?:\w+\s+)?(\d{1,2})\s+(?:DE\s+)?(\w+)\s+(\d{2,4})/i);
+  if (hdrText) {
+    const r = tryParseDate(hdrText[1], hdrText[3], hdrText[4] ?? hdrText[3]);
+    // re-match with proper groups
+    const hdr2 = text.match(/FECHA[=:\s]+(?:\w+\s+)?(\d{1,2})\s+(?:DE\s+)?(\w+)\s+(\d{2,4})/i);
+    if (hdr2) { const r2 = tryParseDate(hdr2[1], hdr2[2], hdr2[3]); if (r2) return r2; }
+    if (r) return r;
+  }
+
+  // Prueba en el nombre del archivo con múltiples patrones
+  const sources = [filename, text.split('\n').slice(0, 5).join(' ')];
+  for (const src of sources) {
+    // Patrón: "14 DE MARZO 2026" o "14 de marzo 2026" o "14-marzo-2026"
+    const m1 = src.match(/(\d{1,2})\s*(?:DE\s+|[-_])(\w+)\s*(?:DE[L]?\s+)?(\d{2,4})/i);
+    if (m1) { const r = tryParseDate(m1[1], m1[2], m1[3]); if (r) return r; }
+    // Patrón: "14/03/2026" o "14-03-2026"
+    const m2 = src.match(/(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/i);
+    if (m2) {
+      const [, d, mo, y] = m2;
+      const yr = y.length === 2 ? `20${y}` : y;
+      const dt = new Date(`${yr}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T12:00:00Z`);
+      if (!isNaN(dt.getTime())) return dt;
+    }
+    // Patrón: "MARZO 14 2026"
+    const m3 = src.match(/(\w+)\s+(\d{1,2})\s+(\d{4})/i);
+    if (m3) { const r = tryParseDate(m3[2], m3[1], m3[3]); if (r) return r; }
   }
   return null;
 }

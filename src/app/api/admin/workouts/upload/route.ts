@@ -108,6 +108,16 @@ export async function POST(req: NextRequest) {
       inserted,
       skipped,
       total: rows.length,
+      rows: rows.map(r => ({
+        horseName: r.horseName,
+        trainerName: r.trainerName,
+        jockeyName: r.jockeyName,
+        workoutType: r.workoutType,
+        distance: r.distance,
+        splits: r.splits,
+        comment: r.comment,
+        daysRest: r.daysRest,
+      })),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido';
