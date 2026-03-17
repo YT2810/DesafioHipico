@@ -149,15 +149,18 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     else llamado = val; // if raceNumber already known from distLine, this is llamado
   }
 
-  // "Carrera Anual Nro.:Hora:\n122\n01:25 p. m."
-  // The value on the SAME line (or next) is the annual number; time is on the FOLLOWING line.
-  // Pattern: label followed by a standalone integer (1-3 digits), then optionally time on next line.
-  const annualBlock = block.match(/Carrera\s+Anual\s+Nro\.?:?Hora:\s*\n?(\d{1,3})(?![:.|\d])\b/i);
-  if (annualBlock) {
-    annualRaceNumber = parseInt(annualBlock[1]);
-    warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber extraído = ${annualRaceNumber}`);
-    // Extract time from what follows the annual number
-    const afterAnnual = block.slice(block.indexOf(annualBlock[0]) + annualBlock[0].length);
+  // pdf-parse renders the INH table header as two possible formats:
+  // A) Labels concatenated: "Carrera Anual Nro.:Hora:\n1\n06:30 p. m."
+  // B) Labels separated:    "Carrera Anual Nro.:\n1\nHora:\n06:30 p. m."
+  // In both cases the annual number is an integer on its own line between the labels.
+  const annualBlockA = block.match(/Carrera\s+Anual\s+Nro\.?:Hora:\s*\n(\d{1,3})(?!\d)/i);
+  const annualBlockB = block.match(/Carrera\s+Anual\s+Nro\.?:\s*\n(\d{1,3})(?!\d)/i);
+  const annualMatch2 = annualBlockA ?? annualBlockB;
+  if (annualMatch2) {
+    annualRaceNumber = parseInt(annualMatch2[1]);
+    warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber extraído = ${annualRaceNumber} (formato ${annualBlockA ? 'A' : 'B'})`);
+    // Extract time from what follows
+    const afterAnnual = block.slice(block.indexOf(annualMatch2[0]) + annualMatch2[0].length);
     const hmAfter = afterAnnual.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
     if (hmAfter) scheduledTime = clean(hmAfter[1]);
   } else {
@@ -172,7 +175,6 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     if (rm) raceNumber = parseInt(rm[1]);
   }
   if (!raceNumber) warnings.push('No se detectó número de carrera en un bloque.');
-  if (annualRaceNumber) warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber extraído = ${annualRaceNumber}, llamado = ${llamado}`);
 
   // Conditions
   const condMatch = block.match(/Condici[oó]n:\s*\n?([\s\S]+?)(?=Reuni[oó]n:|Premio\s+Bs\.|N[°o]Ejemplar)/i);
