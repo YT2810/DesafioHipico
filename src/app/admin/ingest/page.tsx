@@ -581,6 +581,15 @@ function ResultsTab() {
 
   async function handleSave() {
     if (!meetingId || !raceNumber || !finishOrder.length) return;
+    // Validate official time
+    if (!officialTime) {
+      const proceed = window.confirm(
+        '⚠️ El tiempo oficial del 1° está vacío.\n\n' +
+        '• Si el hipódromo no registró tiempo (falla de teletimer), presiona ACEPTAR para guardar sin tiempo.\n' +
+        '• Si falta ingresar el tiempo, presiona CANCELAR y escríbelo arriba.'
+      );
+      if (!proceed) return;
+    }
     // Overwrite protection: warn if race already has results
     const raceInfo = races.find(r => r.raceNumber === parseInt(raceNumber));
     if (raceInfo?.status === 'finished') {
