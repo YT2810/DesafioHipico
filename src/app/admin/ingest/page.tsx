@@ -67,17 +67,18 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [error, setError] = useState('');
+  const [annualOverrides, setAnnualOverrides] = useState<Record<number, number>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped) { onFileChange(dropped); setPreview(null); setResult(null); setError(''); }
+    if (dropped) { onFileChange(dropped); setPreview(null); setResult(null); setError(''); setAnnualOverrides({}); }
   }, [onFileChange]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) { onFileChange(f); setPreview(null); setResult(null); setError(''); }
+    if (f) { onFileChange(f); setPreview(null); setResult(null); setError(''); setAnnualOverrides({}); }
   };
 
   async function callIngest(previewMode: boolean) {
@@ -85,18 +86,34 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
     setError(''); setLoading(true);
     setLoadingMsg(previewMode ? 'Extrayendo datos del PDF...' : 'Guardando en base de datos...');
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const url = previewMode ? '/api/admin/ingest?preview=true' : '/api/admin/ingest';
-      const res = await fetch(url, { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error en el servidor');
-      if (previewMode) { setPreview(data); } else { setResult(data); setPreview(null); }
+      if (previewMode) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/admin/ingest?preview=true', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error en el servidor');
+        setPreview(data);
+        // Init overrides from extracted data
+        const init: Record<number, number> = {};
+        for (const rb of data.races ?? []) {
+          if (rb.race.annualRaceNumber) init[rb.race.raceNumber] = rb.race.annualRaceNumber;
+        }
+        setAnnualOverrides(init);
+      } else {
+        // Confirm: send rawText as JSON so we can apply overrides server-side
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('annualOverrides', JSON.stringify(annualOverrides));
+        const res = await fetch('/api/admin/ingest', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error en el servidor');
+        setResult(data); setPreview(null);
+      }
     } catch (e) { setError(e instanceof Error ? e.message : 'Error desconocido'); }
     finally { setLoading(false); setLoadingMsg(''); }
   }
 
-  function reset() { onFileChange(null); setPreview(null); setResult(null); setError(''); if (inputRef.current) inputRef.current.value = ''; }
+  function reset() { onFileChange(null); setPreview(null); setResult(null); setError(''); setAnnualOverrides({}); if (inputRef.current) inputRef.current.value = ''; }
   const totalEntries = preview?.races.reduce((s, r) => s + r.entries.length, 0) ?? 0;
 
   return (
@@ -189,21 +206,35 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
               <p className="text-amber-400 font-medium">No se detectaron carreras</p>
               <p className="text-xs text-gray-500 mt-1">El PDF puede tener un formato diferente al esperado.</p>
             </div>
-          ) : preview.races.map((rb) => <RacePreviewCard key={rb.race.raceNumber} rb={rb} />)}
+          ) : preview.races.map((rb) => (
+            <RacePreviewCard
+              key={rb.race.raceNumber}
+              rb={rb}
+              annualOverride={annualOverrides[rb.race.raceNumber]}
+              onAnnualChange={(rn, val) => setAnnualOverrides(prev => ({ ...prev, [rn]: val }))}
+            />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function RacePreviewCard({ rb }: { rb: ProcessedDocument['races'][0] }) {
+function RacePreviewCard({ rb, annualOverride, onAnnualChange }: {
+  rb: ProcessedDocument['races'][0];
+  annualOverride?: number;
+  onAnnualChange: (raceNumber: number, val: number) => void;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-5 py-3 bg-gray-800/60 hover:bg-gray-800 transition-colors border-b border-gray-700">
         <div className="flex items-center gap-3">
           <span className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">C{rb.race.raceNumber}</span>
-          {rb.race.annualRaceNumber && <span className="text-xs text-gray-500">Anual #{rb.race.annualRaceNumber}</span>}
+          {annualOverride
+            ? <span className="text-xs text-amber-400 font-bold">Anual #{annualOverride}</span>
+            : <span className="text-xs text-red-500/70">Sin N° Anual</span>
+          }
           <span className="text-sm font-semibold text-white">{rb.race.distance > 0 ? `${rb.race.distance} mts` : '— mts'}</span>
           {rb.race.scheduledTime && <span className="text-xs text-gray-400">🕐 {rb.race.scheduledTime}</span>}
           {rb.race.llamado != null && <span className="text-xs text-gray-500">Llamado {rb.race.llamado}</span>}
@@ -219,6 +250,19 @@ function RacePreviewCard({ rb }: { rb: ProcessedDocument['races'][0] }) {
       </button>
       {open && (
         <>
+          {/* Annual race number editor — always visible so it can be corrected */}
+          <div className="px-5 py-2 bg-amber-950/20 border-b border-amber-900/40 flex items-center gap-3">
+            <span className="text-xs text-amber-500 font-semibold shrink-0">N° Carrera Anual:</span>
+            <input
+              type="number" min="1"
+              value={annualOverride ?? ''}
+              placeholder="No extraído del PDF — ingresa manualmente"
+              onClick={e => e.stopPropagation()}
+              onChange={e => { e.stopPropagation(); onAnnualChange(rb.race.raceNumber, parseInt(e.target.value) || 0); }}
+              className="w-48 bg-gray-900 border border-amber-700/50 rounded px-2 py-1 text-xs text-amber-200 focus:outline-none focus:border-amber-400 placeholder:text-gray-600"
+            />
+            {!annualOverride && <span className="text-xs text-red-400/70">⚠ Falta — el historial no mostrará código de carrera</span>}
+          </div>
           {rb.race.conditions && (
             <div className="px-5 py-2 bg-gray-900 border-b border-gray-800/50">
               <p className="text-xs text-gray-400 italic">{rb.race.conditions}</p>

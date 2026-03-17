@@ -7,11 +7,14 @@ export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
     let rawText = '';
+    let annualOverrides: Record<string, number> = {};
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       const file = formData.get('file') as File | null;
       const text = formData.get('text') as string | null;
+      const annualOverridesRaw = formData.get('annualOverrides') as string | null;
+      annualOverrides = annualOverridesRaw ? JSON.parse(annualOverridesRaw) : {};
 
       if (file) {
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
@@ -49,6 +52,14 @@ export async function POST(request: NextRequest) {
     }
 
     const processed = processDocument(rawText);
+
+    // Apply manual annualRaceNumber overrides (raceNumber → annualRaceNumber)
+    if (Object.keys(annualOverrides).length > 0) {
+      for (const rb of processed.races) {
+        const override = annualOverrides[rb.race.raceNumber];
+        if (override) rb.race.annualRaceNumber = override;
+      }
+    }
 
     const preview = request.nextUrl.searchParams.get('preview') === 'true';
     if (preview) {
