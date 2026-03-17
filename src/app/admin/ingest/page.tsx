@@ -395,33 +395,35 @@ function computeEntryTimes(rows: FinishRow[], winnerTime: string): FinishRow[] {
   const sorted = [...rows]
     .filter(r => !r.isScratched)
     .sort((a, b) => a.finishPosition - b.finishPosition);
+  // Key by finishPosition (not dorsalNumber) to avoid collisions with duplicate dorsals
   const timeMap: Record<number, string> = {};
   const bodiesMap: Record<number, string> = {};
   let accBodies = 0;
   for (const row of sorted) {
-    if (row.finishPosition === 1) {
-      timeMap[row.dorsalNumber] = winnerTime;
-      bodiesMap[row.dorsalNumber] = '—';
-      // Never use winner's distanceMargin in accumulation
+    // Treat finishPosition 0 as winner (Gemini sometimes returns 0 for 1st)
+    const isWinner = row.finishPosition === 1 || row.finishPosition === 0;
+    if (isWinner) {
+      timeMap[row.finishPosition] = winnerTime;
+      bodiesMap[row.finishPosition] = '—';
       accBodies = 0;
       continue;
     }
     const bodies = marginToBodies(row.distanceMargin);
     if (bodies === null) {
-      timeMap[row.dorsalNumber] = 'S/T';
-      bodiesMap[row.dorsalNumber] = 'FC';
+      timeMap[row.finishPosition] = 'S/T';
+      bodiesMap[row.finishPosition] = 'FC';
       accBodies = 0; continue;
     }
     accBodies += bodies;
-    bodiesMap[row.dorsalNumber] = fmtBodies(accBodies);
+    bodiesMap[row.finishPosition] = fmtBodies(accBodies);
     const extraFifths = Math.round(accBodies);
-    timeMap[row.dorsalNumber] = fifthsToStr(baseFifths + extraFifths);
+    timeMap[row.finishPosition] = fifthsToStr(baseFifths + extraFifths);
   }
   for (const row of rows.filter(r => r.isScratched)) {
-    timeMap[row.dorsalNumber] = 'S/T';
-    bodiesMap[row.dorsalNumber] = 'S/T';
+    timeMap[row.finishPosition] = 'S/T';
+    bodiesMap[row.finishPosition] = 'S/T';
   }
-  return rows.map(r => ({ ...r, estimatedTime: timeMap[r.dorsalNumber] ?? '', accumulatedBodies: bodiesMap[r.dorsalNumber] ?? '' }));
+  return rows.map(r => ({ ...r, estimatedTime: timeMap[r.finishPosition] ?? '', accumulatedBodies: bodiesMap[r.finishPosition] ?? '' }));
 }
 interface PayoutRow { combination: string; amount: string; }
 interface PayoutsEdit {
