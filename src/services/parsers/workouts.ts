@@ -40,11 +40,15 @@ function tryParseDate(day: string, monthToken: string, year: string): Date | nul
   return new Date(`${y}-${m}-${day.padStart(2, '0')}T12:00:00Z`);
 }
 
+const MONTH_NAMES = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|jun|jul|ago|sep|sept|oct|nov|dic';
+
 export function extractWorkoutDate(text: string, filename: string): Date | null {
   const sources = [filename, text.split('\n').slice(0, 8).join(' ')];
   for (const src of sources) {
-    const m1 = src.match(/(\d{1,2})\s*(?:DE\s+|[-_])(\w+)\s*(?:DE[L]?\s+)?(\d{2,4})/i);
+    // Match: "05 FEBRERO 2026" or "05 DE FEBRERO 2026" or "5-FEBRERO-2026"
+    const m1 = src.match(new RegExp(`(\\d{1,2})\\s*(?:DE\\s+|[-_])?(${MONTH_NAMES})\\s*(?:DE[L]?\\s+)?(\\d{2,4})`, 'i'));
     if (m1) { const r = tryParseDate(m1[1], m1[2], m1[3]); if (r) return r; }
+    // Match: "05/02/2026" or "05-02-2026"
     const m2 = src.match(/(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/i);
     if (m2) {
       const yr = m2[3].length === 2 ? `20${m2[3]}` : m2[3];
