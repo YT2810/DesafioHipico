@@ -184,8 +184,8 @@ function WorkoutRow({ w }: { w: WorkoutItem }) {
           (w.daysRest ?? 99) <= 3 ? 'text-green-400' : (w.daysRest ?? 99) <= 7 ? 'text-yellow-500' : 'text-gray-600'
         }`}>{w.daysRest}d</span>
       )}
-      {w.splits && <span className="shrink-0 font-mono text-yellow-600/80 w-[3.5rem] truncate">{w.splits}</span>}
-      <span className="flex-1 text-gray-600 italic truncate">{w.comment || w.jockeyName}</span>
+      {w.splits && <span className="font-mono text-yellow-600/80">{w.splits}</span>}
+      {w.comment && <span className="flex-1 text-gray-600 italic truncate">{w.comment}</span>}
     </div>
   );
 }

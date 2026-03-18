@@ -234,18 +234,40 @@ export function parseWorkoutsPdf(text: string): ParsedWorkout[] {
     const rmMatch = workLine.match(/(\d+(?:[,.]\d+)?)\s*$/);
     const rm = rmMatch ? parseFloat(rmMatch[1].replace(',', '.')) : null;
 
-    // Splits: secuencia de números al inicio antes del primer texto largo
-    // Quitar distancia, tipo y RM del string para obtener splits+comentario
-    let workClean = workLine
+    // Quitar distancia y tipo para obtener parciales + comentario
+    // Formato: "15,1 29,4 43,1 57,2/ 73// MUY COMODO Y SHN 13,2"
+    const workClean = workLine
       .replace(/\(\d+MTS?\)/gi, '')
       .replace(/\(EP\)|\(ES\)|\(AP\)/gi, '')
-      .replace(/(\d+(?:[,.]\d+)?)\s*$/, '') // quitar RM final
       .trim();
 
-    // Splits: números con comas/puntos al inicio, separados por espacios, con posibles marcadores 2P 4P 6P /  //  ///
-    const splitsMatch = workClean.match(/^([\d,\.\s\/P]+?)(?=[A-ZÁÉÍÓÚÑÜ]{2}|$)/i);
-    const splits = splitsMatch ? splitsMatch[1].trim().replace(/\s+/g, ' ') : '';
-    const comment = splits ? workClean.slice(splits.length).trim() : workClean.trim();
+    // Tokenizar y encontrar el primer token que sea solo letras (inicio del comentario)
+    // Tokens numéricos/marcadores: números, 2P/4P/6P, DDLR, barras /
+    const tokens = workClean.split(/\s+/);
+    const isNumericToken = (t: string) =>
+      /^[\d,./]+$/.test(t) || /^\d+P$/i.test(t) || /^DDLR$/i.test(t);
+
+    let commentIdx = -1;
+    for (let ti = 0; ti < tokens.length; ti++) {
+      if (/^[A-ZÁÉÍÓÚÑÜ,]+$/i.test(tokens[ti]) && !isNumericToken(tokens[ti])) {
+        commentIdx = ti;
+        break;
+      }
+    }
+
+    let splits: string;
+    let comment: string;
+    if (commentIdx > 0) {
+      splits = tokens.slice(0, commentIdx).join(' ');
+      const rawComment = tokens.slice(commentIdx).join(' ');
+      comment = rawComment.replace(/\s*\d+[.,]\d+\s*$/, '').replace(/\s*\d+\s*$/, '').trim();
+    } else if (commentIdx === 0) {
+      splits = '';
+      comment = tokens.join(' ').replace(/\s*\d+[.,]\d+\s*$/, '').replace(/\s*\d+\s*$/, '').trim();
+    } else {
+      splits = workClean;
+      comment = '';
+    }
 
     // --- Parsear jinete/entrenador ---
     let jockeyName = '';
