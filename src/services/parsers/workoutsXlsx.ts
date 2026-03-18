@@ -83,7 +83,11 @@ function isNameContent(s: string): boolean {
 }
 
 function isRmContent(s: string): boolean {
-  return /^\d+([.,]\d+)?$/.test(s.trim());
+  if (!/^\d+([.,]\d+)?$/.test(s.trim())) return false;
+  const v = parseFloat(s.replace(',', '.'));
+  // RM for horse workouts is always between 10 and 30 seconds
+  // Single digits (1-9) are days-rest or other data, not RM
+  return v >= 10 && v <= 30;
 }
 
 function isJockeyContent(s: string): boolean {
