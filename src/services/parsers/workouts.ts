@@ -21,6 +21,7 @@ export interface ParsedWorkout {
   workoutType: 'EP' | 'ES' | 'AP' | 'galopo';
   splits: string;
   comment: string;
+  rm: number | null;
   jockeyName: string;
   trainerName: string;
   rawBlock: string;
@@ -288,6 +289,7 @@ export function parseWorkoutsPdf(text: string): ParsedWorkout[] {
       workoutType,
       splits,
       comment,
+      rm,
       jockeyName,
       trainerName,
       rawBlock: [line, workLine, jockeyLine].join(' | '),

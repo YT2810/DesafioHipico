@@ -35,6 +35,7 @@ interface WorkoutItem {
   workoutType: string;
   splits: string;
   comment: string;
+  rm: number | null;
   jockeyName: string;
   trainerName: string;
   daysRest: number | null;
@@ -185,6 +186,7 @@ function WorkoutRow({ w }: { w: WorkoutItem }) {
         }`}>{w.daysRest}d</span>
       )}
       {w.splits && <span className="font-mono text-yellow-600/80">{w.splits}</span>}
+      {w.rm != null && <span className="shrink-0 font-bold text-yellow-400">{w.rm}</span>}
       {w.comment && <span className="flex-1 text-gray-600 italic truncate">{w.comment}</span>}
     </div>
   );

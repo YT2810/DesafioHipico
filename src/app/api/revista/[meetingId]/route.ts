@@ -266,6 +266,7 @@ export async function GET(
             workoutType: w.workoutType,
             splits: w.splits,
             comment: w.comment,
+            rm: w.rm ?? null,
             jockeyName: w.jockeyName,
             trainerName: w.trainerName,
             daysRest: w.daysRest ?? null,

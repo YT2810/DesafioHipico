@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
             jockeyName: row.jockeyName,
             trainerName: row.trainerName,
             daysRest: row.daysRest ?? undefined,
+            rm: row.rm ?? undefined,
             sourceFile: file.name,
           },
         },
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
         distance: r.distance,
         splits: r.splits,
         comment: r.comment,
+        rm: r.rm,
         daysRest: r.daysRest,
       })),
     });

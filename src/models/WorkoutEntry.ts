@@ -14,6 +14,7 @@ export interface IWorkoutEntry extends Document {
   jockeyName?: string;
   trainerName?: string;
   daysRest?: number;
+  rm?: number;
   raceNumber?: string;
   sourceFile?: string;
   createdAt: Date;
@@ -33,6 +34,7 @@ const WorkoutEntrySchema = new Schema<IWorkoutEntry>(
     jockeyName:  { type: String, trim: true },
     trainerName: { type: String, trim: true },
     daysRest:    { type: Number },
+    rm:          { type: Number },
     raceNumber:  { type: String, trim: true },
     sourceFile:  { type: String, trim: true },
   },
