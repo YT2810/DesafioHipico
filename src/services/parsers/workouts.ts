@@ -202,12 +202,15 @@ export function parseWorkoutsPdf(text: string): ParsedWorkout[] {
 
     if (!horseMatch) { i++; continue; }
 
-    // Verificar que no sea una línea de trabajo enmascarada
+    // Verificar que no sea una línea de trabajo enmascarada ni una línea de jinete/entrenador
     const candidateName = horseMatch[2].trim();
     if (
       /\(EP\)|\(ES\)|\(AP\)/i.test(candidateName) ||
-      /^GALOPO|^TROTO|^SOLO PIQUE|^UN PIQUE|^RECONOCIO|^SALIO|^DE ESCUELITA/i.test(candidateName) ||
-      /^\d+[,.]\d/.test(candidateName)
+      /^GALOPO|^TROTO|^SOLO PIQUE|^UN PIQUE|^RECONOCIO|^SALIO|^SALIERON|^DE ESCUELITA/i.test(candidateName) ||
+      /^\d+[,.]\d/.test(candidateName) ||
+      // Línea de jinete/entrenador: empieza con patrón INICIAL. (una o dos letras seguidas de punto)
+      // Ej: "R.ARRAGAA.MIZRAHI", "FEL.VELASQUEZJ.SALVADOR", "EDW.JARAMILLOG.MARQUEZ"
+      /^[A-Z]{1,3}\.[A-Z]/.test(candidateName)
     ) { i++; continue; }
 
     const daysPrefix = horseMatch[1] ?? '';
