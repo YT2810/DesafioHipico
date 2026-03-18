@@ -38,5 +38,12 @@ export async function GET() {
     horseName: { $regex: /^[A-Z]{1,3}\.[A-Z][A-Z]+$/ },
   }).limit(10).select('horseName workoutDate sourceFile').lean();
 
-  return NextResponse.json({ total, totalRm, totalBad, byDate: agg, badSamples });
+  // Sample workouts to check rm values
+  const rmSamples = await WorkoutEntry.find({ rm: { $ne: null } })
+    .limit(10).select('horseName splits workoutType rm sourceFile').lean();
+
+  const noRmSamples = await WorkoutEntry.find({ rm: null })
+    .limit(5).select('horseName splits workoutType rm sourceFile').lean();
+
+  return NextResponse.json({ total, totalRm, totalBad, byDate: agg, badSamples, rmSamples, noRmSamples });
 }
