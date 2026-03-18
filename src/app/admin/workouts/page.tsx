@@ -17,7 +17,7 @@ interface PreviewRow {
 }
 
 type FileStatus = 'pending' | 'uploading' | 'done' | 'error';
-interface WorkoutRow { horseName: string; trainerName: string; jockeyName: string; workoutType: string; distance: number | null; splits: string; comment: string; daysRest: number | null; }
+interface WorkoutRow { horseName: string; trainerName: string; jockeyName: string; workoutType: string; distance: number | null; splits: string; comment: string; daysRest: number | null; rm?: number | null; }
 interface FileItem { file: File; status: FileStatus; message: string; inserted: number; total: number; workoutDate: string; rows: WorkoutRow[]; expanded: boolean; }
 
 export default function AdminWorkoutsPage() {
@@ -258,13 +258,17 @@ export default function AdminWorkoutsPage() {
                               row.splits,
                               row.comment,
                             ].filter(Boolean).join(' ');
-                            const copyText = `${row.horseName} — ${parts}${row.trainerName ? ` [${row.trainerName}]` : ''}`;
+                            const copyText = `${row.horseName} — ${parts}${row.rm != null ? ` RM:${row.rm}` : ''}${row.trainerName ? ` [${row.trainerName}]` : ''}`;
                             return (
                               <div key={j} className="px-4 py-1.5 flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <span className="text-[11px] font-bold text-white">{row.horseName}</span>
-                                  {row.trainerName && <span className="text-[10px] text-gray-500 ml-1.5">Ent: {row.trainerName}</span>}
-                                  <p className="text-[10px] text-yellow-600/70 font-mono">{parts}</p>
+                                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                                    <span className="text-[11px] font-bold text-white">{row.horseName}</span>
+                                    {row.jockeyName && <span className="text-[10px] text-amber-400/70">Joc: {row.jockeyName}</span>}
+                                    {row.trainerName && <span className="text-[10px] text-gray-500">Ent: {row.trainerName}</span>}
+                                    {row.rm != null && <span className="text-[10px] font-bold text-yellow-400">RM:{row.rm}</span>}
+                                  </div>
+                                  <p className="text-[10px] text-yellow-600/70 font-mono leading-tight">{parts}</p>
                                 </div>
                                 <button
                                   onClick={() => navigator.clipboard.writeText(copyText)}

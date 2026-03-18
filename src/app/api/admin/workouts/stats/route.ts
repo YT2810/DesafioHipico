@@ -12,7 +12,7 @@ export async function GET() {
       $group: {
         _id: { $dateToString: { format: '%Y-%m-%d', date: '$workoutDate' } },
         count: { $sum: 1 },
-        withRm: { $sum: { $cond: [{ $ne: ['$rm', null] }, 1, 0] } },
+        withRm: { $sum: { $cond: [{ $and: [{ $gt: ['$rm', null] }] }, 1, 0] } },
         withSplits: { $sum: { $cond: [{ $gt: ['$splits', ''] }, 1, 0] } },
         // Names matching jockey pattern X.APELLIDO (no space) = bad parse
         badNames: {
