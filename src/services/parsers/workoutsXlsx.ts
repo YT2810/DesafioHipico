@@ -74,6 +74,22 @@ function parseWorkLine(work: string): {
   return { distance, workoutType, splits, comment };
 }
 
+function isNameContent(s: string): boolean {
+  if (!s || s.length < 2) return false;
+  if (/^(EJEMPLARES|PARCIALES|JINETES|ENTRENADORES|RM|EJEMPLAR)$/i.test(s)) return false;
+  if (/^[A-Z]{1,3}\.[A-Z]/i.test(s) && !s.includes(' ')) return false; // jockey without space
+  if (/^\d+[,.]\d/.test(s)) return false; // starts with partial number
+  return true;
+}
+
+function isRmContent(s: string): boolean {
+  return /^\d+([.,]\d+)?$/.test(s.trim());
+}
+
+function isJockeyContent(s: string): boolean {
+  return /^[A-Z]{1,4}\.[A-Z]/i.test(s.trim()) || /^TRAQUEADOR/i.test(s.trim());
+}
+
 export function parseWorkoutsXlsx(buffer: Buffer): ParsedWorkout[] {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const XLSX = require('xlsx');
@@ -85,41 +101,69 @@ export function parseWorkoutsXlsx(buffer: Buffer): ParsedWorkout[] {
     const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
     for (const row of rows) {
-      // Detect layout by finding which column has workout content
-      // Layout A: work at col 3 → name at col 1, rm at col 5, jockey at col 7, trainer at col 9
-      // Layout B: work at col 4 → name at col 2, rm at col 6, jockey at col 8, trainer at col 10
-      const c3 = (row[3] ?? '').toString().trim();
-      const c4 = (row[4] ?? '').toString().trim();
+      const cells = row.map(c => (c ?? '').toString().trim());
 
-      let nameIdx: number, workStr: string, rmIdx: number, jockeyIdx: number, trainerIdx: number;
-
-      if (isWorkContent(c3)) {
-        nameIdx = 1; workStr = c3; rmIdx = 5; jockeyIdx = 7; trainerIdx = 9;
-      } else if (isWorkContent(c4)) {
-        nameIdx = 2; workStr = c4; rmIdx = 6; jockeyIdx = 8; trainerIdx = 10;
-      } else {
-        continue; // header, empty, or date row
+      // Find the column with workout content (EP/ES/AP/GALOPO/parciales)
+      let workIdx = -1;
+      for (let ci = 2; ci < cells.length; ci++) {
+        if (isWorkContent(cells[ci])) { workIdx = ci; break; }
       }
+      if (workIdx < 0) continue;
 
-      const rawName = (row[nameIdx] ?? '').toString().trim();
-      if (!rawName || rawName.length < 2) continue;
-      // Skip header rows
-      if (/^(EJEMPLARES|PARCIALES|JINETES|ENTRENADORES|RM)$/i.test(rawName)) continue;
+      const workStr = cells[workIdx];
 
+      // Name: look left of workIdx — first non-empty, valid name column
+      let nameIdx = -1;
+      for (let ci = workIdx - 1; ci >= 0; ci--) {
+        if (cells[ci] && isNameContent(cells[ci]) && !isRmContent(cells[ci])) {
+          nameIdx = ci; break;
+        }
+      }
+      if (nameIdx < 0) continue;
+
+      const rawName = cells[nameIdx];
       const horseName = cleanHorseName(rawName).toUpperCase().replace(/\s+/g, ' ').trim();
-      if (!horseName) continue;
+      if (!horseName || horseName.length < 2) continue;
 
-      const daysRaw = (row[0] ?? '').toString().trim();
+      // Days: first column (col 0) — may be "4D", "10D", "6V" etc.
+      const daysRaw = cells[0] ?? '';
       const daysRest = parseDays(daysRaw);
 
-      const rmRaw = (row[rmIdx] ?? '').toString().trim();
-      const rm = rmRaw && /^\d+[,.]?\d*$/.test(rmRaw)
-        ? parseFloat(rmRaw.replace(',', '.'))
-        : null;
+      // RM: look right of workIdx — first numeric-only cell
+      let rm: number | null = null;
+      let rmSkip = 0; // how many cols past workIdx is RM
+      for (let ci = workIdx + 1; ci < Math.min(workIdx + 4, cells.length); ci++) {
+        if (cells[ci] && isRmContent(cells[ci])) {
+          rm = parseFloat(cells[ci].replace(',', '.'));
+          rmSkip = ci - workIdx;
+          break;
+        } else if (cells[ci] && !isRmContent(cells[ci])) {
+          // non-numeric non-empty — RM column is empty, stop
+          break;
+        }
+      }
 
-      const jockeyName = (row[jockeyIdx] ?? '').toString().trim()
-        .replace(/^TRAQUEADOR\s*/i, '');
-      const trainerName = (row[trainerIdx] ?? '').toString().trim();
+      // Jockey: first jockey-like cell after workIdx (+rmSkip)
+      let jockeyName = '';
+      let jockeyRelIdx = -1;
+      for (let ci = workIdx + rmSkip + 1; ci < Math.min(workIdx + 6, cells.length); ci++) {
+        if (cells[ci] && isJockeyContent(cells[ci])) {
+          jockeyName = cells[ci].replace(/^TRAQUEADOR\s*/i, '').trim();
+          jockeyRelIdx = ci;
+          break;
+        }
+      }
+
+      // Trainer: first non-empty cell after jockey
+      let trainerName = '';
+      if (jockeyRelIdx >= 0) {
+        for (let ci = jockeyRelIdx + 1; ci < Math.min(jockeyRelIdx + 4, cells.length); ci++) {
+          if (cells[ci] && isJockeyContent(cells[ci])) {
+            trainerName = cells[ci];
+            break;
+          }
+        }
+      }
 
       const { distance, workoutType, splits, comment } = parseWorkLine(workStr);
 
@@ -133,7 +177,7 @@ export function parseWorkoutsXlsx(buffer: Buffer): ParsedWorkout[] {
         rm,
         jockeyName,
         trainerName,
-        rawBlock: `${daysRaw}|${rawName}|${workStr}|${rmRaw}|${jockeyName}|${trainerName}`,
+        rawBlock: `${daysRaw}|${rawName}|${workStr}|${rm ?? ''}|${jockeyName}|${trainerName}`,
       });
     }
   }
