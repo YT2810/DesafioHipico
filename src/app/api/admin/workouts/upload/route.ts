@@ -3,7 +3,8 @@ import connectMongo from '@/lib/mongodb';
 import WorkoutEntry from '@/models/WorkoutEntry';
 import Track from '@/models/Track';
 import Horse from '@/models/Horse';
-import { parseWorkoutsPdf, extractWorkoutDate } from '@/services/parsers/workouts';
+import { parseWorkoutsPdfBuffer, extractWorkoutDate } from '@/services/parsers/workouts';
+import { parseWorkoutsXlsx } from '@/services/parsers/workoutsXlsx';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,24 +20,33 @@ export async function POST(req: NextRequest) {
     if (!trackId) return NextResponse.json({ error: 'Falta trackId' }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-    const parsed = await pdfParse(buffer);
-    const text: string = parsed.text;
+    const isXlsx = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
-    const workoutDate = extractWorkoutDate(text, file.name);
-    if (!workoutDate) {
-      return NextResponse.json({ error: 'No se pudo extraer la fecha del PDF. Verifica el nombre del archivo (ej: TRABAJOS SABADO 14 DE MARZO 2026.pdf)' }, { status: 400 });
+    // Extract date from filename first; for PDFs also try text content
+    let finalDate: Date | null = extractWorkoutDate('', file.name);
+    if (!finalDate && !isXlsx) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+      const parsed = await pdfParse(buffer);
+      finalDate = extractWorkoutDate(parsed.text, file.name);
+    }
+    if (!finalDate) {
+      return NextResponse.json({ error: 'No se pudo extraer la fecha del archivo. Verifica el nombre (ej: TRABAJOS SABADO 14 DE MARZO 2026.pdf)' }, { status: 400 });
     }
 
-    const rows = parseWorkoutsPdf(text);
+    let rows;
+    if (isXlsx) {
+      rows = parseWorkoutsXlsx(buffer);
+    } else {
+      rows = await parseWorkoutsPdfBuffer(buffer);
+    }
     if (rows.length === 0) {
       return NextResponse.json({ error: 'No se encontraron trabajos en el PDF' }, { status: 400 });
     }
 
     if (previewOnly) {
       return NextResponse.json({
-        workoutDate: workoutDate.toISOString(),
+        workoutDate: finalDate.toISOString(),
         count: rows.length,
         preview: rows.slice(0, 10),
       });
@@ -47,8 +57,8 @@ export async function POST(req: NextRequest) {
     const track = await Track.findById(trackId).lean();
     if (!track) return NextResponse.json({ error: 'Track no encontrado' }, { status: 404 });
 
-    const dateStart = new Date(workoutDate); dateStart.setUTCHours(0, 0, 0, 0);
-    const dateEnd   = new Date(workoutDate); dateEnd.setUTCHours(23, 59, 59, 999);
+    const dateStart = new Date(finalDate); dateStart.setUTCHours(0, 0, 0, 0);
+    const dateEnd   = new Date(finalDate); dateEnd.setUTCHours(23, 59, 59, 999);
 
     let inserted = 0;
     for (const row of rows) {
@@ -66,7 +76,7 @@ export async function POST(req: NextRequest) {
             horseId: horse ? horse._id : undefined,
             horseName: normalizedName,
             trackId,
-            workoutDate,
+            workoutDate: finalDate,
             distance: row.distance ?? 0,
             workoutType: row.workoutType,
             splits: row.splits,
@@ -85,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      workoutDate: workoutDate.toISOString(),
+      workoutDate: finalDate.toISOString(),
       inserted,
       total: rows.length,
       rows: rows.map(r => ({

@@ -186,7 +186,7 @@ export default function AdminWorkoutsPage() {
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${activeTab === tab ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'}`}
               style={activeTab === tab ? { backgroundColor: GOLD } : {}}>
-              {tab === 'bulk' ? '📦 Masiva (varios PDFs)' : '🔍 Un archivo con vista previa'}
+              {tab === 'bulk' ? '📦 Masiva (varios archivos)' : '🔍 Un archivo con vista previa'}
             </button>
           ))}
         </div>
@@ -195,8 +195,8 @@ export default function AdminWorkoutsPage() {
         {activeTab === 'bulk' && (
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4 space-y-3">
-              <p className="text-xs text-gray-500">Selecciona todos los PDFs del año. Se subirán uno a uno con progreso individual.</p>
-              <input ref={bulkRef} type="file" accept=".pdf" multiple onChange={handleBulkSelect}
+              <p className="text-xs text-gray-500">Selecciona todos los PDFs o Excel (.xlsx) del año. Se subirán uno a uno con progreso individual.</p>
+              <input ref={bulkRef} type="file" accept=".pdf,.xlsx,.xls" multiple onChange={handleBulkSelect}
                 className="w-full text-sm text-gray-300 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:text-black cursor-pointer" />
               {bulkFiles.length > 0 && (
                 <div className="flex gap-2">

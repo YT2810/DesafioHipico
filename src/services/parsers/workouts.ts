@@ -1,17 +1,14 @@
 /**
  * Parser de PDFs de trabajos INH — La Rinconada
- *
- * Formato real del PDF (tabla con columnas):
- *   Col 1: Número de carrera (ej: "4D", "7D") — puede estar vacía
- *   Col 2: Nombre del ejemplar
- *   Col 3: Parciales y comentarios (ej: "14,1 27 39 (600MTS) (EP) 51,2 MUY COMODO")
- *   Col 4: RM (remate, número, ej: "12", "15,3") — puede estar vacío
- *   Col 5: Jinete o TRAQUEADOR
- *   Col 6: Entrenador
- *
- * El PDF puede contener múltiples secciones de fechas diferentes.
- * Puede incluir una sección "APARATO" separada con ejercicios de aparato.
- * Texto puede ser mayúsculas, minúsculas o mixto (Excel arcaico del hipódromo).
+ * Usa posiciones X del PDF para asignar columnas correctamente.
+ * Rangos X verificados empíricamente:
+ *   Col 1 (x<78):      Días descanso (ej: "4D", "13D")
+ *   Col 2 (x 78-230):  Nombre ejemplar
+ *   Col 3 (x 230-610): Parciales y comentarios
+ *   Col 4 (x 610-640): RM
+ *   Col 5 (x 640-705): Jinete
+ *   Col 6 (x >705):    Entrenador
+ * Agrupación por (page, Y) para evitar colisiones entre páginas.
  */
 
 export interface ParsedWorkout {
@@ -28,262 +25,221 @@ export interface ParsedWorkout {
 }
 
 const MONTH_MAP: Record<string, string> = {
-  enero: '01', ene: '01',
-  febrero: '02', feb: '02',
-  marzo: '03', mar: '03',
-  abril: '04', abr: '04',
-  mayo: '05',
-  junio: '06', jun: '06',
-  julio: '07', jul: '07',
-  agosto: '08', ago: '08',
-  septiembre: '09', sep: '09', sept: '09',
-  octubre: '10', oct: '10',
-  noviembre: '11', nov: '11',
+  enero: '01', ene: '01', febrero: '02', feb: '02',
+  marzo: '03', mar: '03', abril: '04', abr: '04',
+  mayo: '05', junio: '06', jun: '06', julio: '07', jul: '07',
+  agosto: '08', ago: '08', septiembre: '09', sep: '09', sept: '09',
+  octubre: '10', oct: '10', noviembre: '11', nov: '11',
   diciembre: '12', dic: '12',
 };
 
 function tryParseDate(day: string, monthToken: string, year: string): Date | null {
   const m = MONTH_MAP[monthToken.toLowerCase()];
   if (!m) return null;
-  const d = day.padStart(2, '0');
   const y = year.length === 2 ? `20${year}` : year;
-  return new Date(`${y}-${m}-${d}T12:00:00Z`);
+  return new Date(`${y}-${m}-${day.padStart(2, '0')}T12:00:00Z`);
 }
 
-// Extrae la fecha del nombre del archivo o del contenido del PDF — tolerante a mayúsculas/minúsculas y variantes
 export function extractWorkoutDate(text: string, filename: string): Date | null {
-  // Prueba en texto del PDF primero: "FECHA= MIERCOLES 11/03 DEL 2026" o "FECHA= 11/03/2026"
-  const hdrSlash = text.match(/FECHA[=:\s]+(?:\w+\s+)?(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/i);
-  if (hdrSlash) {
-    const [, d, m, y] = hdrSlash;
-    const yr = y.length === 2 ? `20${y}` : y;
-    return new Date(`${yr}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T12:00:00Z`);
-  }
-  const hdrText = text.match(/FECHA[=:\s]+(?:\w+\s+)?(\d{1,2})\s+(?:DE\s+)?(\w+)\s+(\d{2,4})/i);
-  if (hdrText) {
-    const r = tryParseDate(hdrText[1], hdrText[3], hdrText[4] ?? hdrText[3]);
-    // re-match with proper groups
-    const hdr2 = text.match(/FECHA[=:\s]+(?:\w+\s+)?(\d{1,2})\s+(?:DE\s+)?(\w+)\s+(\d{2,4})/i);
-    if (hdr2) { const r2 = tryParseDate(hdr2[1], hdr2[2], hdr2[3]); if (r2) return r2; }
-    if (r) return r;
-  }
-
-  // Prueba en el nombre del archivo con múltiples patrones
-  const sources = [filename, text.split('\n').slice(0, 5).join(' ')];
+  const sources = [filename, text.split('\n').slice(0, 8).join(' ')];
   for (const src of sources) {
-    // Patrón: "14 DE MARZO 2026" o "14 de marzo 2026" o "14-marzo-2026"
     const m1 = src.match(/(\d{1,2})\s*(?:DE\s+|[-_])(\w+)\s*(?:DE[L]?\s+)?(\d{2,4})/i);
     if (m1) { const r = tryParseDate(m1[1], m1[2], m1[3]); if (r) return r; }
-    // Patrón: "14/03/2026" o "14-03-2026"
     const m2 = src.match(/(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/i);
     if (m2) {
-      const [, d, mo, y] = m2;
-      const yr = y.length === 2 ? `20${y}` : y;
-      const dt = new Date(`${yr}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T12:00:00Z`);
+      const yr = m2[3].length === 2 ? `20${m2[3]}` : m2[3];
+      const dt = new Date(`${yr}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}T12:00:00Z`);
       if (!isNaN(dt.getTime())) return dt;
     }
-    // Patrón: "MARZO 14 2026"
-    const m3 = src.match(/(\w+)\s+(\d{1,2})\s+(\d{4})/i);
-    if (m3) { const r = tryParseDate(m3[2], m3[1], m3[3]); if (r) return r; }
   }
   return null;
 }
 
-/**
- * Separa jinete y entrenador de una línea concatenada sin espacio.
- * Ej: "G.GONZALEZF.PARILLI.T" → ["G.GONZALEZ", "F.PARILLI.T"]
- * Patrón: cada nombre tiene forma LETRA.APELLIDO (inicial+punto+letras)
- * Buscamos el punto de corte donde empieza una nueva inicial mayúscula
- * después de terminar el primer nombre.
- */
-function splitJockeyTrainer(line: string): [string, string] {
-  // Nombres típicos: "G.GONZALEZ", "J.C.RODRIGUEZ", "F.PARILLI.T", "C.L.UZCATEGUI"
-  // Patrón: una o dos iniciales (X. o X.Y.) seguidas de APELLIDO
-  // Buscamos la segunda ocurrencia de una letra mayúscula seguida de punto
-  // que NO sea parte de un apellido (como en "D'ANGELO" o "ALEMAN, Jr")
+function colOf(x: number): number {
+  if (x < 78)  return 1;  // días
+  if (x < 230) return 2;  // nombre
+  if (x < 610) return 3;  // trabajo+comentario
+  if (x < 640) return 4;  // RM
+  if (x < 705) return 5;  // jinete
+  return 6;               // entrenador
+}
 
-  // Estrategia: buscar todas las posiciones donde aparece [A-Z]\. que podrían
-  // ser el inicio de un segundo nombre
-  const matches = [...line.matchAll(/(?<=[A-ZÁÉÍÓÚ])[A-ZÁÉÍÓÚ](?=\.)/g)];
-  // El primer nombre termina en el índice donde empieza el segundo
-  // Buscamos el patrón: letras/puntos del nombre1 + letra mayúscula de inicio nombre2
-  // Regex: nombre = (\w+\.)+\w+ o similar
-  // Más robusto: partir en la primera letra mayúscula que sigue a una letra minúscula
-  // o a un apellido completo (buscar segunda secuencia INICIAL.)
+function isHeaderStr(s: string): boolean {
+  const t = s.trim();
+  return /^(DIVISION|EJEMPLARES|PARCIALES|ENTRENADORES|JINETES|INH\/)/i.test(t) ||
+    /^APARATO\s*$/i.test(t) ||
+    /^RM$/i.test(t);
+}
 
-  // Approach: encontrar el índice donde empieza el segundo token X.
-  // Un token de nombre empieza con [A-Z] seguido de '.'
-  // Encontramos todas las posiciones i donde line[i] es mayúscula y line[i+1] es '.'
-  const starts: number[] = [];
-  for (let i = 0; i < line.length - 1; i++) {
-    if (/[A-ZÁÉÍÓÚ]/.test(line[i]) && line[i + 1] === '.') {
-      starts.push(i);
+function parseWorkLine(work: string): {
+  distance: number | null;
+  workoutType: 'EP' | 'ES' | 'AP' | 'galopo';
+  splits: string;
+  comment: string;
+} {
+  const distMatch = work.match(/\((\d+)MTS?\)/i);
+  const distance = distMatch ? parseInt(distMatch[1]) : null;
+
+  let workoutType: 'EP' | 'ES' | 'AP' | 'galopo' = 'galopo';
+  if (/\(EP\)/i.test(work)) workoutType = 'EP';
+  else if (/\(ES\)/i.test(work)) workoutType = 'ES';
+  else if (/\(AP\)/i.test(work)) workoutType = 'AP';
+
+  const clean = work
+    .replace(/\(\d+MTS?\)/gi, '')
+    .replace(/\(EP\)|\(ES\)|\(AP\)/gi, '')
+    .trim();
+
+  const tokens = clean.split(/\s+/);
+  const isNumTok = (t: string) =>
+    /^[\d,./]+$/.test(t) || /^\d+[VP]$/i.test(t) || /^DDLR$/i.test(t);
+
+  let ci = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    if (/^[A-ZÁÉÍÓÚÑÜ,]+$/i.test(tokens[i]) && !isNumTok(tokens[i])) {
+      ci = i;
+      break;
     }
   }
 
-  // El primer nombre inicia en starts[0] (o 0 si no hay punto al inicio)
-  // El segundo nombre inicia en el primer start que es POSTERIOR al primer apellido
-  // El primer apellido termina cuando hay una secuencia de letras SIN punto
-  // Buscamos el split: después del primer bloque X.APELLIDO o X.Y.APELLIDO
-  // Un apellido = letras sin punto al final (puede tener coma, espacio, apóstrofe)
-
-  // Simplificamos: el primer nombre es todo hasta el primer carácter mayúsculo
-  // que aparece inmediatamente después de una letra (no un punto ni espacio)
-  // Ej: "G.GONZALEZF" → split en 9 (antes de F)
-  // Ej: "J.C.RODRIGUEZJ" → split antes del último J
-  // Ej: "FEL.VELASQUEZJ" → split antes de J al final de VELASQUEZ
-
-  // Buscar: letra minúscula/mayúscula de apellido seguida directamente de letra mayúscula (sin punto ni espacio)
-  // que sea inicio del segundo nombre
-  const splitMatch = line.match(/^(.+?[A-ZÁÉÍÓÚ]{2,})([A-ZÁÉÍÓÚ]\..*)$/);
-  if (splitMatch) {
-    return [splitMatch[1].trim(), splitMatch[2].trim()];
+  let splits: string;
+  let comment: string;
+  if (ci > 0) {
+    splits = tokens.slice(0, ci).join(' ');
+    comment = tokens.slice(ci).join(' ')
+      .replace(/\s*\d+[.,]\d+\s*$/, '')
+      .replace(/\s*\d+\s*$/, '')
+      .trim();
+  } else if (ci === 0) {
+    splits = '';
+    comment = tokens.join(' ')
+      .replace(/\s*\d+[.,]\d+\s*$/, '')
+      .replace(/\s*\d+\s*$/, '')
+      .trim();
+  } else {
+    splits = clean;
+    comment = '';
   }
 
-  // Fallback: dividir por espacios múltiples o por la mitad si hay un espacio
-  const spaceIdx = line.indexOf(' ');
-  if (spaceIdx > 0) {
-    return [line.slice(0, spaceIdx).trim(), line.slice(spaceIdx).trim()];
+  return { distance, workoutType, splits, comment };
+}
+
+// Remove implements like (+GR), (-BB), (+OT), (+GR y +BB) but keep (USA), (CHI), (ARG) etc
+function cleanHorseName(name: string): string {
+  return name
+    .replace(/\s*\([+-][A-Z]{2,}(?:\s+y\s+[+-][A-Z]{2,})?\)/gi, '')
+    .trim();
+}
+
+function isWorkContent(s: string): boolean {
+  return /\(EP\)|\(ES\)|\(AP\)/i.test(s) ||
+    /^(GALOPO|TROTO|SOLO\s+PIQUE|UN\s+PIQUE|RECONOCI|SALIO|SALIERON|DE\s+ESCUELITA|GALOPARON)/i.test(s.trim()) ||
+    /^\d+[,.]/.test(s.trim());
+}
+
+export async function parseWorkoutsPdfBuffer(buffer: Buffer): Promise<ParsedWorkout[]> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+
+  // Collect items with page index
+  const allItems: { page: number; x: number; y: number; s: string }[] = [];
+  let pageIdx = 0;
+
+  const options = {
+    pagerender: (pageData: any) => {
+      const pn = pageIdx++;
+      return pageData.getTextContent({ normalizeWhitespace: false }).then((tc: any) => {
+        for (const item of tc.items) {
+          const s = item.str as string;
+          if (!s.trim()) continue;
+          allItems.push({
+            page: pn,
+            x: Math.round(item.transform[4]),
+            y: Math.round(item.transform[5]),
+            s,
+          });
+        }
+        return '';
+      });
+    },
+  };
+
+  await pdfParse(buffer, options);
+
+  // Group by (page, Y) — items on the same physical row share page+Y
+  const rowMap = new Map<string, { [col: number]: string }>();
+  for (const item of allItems) {
+    const key = `${item.page}_${item.y}`;
+    const col = colOf(item.x);
+    if (!rowMap.has(key)) rowMap.set(key, {});
+    const row = rowMap.get(key)!;
+    // Append with space separator (items on same col are fragments of same text)
+    row[col] = row[col] ? row[col] + item.s : item.s;
   }
 
-  return [line, ''];
-}
+  // Sort rows: by page asc, then by Y desc (top of page first — PDF Y grows upward)
+  const sortedKeys = [...rowMap.keys()].sort((a, b) => {
+    const [pa, ya] = a.split('_').map(Number);
+    const [pb, yb] = b.split('_').map(Number);
+    if (pa !== pb) return pa - pb;
+    return yb - ya;
+  });
 
-function isHeaderLine(line: string): boolean {
-  return (
-    /^DIVISION/i.test(line) ||
-    /^EJEMPLARES/i.test(line) ||
-    /^\(EJERCICIOS/i.test(line) ||
-    /^FECHA[=:]/i.test(line) ||
-    /^PARCIALES/i.test(line) ||
-    /INH\/ LA RINCONADA/i.test(line) ||
-    /ESTADO DE LA PISTA/i.test(line) ||
-    /^ENTRENADORES/i.test(line) ||
-    /^APARATO\s*$/i.test(line) ||
-    line.length < 2
-  );
-}
-
-/**
- * Una línea es de "nombre de caballo" si:
- * - Empieza con dígitos+D (prefijo días) seguido de nombre, O
- * - Es solo texto en mayúsculas (nombre puro sin números iniciales)
- * - NO es una línea de trabajo (parciales) ni de jinete/entrenador
- */
-function isHorseLine(line: string): boolean {
-  // Línea de trabajo: contiene (EP), (ES), (AP), GALOPO, TROTO, números con comas
-  if (/\(EP\)|\(ES\)|\(AP\)/i.test(line)) return false;
-  if (/^GALOPO|^TROTO|^SOLO PIQUE|^UN PIQUE|^RECONOCIO|^SALIO|^SALIERON|^DE ESCUELITA/i.test(line)) return false;
-  if (/^\d+[,.]\d/.test(line)) return false; // empieza con parcial numérico
-  // Línea de jinete: dos nombres con puntos concatenados (manejado por contexto)
-  // Nombre de caballo: letras, espacios, paréntesis, +, -, apostrofes
-  return /^(\d{1,2}D)?[A-ZÁÉÍÓÚÑÜH\.][A-ZÁÉÍÓÚÑÜ\s\(\)\+\-\.,'\d]*/i.test(line);
-}
-
-export function parseWorkoutsPdf(text: string): ParsedWorkout[] {
   const workouts: ParsedWorkout[] = [];
 
-  const lines = text
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0);
+  for (const key of sortedKeys) {
+    const row = rowMap.get(key)!;
+    const col2 = (row[2] ?? '').trim();
+    const col3 = (row[3] ?? '').trim();
 
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
+    // Need both a horse name (col2) and a workout description (col3)
+    if (!col2 || !col3) continue;
 
-    if (isHeaderLine(line)) { i++; continue; }
+    // Skip header rows
+    if (isHeaderStr(col2) || isHeaderStr(col3)) continue;
 
-    // Detectar nombre de caballo: opcional prefijo ND seguido del nombre
-    // Ej: "4DAXIS MUNDI", "ALCALA", "H.ROSEMONT"
-    const horseMatch = line.match(/^(\d{1,2}D)?([A-ZÁÉÍÓÚÑÜH\.][A-ZÁÉÍÓÚÑÜ\s\(\)\+\-\.'`,\d]*)$/i);
+    // col3 must look like workout content
+    if (!isWorkContent(col3)) continue;
 
-    if (!horseMatch) { i++; continue; }
+    // col2 must look like a horse name — reject pure numeric/jockey lines
+    if (/^\d+[,.]/.test(col2)) continue;  // parcial number leaked into col2
+    if (isHeaderStr(col2)) continue;
 
-    // Verificar que no sea una línea de trabajo enmascarada ni una línea de jinete/entrenador
-    const candidateName = horseMatch[2].trim();
-    if (
-      /\(EP\)|\(ES\)|\(AP\)/i.test(candidateName) ||
-      /^GALOPO|^TROTO|^SOLO PIQUE|^UN PIQUE|^RECONOCIO|^SALIO|^SALIERON|^DE ESCUELITA/i.test(candidateName) ||
-      /^\d+[,.]\d/.test(candidateName) ||
-      // Línea de jinete/entrenador: empieza con patrón INICIAL. (una o dos letras seguidas de punto)
-      // Ej: "R.ARRAGAA.MIZRAHI", "FEL.VELASQUEZJ.SALVADOR", "EDW.JARAMILLOG.MARQUEZ"
-      /^[A-Z]{1,3}\.[A-Z]/.test(candidateName)
-    ) { i++; continue; }
+    // Parse days: col1 may have "4D" or "13D", or embedded in col2 like "4DARCANO" (rare)
+    let daysRest: number | null = null;
+    let rawName = col2;
 
-    const daysPrefix = horseMatch[1] ?? '';
-    const daysRest = daysPrefix ? parseInt(daysPrefix) : null;
-    const horseName = candidateName;
-
-    const workLine = lines[i + 1] ?? '';
-    const jockeyLine = lines[i + 2] ?? '';
-
-    // Verificar que la línea siguiente sea realmente un trabajo
-    if (!workLine || isHeaderLine(workLine)) { i++; continue; }
-
-    // --- Parsear línea de trabajo ---
-    // Distancia
-    const distMatch = workLine.match(/\((\d+)MTS?\)/i);
-    const distance = distMatch ? parseInt(distMatch[1]) : null;
-
-    // Tipo
-    let workoutType: 'EP' | 'ES' | 'AP' | 'galopo' = 'galopo';
-    if (/\(EP\)/i.test(workLine)) workoutType = 'EP';
-    else if (/\(ES\)/i.test(workLine)) workoutType = 'ES';
-    else if (/\(AP\)/i.test(workLine)) workoutType = 'AP';
-
-    // RM: número pegado al final (ej: "...SE FUE LARGO12" o "...COMODO 15,3")
-    const rmMatch = workLine.match(/(\d+(?:[,.]\d+)?)\s*$/);
-    const rm = rmMatch ? parseFloat(rmMatch[1].replace(',', '.')) : null;
-
-    // Quitar distancia y tipo para obtener parciales + comentario
-    // Formato: "15,1 29,4 43,1 57,2/ 73// MUY COMODO Y SHN 13,2"
-    const workClean = workLine
-      .replace(/\(\d+MTS?\)/gi, '')
-      .replace(/\(EP\)|\(ES\)|\(AP\)/gi, '')
-      .trim();
-
-    // Tokenizar y encontrar el primer token que sea solo letras (inicio del comentario)
-    // Tokens numéricos/marcadores: números, 2P/4P/6P, DDLR, barras /
-    const tokens = workClean.split(/\s+/);
-    const isNumericToken = (t: string) =>
-      /^[\d,./]+$/.test(t) || /^\d+P$/i.test(t) || /^DDLR$/i.test(t);
-
-    let commentIdx = -1;
-    for (let ti = 0; ti < tokens.length; ti++) {
-      if (/^[A-ZÁÉÍÓÚÑÜ,]+$/i.test(tokens[ti]) && !isNumericToken(tokens[ti])) {
-        commentIdx = ti;
-        break;
-      }
-    }
-
-    let splits: string;
-    let comment: string;
-    if (commentIdx > 0) {
-      splits = tokens.slice(0, commentIdx).join(' ');
-      const rawComment = tokens.slice(commentIdx).join(' ');
-      comment = rawComment.replace(/\s*\d+[.,]\d+\s*$/, '').replace(/\s*\d+\s*$/, '').trim();
-    } else if (commentIdx === 0) {
-      splits = '';
-      comment = tokens.join(' ').replace(/\s*\d+[.,]\d+\s*$/, '').replace(/\s*\d+\s*$/, '').trim();
+    const col1 = (row[1] ?? '').trim();
+    const daysFromCol1 = col1.match(/^(\d{1,2})V?D?$/i);
+    if (daysFromCol1 && /D/i.test(col1)) {
+      daysRest = parseInt(daysFromCol1[1]);
     } else {
-      splits = workClean;
-      comment = '';
-    }
-
-    // --- Parsear jinete/entrenador ---
-    let jockeyName = '';
-    let trainerName = '';
-
-    if (jockeyLine && !isHeaderLine(jockeyLine)) {
-      // Verificar que jockeyLine no sea otro nombre de caballo (próxima entrada)
-      const isNextHorse = /^\d{1,2}D[A-Z]/i.test(jockeyLine);
-      if (!isNextHorse) {
-        [jockeyName, trainerName] = splitJockeyTrainer(jockeyLine);
+      // Try embedded: "4DARCANO" — but only if col1 is empty or non-numeric
+      const embedded = rawName.match(/^(\d{1,2})D(.+)$/i);
+      if (embedded) {
+        daysRest = parseInt(embedded[1]);
+        rawName = embedded[2].trim();
       }
     }
+
+    const horseName = cleanHorseName(rawName).toUpperCase().replace(/\s+/g, ' ').trim();
+    if (!horseName || horseName.length < 2) continue;
+
+    // RM: prefer col4 (dedicated RM column), fallback to end of col3
+    let rm: number | null = null;
+    const col4 = (row[4] ?? '').trim();
+    if (col4 && /^\d+[,.]?\d*$/.test(col4)) {
+      rm = parseFloat(col4.replace(',', '.'));
+    } else {
+      const rmEnd = col3.match(/(\d+(?:[,.]\d+)?)\s*$/);
+      if (rmEnd) rm = parseFloat(rmEnd[1].replace(',', '.'));
+    }
+
+    const { distance, workoutType, splits, comment } = parseWorkLine(col3);
+
+    const jockeyRaw = (row[5] ?? '').trim();
+    const jockeyName = jockeyRaw.replace(/^TRAQUEADOR\s*/i, '').trim();
+    const trainerName = (row[6] ?? '').trim();
 
     workouts.push({
       horseName,
@@ -295,11 +251,14 @@ export function parseWorkoutsPdf(text: string): ParsedWorkout[] {
       rm,
       jockeyName,
       trainerName,
-      rawBlock: [line, workLine, jockeyLine].join(' | '),
+      rawBlock: `${col1}|${col2}|${col3}|${col4}|${jockeyName}|${trainerName}`,
     });
-
-    i += 3;
   }
 
   return workouts;
+}
+
+// Legacy text-based export — only used internally for extractWorkoutDate
+export function parseWorkoutsPdf(_text: string): ParsedWorkout[] {
+  return [];
 }
