@@ -398,8 +398,8 @@ export default function AdminWorkoutsPage() {
 }
 
 function DeleteSection() {
-  const [from, setFrom] = useState('2026-01-01');
-  const [to, setTo] = useState('2026-03-17');
+  const [from, setFrom] = useState('2025-01-01');
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState('');
 
