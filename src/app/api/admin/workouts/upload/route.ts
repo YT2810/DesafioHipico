@@ -60,20 +60,23 @@ export async function POST(req: NextRequest) {
     const dateStart = new Date(finalDate); dateStart.setUTCHours(0, 0, 0, 0);
     const dateEnd   = new Date(finalDate); dateEnd.setUTCHours(23, 59, 59, 999);
 
-    let inserted = 0;
-    for (const row of rows) {
+    // Batch horse lookup — one query for all names instead of N sequential queries
+    const validRows = rows.filter(r => r.horseName.trim().length > 0);
+    const allNames = [...new Set(validRows.map(r => r.horseName.toUpperCase().trim()))];
+    const horses = await Horse.find({
+      name: { $in: allNames.map(n => new RegExp(`^${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')) },
+    }).lean();
+    const horseMap = new Map(horses.map(h => [(h.name as string).toUpperCase().trim(), h._id]));
+
+    // Parallel upserts
+    await Promise.all(validRows.map(row => {
       const normalizedName = row.horseName.toUpperCase().trim();
-      if (!normalizedName) continue;
-
-      const horse = await Horse.findOne({
-        name: { $regex: new RegExp(`^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-      }).lean();
-
-      await WorkoutEntry.findOneAndUpdate(
+      const horseId = horseMap.get(normalizedName);
+      return WorkoutEntry.findOneAndUpdate(
         { horseName: normalizedName, trackId, workoutDate: { $gte: dateStart, $lte: dateEnd } },
         {
           $set: {
-            horseId: horse ? horse._id : undefined,
+            horseId: horseId ?? undefined,
             horseName: normalizedName,
             trackId,
             workoutDate: finalDate,
@@ -90,8 +93,8 @@ export async function POST(req: NextRequest) {
         },
         { upsert: true, new: true }
       );
-      inserted++;
-    }
+    }));
+    const inserted = validRows.length;
 
     return NextResponse.json({
       success: true,
