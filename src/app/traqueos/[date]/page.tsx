@@ -88,5 +88,61 @@ export default async function TraqueosDatePage(
 ) {
   const { date } = await params;
   if (!parseDate(date)) notFound();
-  return <TraqueosDateClient date={date} />;
+
+  const parsed = parseDate(date)!;
+  const d = parsed.getUTCDate();
+  const mon = MONTHS_ES[parsed.getUTCMonth()];
+  const y = parsed.getUTCFullYear();
+
+  await connectMongo();
+  const track = await Track.findOne({ name: /rinconada/i }).lean() as any;
+  const entry = track ? await WorkoutEntry.findOne({
+    trackId: track._id,
+    workoutDate: { $gte: new Date(`${date}T00:00:00Z`), $lte: new Date(`${date}T23:59:59Z`) },
+  }).lean() as any : null;
+  const sourceFile = entry?.sourceFile ?? '';
+  const type = sessionType(sourceFile);
+  const title = buildTitle(parsed, sourceFile);
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    name: title,
+    description: `${type} y parciales oficiales de los caballos en La Rinconada del ${d} de ${mon} de ${y}. Datos de la División de Toma Tiempos del INH.`,
+    url: `${BASE}/traqueos/${date}`,
+    datePublished: date,
+    dateModified: date,
+    license: 'https://creativecommons.org/licenses/by/4.0/',
+    creator: {
+      '@type': 'Organization',
+      name: 'Instituto Nacional de Hipismo (INH)',
+      url: 'https://www.inh.gob.ve',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Desafío Hípico',
+      url: BASE,
+    },
+    keywords: [
+      'traqueos La Rinconada', 'trabajos caballos Venezuela',
+      'parciales caballos', 'toma tiempos INH', `traqueos ${mon} ${y}`,
+    ],
+    spatialCoverage: {
+      '@type': 'Place',
+      name: 'La Rinconada',
+      address: { '@type': 'PostalAddress', addressCountry: 'VE', addressLocality: 'Caracas' },
+    },
+    variableMeasured: [
+      { '@type': 'PropertyValue', name: 'Tiempo parcial', unitCode: 'SEC' },
+      { '@type': 'PropertyValue', name: 'Remate (RM)', unitCode: 'SEC' },
+      { '@type': 'PropertyValue', name: 'Distancia de trabajo', unitCode: 'MTR' },
+    ],
+  };
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <TraqueosDateClient date={date} />
+    </>
+  );
 }

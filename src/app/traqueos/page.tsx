@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
 import TraqueosClient from './TraqueosClient';
+import connectMongo from '@/lib/mongodb';
+import WorkoutEntry from '@/models/WorkoutEntry';
+import Track from '@/models/Track';
 
 const BASE = 'https://www.desafiohipico.com';
+
+const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
 export const metadata: Metadata = {
   title: 'Traqueos La Rinconada · Trabajos Oficiales INH Esta Semana',
@@ -40,6 +46,67 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TraqueosPage() {
-  return <TraqueosClient />;
+function sessionLabel(sourceFile: string) {
+  const f = (sourceFile ?? '').toUpperCase();
+  if (f.includes('AJUSTE')) return 'Ajustes';
+  if (f.includes('TRABAJO')) return 'Trabajos';
+  return 'Traqueos';
+}
+
+export default async function TraqueosPage() {
+  let dates: { _id: string; sourceFile: string }[] = [];
+  try {
+    await connectMongo();
+    const track = await Track.findOne({ name: /rinconada/i }).lean() as any;
+    if (track) {
+      dates = await WorkoutEntry.aggregate([
+        { $match: { trackId: track._id } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$workoutDate' } }, sourceFile: { $first: '$sourceFile' } } },
+        { $sort: { _id: -1 } },
+        { $limit: 60 },
+      ]);
+    }
+  } catch { /* build time — skip */ }
+
+  // JSON-LD: DataCatalog (hub) + ItemList of sessions
+  const itemList = {
+    '@context': 'https://schema.org',
+    '@type': 'DataCatalog',
+    name: 'Traqueos La Rinconada · Desafío Hípico',
+    description: 'Catálogo de traqueos y trabajos oficiales de La Rinconada publicados por la División de Toma Tiempos del INH.',
+    url: `${BASE}/traqueos`,
+    publisher: { '@type': 'Organization', name: 'Desafío Hípico', url: BASE },
+    dataset: dates.map(d => {
+      const dt = new Date(`${d._id}T12:00:00Z`);
+      const label = sessionLabel(d.sourceFile);
+      const day = DAYS_ES[dt.getUTCDay()];
+      const dd = dt.getUTCDate();
+      const mon = MONTHS_ES[dt.getUTCMonth()];
+      const y = dt.getUTCFullYear();
+      return {
+        '@type': 'Dataset',
+        name: `${label} La Rinconada ${day} ${dd} de ${mon} ${y}`,
+        url: `${BASE}/traqueos/${d._id}`,
+        datePublished: d._id,
+        creator: { '@type': 'Organization', name: 'Instituto Nacional de Hipismo (INH)' },
+      };
+    }),
+  };
+
+  const breadcrumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Desafío Hípico', item: BASE },
+      { '@type': 'ListItem', position: 2, name: 'Traqueos La Rinconada', item: `${BASE}/traqueos` },
+    ],
+  };
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
+      <TraqueosClient />
+    </>
+  );
 }
