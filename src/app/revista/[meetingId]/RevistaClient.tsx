@@ -129,7 +129,7 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
   const pos = h.isScratched ? 'R' : (h.finishPosition ?? '?');
   const col = posColor(h.finishPosition);
   const isWinner = h.finishPosition === 1;
-  const diff = isWinner ? 'GANÓ' : (h.distanceMargin ?? h.diffVsFirst ?? '');
+  const diff = isWinner ? 'GANÓ' : (h.diffVsFirst ?? h.distanceMargin ?? '');
   const refName = isWinner
     ? (h.secondName ? `2° ${h.secondName}` : '')
     : (h.winnerName ? `1° ${h.winnerName}` : '');
