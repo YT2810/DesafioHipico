@@ -16,6 +16,7 @@ const WORKOUT_LABELS: Record<string, string> = {
 };
 
 interface DateItem { _id: string; count: number; sourceFile: string; }
+interface NextMeeting { id: string; date: string; meetingNumber: number; }
 interface WorkoutEntry {
   _id: string;
   horseName: string;
@@ -49,6 +50,7 @@ export default function TraqueosClient() {
   const [dates, setDates] = useState<DateItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [entries, setEntries] = useState<WorkoutEntry[]>([]);
+  const [nextMeeting, setNextMeeting] = useState<NextMeeting | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -61,6 +63,7 @@ export default function TraqueosClient() {
       .then(d => {
         setDates(d.dates ?? []);
         if (d.dates?.length > 0) setSelectedDate(d.dates[0]._id);
+        if (d.nextMeeting) setNextMeeting(d.nextMeeting);
       });
 
     // Track time on page when leaving
@@ -78,6 +81,7 @@ export default function TraqueosClient() {
       .then(r => r.json())
       .then(d => {
         setEntries(d.entries ?? []);
+        if (d.nextMeeting) setNextMeeting(d.nextMeeting);
         trackGA('traqueos_date_view', { date: selectedDate, count: d.entries?.length ?? 0 });
       })
       .finally(() => setLoading(false));
@@ -111,13 +115,23 @@ export default function TraqueosClient() {
                 Trabajos y parciales oficiales · División de Toma Tiempos INH
               </p>
             </div>
-            <Link
-              href="/pronosticos"
-              onClick={() => trackGA('traqueos_cta_click', { destination: 'pronosticos' })}
-              className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-black transition-colors hover:brightness-110"
-              style={{ backgroundColor: GOLD }}>
-              Ver Pronósticos →
-            </Link>
+            <div className="flex gap-2 flex-wrap">
+              {nextMeeting && (
+                <Link
+                  href={`/revista/${nextMeeting.id}`}
+                  onClick={() => trackGA('traqueos_cta_click', { destination: 'revista' })}
+                  className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold border border-yellow-700/60 text-yellow-400 hover:bg-yellow-950/40 transition-colors">
+                  Revista Reunión {nextMeeting.meetingNumber} →
+                </Link>
+              )}
+              <Link
+                href="/pronosticos"
+                onClick={() => trackGA('traqueos_cta_click', { destination: 'pronosticos' })}
+                className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-black transition-colors hover:brightness-110"
+                style={{ backgroundColor: GOLD }}>
+                Ver Pronósticos →
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -238,20 +252,39 @@ export default function TraqueosClient() {
           </div>
         )}
 
-        {/* ── CTA pronósticos ── */}
+        {/* ── CTAs cruzados ── */}
         {entries.length > 0 && (
-          <div className="rounded-2xl border border-yellow-900/40 bg-yellow-950/20 p-4 flex items-center gap-4">
-            <div className="flex-1">
-              <p className="text-sm font-bold text-white">¿Listo para apostar con información?</p>
-              <p className="text-xs text-gray-400 mt-0.5">Consulta los pronósticos de los mejores handicappers de Venezuela.</p>
+          <div className="space-y-3">
+            {nextMeeting && (
+              <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4 flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-white">Revista de la próxima reunión</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Reunión {nextMeeting.meetingNumber} · {new Date(nextMeeting.date).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}
+                    {' — ve solo los traqueos de los caballos que van a correr, con su historial completo.'}
+                  </p>
+                </div>
+                <Link
+                  href={`/revista/${nextMeeting.id}`}
+                  onClick={() => trackGA('traqueos_cta_click', { destination: 'revista_bottom' })}
+                  className="shrink-0 px-4 py-2 rounded-xl text-sm font-bold border border-yellow-700/60 text-yellow-400 hover:bg-yellow-950/40 transition-colors">
+                  Ver Revista
+                </Link>
+              </div>
+            )}
+            <div className="rounded-2xl border border-yellow-900/40 bg-yellow-950/20 p-4 flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-bold text-white">¿Listo para apostar con información?</p>
+                <p className="text-xs text-gray-400 mt-0.5">Consulta los pronósticos de los mejores handicappers de Venezuela.</p>
+              </div>
+              <Link
+                href="/pronosticos"
+                onClick={() => trackGA('traqueos_cta_click', { destination: 'pronosticos_bottom' })}
+                className="shrink-0 px-4 py-2 rounded-xl text-sm font-bold text-black transition-colors hover:brightness-110"
+                style={{ backgroundColor: GOLD }}>
+                Pronósticos
+              </Link>
             </div>
-            <Link
-              href="/pronosticos"
-              onClick={() => trackGA('traqueos_cta_click', { destination: 'pronosticos_bottom' })}
-              className="shrink-0 px-4 py-2 rounded-xl text-sm font-bold text-black transition-colors hover:brightness-110"
-              style={{ backgroundColor: GOLD }}>
-              Pronósticos
-            </Link>
           </div>
         )}
 
