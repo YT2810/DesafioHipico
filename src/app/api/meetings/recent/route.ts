@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
           status: m.status,
           trackName: track?.name ?? 'Hipódromo',
           raceCount,
+          summaryVideoUrl: (m as any).summaryVideoUrl ?? null,
+          streamUrl: (m as any).streamUrl ?? null,
         };
       })
     );

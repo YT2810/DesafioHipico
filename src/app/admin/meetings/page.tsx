@@ -11,6 +11,7 @@ interface MeetingRow {
   trackName: string;
   raceCount: number;
   summaryVideoUrl?: string | null;
+  streamUrl?: string | null;
 }
 
 export default function AdminMeetingsPage() {
@@ -19,7 +20,10 @@ export default function AdminMeetingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [videoInputs, setVideoInputs] = useState<Record<string, string>>({});
-  const [feedback, setFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
+  const [savingStream, setSavingStream] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({}); 
+  const [streamFeedback, setStreamFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({}); 
 
   const roles: string[] = (session?.user as any)?.roles ?? [];
   const canAccess = roles.some(r => ['admin', 'staff'].includes(r));
@@ -32,12 +36,37 @@ export default function AdminMeetingsPage() {
         const rows: MeetingRow[] = d.meetings ?? [];
         setMeetings(rows);
         const inputs: Record<string, string> = {};
-        rows.forEach(m => { inputs[m._id] = m.summaryVideoUrl ?? ''; });
+        const sInputs: Record<string, string> = {};
+        rows.forEach(m => {
+          inputs[m._id] = m.summaryVideoUrl ?? '';
+          sInputs[m._id] = m.streamUrl ?? '';
+        });
         setVideoInputs(inputs);
+        setStreamInputs(sInputs);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [status]);
+
+  async function saveStream(meetingId: string) {
+    setSavingStream(meetingId);
+    setStreamFeedback(prev => ({ ...prev, [meetingId]: { ok: false, msg: '' } }));
+    try {
+      const res = await fetch(`/api/admin/meetings/${meetingId}/stream`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ streamUrl: streamInputs[meetingId] || null }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? 'Error');
+      setStreamFeedback(prev => ({ ...prev, [meetingId]: { ok: true, msg: '✓ Guardado' } }));
+      setMeetings(prev => prev.map(m => m._id === meetingId ? { ...m, streamUrl: d.streamUrl } : m));
+    } catch (e: any) {
+      setStreamFeedback(prev => ({ ...prev, [meetingId]: { ok: false, msg: e.message } }));
+    } finally {
+      setSavingStream(null);
+    }
+  }
 
   async function saveVideo(meetingId: string) {
     setSaving(meetingId);
@@ -72,11 +101,10 @@ export default function AdminMeetingsPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-3">
-        <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3">
+        <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3 space-y-1">
           <p className="text-xs text-blue-300 leading-relaxed">
-            Pega el enlace de YouTube del video resumen de cada jornada.<br/>
-            Acepta formatos: <span className="font-mono">youtube.com/watch?v=ID</span> o <span className="font-mono">youtu.be/ID</span>.
-            El video se incrusta automáticamente en la página de Resultados.
+            <strong>Stream en vivo:</strong> Pega la URL de YouTube, Telegram o VK del domingo. Se muestra en <span className="font-mono">/en-vivo</span>.<br/>
+            <strong>Video resumen:</strong> Solo YouTube (<span className="font-mono">youtube.com/watch?v=ID</span> o <span className="font-mono">youtu.be/ID</span>). Se muestra en Resultados.
           </p>
         </div>
 
@@ -92,6 +120,9 @@ export default function AdminMeetingsPage() {
           const fb = feedback[m._id];
           const hasVideo = !!m.summaryVideoUrl;
 
+          const sfb = streamFeedback[m._id];
+          const hasStream = !!m.streamUrl;
+
           return (
             <div key={m._id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
               {/* Meeting info */}
@@ -100,32 +131,55 @@ export default function AdminMeetingsPage() {
                   <p className="text-sm font-bold text-white">{m.trackName} — Reunión #{m.meetingNumber}</p>
                   <p className="text-[11px] text-gray-500 capitalize">{dateStr} · {m.raceCount} carreras</p>
                 </div>
-                {hasVideo && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/50 border border-red-800/50 text-red-400 shrink-0">▶ Video</span>
-                )}
+                <div className="flex gap-1">
+                  {hasStream && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/50 border border-red-800/50 text-red-400 shrink-0">📡 En vivo</span>}
+                  {hasVideo && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-950/50 border border-blue-800/50 text-blue-400 shrink-0">▶ Video</span>}
+                </div>
               </div>
 
-              {/* Video URL input */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="url"
-                  value={videoInputs[m._id] ?? ''}
-                  onChange={e => setVideoInputs(prev => ({ ...prev, [m._id]: e.target.value }))}
-                  placeholder="https://youtube.com/watch?v=... o https://youtu.be/..."
-                  className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors"
-                />
-                <button
-                  onClick={() => saveVideo(m._id)}
-                  disabled={saving === m._id}
-                  className="shrink-0 text-xs px-4 py-2 rounded-lg font-bold bg-yellow-600 hover:bg-yellow-500 text-black disabled:opacity-50 transition-colors"
-                >
-                  {saving === m._id ? '...' : 'Guardar'}
-                </button>
+              {/* Stream URL input */}
+              <div className="space-y-1">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📡 Stream en vivo (YouTube / Telegram / VK)</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={streamInputs[m._id] ?? ''}
+                    onChange={e => setStreamInputs(prev => ({ ...prev, [m._id]: e.target.value }))}
+                    placeholder="https://youtube.com/live/... o t.me/... o vk.com/video..."
+                    className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-red-600 transition-colors"
+                  />
+                  <button
+                    onClick={() => saveStream(m._id)}
+                    disabled={savingStream === m._id}
+                    className="shrink-0 text-xs px-4 py-2 rounded-lg font-bold bg-red-700 hover:bg-red-600 text-white disabled:opacity-50 transition-colors"
+                  >
+                    {savingStream === m._id ? '...' : 'Guardar'}
+                  </button>
+                </div>
+                {sfb?.msg && <p className={`text-[11px] font-semibold ${sfb.ok ? 'text-green-400' : 'text-red-400'}`}>{sfb.msg}</p>}
               </div>
 
-              {fb?.msg && (
-                <p className={`text-[11px] font-semibold ${fb.ok ? 'text-green-400' : 'text-red-400'}`}>{fb.msg}</p>
-              )}
+              {/* Video resumen URL input */}
+              <div className="space-y-1">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">▶ Video resumen (solo YouTube)</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={videoInputs[m._id] ?? ''}
+                    onChange={e => setVideoInputs(prev => ({ ...prev, [m._id]: e.target.value }))}
+                    placeholder="https://youtube.com/watch?v=... o https://youtu.be/..."
+                    className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors"
+                  />
+                  <button
+                    onClick={() => saveVideo(m._id)}
+                    disabled={saving === m._id}
+                    className="shrink-0 text-xs px-4 py-2 rounded-lg font-bold bg-yellow-600 hover:bg-yellow-500 text-black disabled:opacity-50 transition-colors"
+                  >
+                    {saving === m._id ? '...' : 'Guardar'}
+                  </button>
+                </div>
+                {fb?.msg && <p className={`text-[11px] font-semibold ${fb.ok ? 'text-green-400' : 'text-red-400'}`}>{fb.msg}</p>}
+              </div>
             </div>
           );
         })}

@@ -63,6 +63,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const,
       priority: 0.88,
     },
+    {
+      url: `${BASE}/en-vivo`,
+      lastModified: now,
+      changeFrequency: 'daily' as const,
+      priority: 0.95,
+    },
   ];
 
   // ── Dynamic: recent + upcoming meetings ───────────────────────────────────
