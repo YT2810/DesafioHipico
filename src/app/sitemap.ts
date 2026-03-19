@@ -57,6 +57,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: freq,
       priority: 0.92,
     },
+    {
+      url: `${BASE}/retrospectos`,
+      lastModified: now,
+      changeFrequency: 'weekly' as const,
+      priority: 0.88,
+    },
   ];
 
   // ── Dynamic: recent + upcoming meetings ───────────────────────────────────

@@ -23,18 +23,45 @@ const TRACK_SEO: Record<string, { title: string; description: string; keywords: 
   },
 };
 
+const BASE = 'https://www.desafiohipico.com';
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: 'Resultados de Carreras | Desafío Hípico Venezuela',
-    description: 'Resultados oficiales de carreras de caballos en Venezuela — Hipódromo La Rinconada (Caracas), Valencia y más. Posiciones, tiempos, dividendos y video resumen de cada jornada.',
-    keywords: 'resultados carreras caballos venezuela, resultados la rinconada, hipódromo caracas resultados, dividendos hipismo venezuela, ganadores carreras',
+    title: 'Resultados Hípicos de Hoy Domingo | La Rinconada y Valencia — INH',
+    description: 'Resultados oficiales de carreras hípicas en Venezuela: Hipódromo La Rinconada (Caracas) y Valencia. Posiciones, tiempos, dividendos y ganadores de cada carrera. Datos del INH actualizados cada jornada.',
+    keywords: [
+      'resultados hípicos de hoy domingo',
+      'resultados hipódromo la rinconada hoy',
+      'resultados la rinconada',
+      'resultados inh',
+      'resultados inh hoy',
+      'resultados inh hoy la rinconada',
+      'la rinconada resultados',
+      'resultados carreras caballos venezuela',
+      'resultados hípicos de hoy domingo meridiano',
+      'resultados hipódromo de valencia hoy',
+      'dividendos la rinconada hoy',
+      'ganadores carreras la rinconada',
+      'resultados hinava hoy',
+      'resultados 5y6 hipódromo la rinconada hoy',
+    ],
     openGraph: {
-      title: 'Resultados de Carreras | Desafío Hípico Venezuela',
-      description: 'Posiciones, dividendos y video resumen de cada jornada hípica en Venezuela.',
+      title: 'Resultados Hípicos · La Rinconada y Valencia · INH',
+      description: 'Posiciones, tiempos, dividendos y ganadores de cada carrera hípica en Venezuela. Datos oficiales del INH.',
       type: 'website',
+      url: `${BASE}/resultados`,
+      siteName: 'Desafío Hípico',
+      locale: 'es_VE',
+      images: [{ url: `${BASE}/api/og`, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'Resultados Hípicos · La Rinconada y Valencia',
+      description: 'Posiciones, dividendos y ganadores. Datos oficiales INH Venezuela.',
+      images: [`${BASE}/api/og`],
     },
     alternates: {
-      canonical: 'https://desafiohipico.com/resultados',
+      canonical: `${BASE}/resultados`,
     },
   };
 }

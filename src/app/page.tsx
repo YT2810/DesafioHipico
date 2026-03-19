@@ -108,6 +108,10 @@ export default function HomePage() {
                         className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
                         ⏱ Traqueos
                       </Link>
+                      <Link href="/retrospectos" onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
+                        📚 Retrospectos
+                      </Link>
                       <Link href="/perfil" onClick={() => setMenuOpen(false)}
                         className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
                         👤 Mi perfil
@@ -166,11 +170,15 @@ export default function HomePage() {
             className="w-full py-3 rounded-2xl text-sm font-semibold text-gray-400 bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors text-center">
             🚫 Ver retirados del día
           </Link>
-          {/* Traqueos — discriminado por hipódromo */}
+          {/* Traqueos y Retrospectos — discriminado por hipódromo */}
           <div className="flex gap-2 w-full">
             <Link href="/traqueos"
               className="flex-1 py-3 rounded-2xl text-sm font-semibold text-gray-300 bg-gray-900 border border-gray-700 hover:border-yellow-700/50 transition-colors text-center">
-              ⏱ Traqueos La Rinconada
+              ⏱ Traqueos
+            </Link>
+            <Link href="/retrospectos"
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold text-gray-300 bg-gray-900 border border-gray-700 hover:border-yellow-700/50 transition-colors text-center">
+              📚 Retrospectos
             </Link>
           </div>
           {!isLoggedIn && (
@@ -323,7 +331,7 @@ export default function HomePage() {
 
         {/* SEO footer text — visible but subtle, helps Google index key terms */}
         <p className="text-xs text-gray-800 text-center leading-relaxed">
-          Inscritos La Rinconada · Inscritos Valencia · Resultados hípicos Venezuela · Revista La Rinconada · Traqueos La Rinconada · Trabajos oficiales INH · HINAVA
+          Inscritos La Rinconada · Inscritos Valencia · Resultados hípicos Venezuela · Revista La Rinconada · Traqueos La Rinconada · Trabajos oficiales INH · Retrospectos La Rinconada · Datos hípicos INH · HINAVA
         </p>
       </main>
 
