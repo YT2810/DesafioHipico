@@ -125,9 +125,22 @@ function jockeyShort(name: string): string {
   if (!name) return '—';
   const parts = name.trim().split(/\s+/);
   if (parts.length <= 2) return parts.join(' ');
-  // Format in DB: APELLIDO [INICIAL] NOMBRE — e.g. "QUEVEDO M FRANCISCO"
-  // Show first 2 words only: "QUEVEDO M"
-  return `${parts[0]} ${parts[1]}`;
+  // DB format: APELLIDO [INICIAL_2DO_APELLIDO] NOMBRE [INICIAL_FINAL]
+  // e.g. "QUEVEDO M FRANCISCO"  → "QUEVEDO M. FRA"
+  //      "GONZALEZ G YOELBIS D" → "GONZALEZ G. YOE"
+  //      "RODRIGUEZ JEAN C"     → "RODRIGUEZ JEA"
+  // Rule: keep apellido (parts[0]) full.
+  // If parts[1] is a single letter = middle initial → show as "X."
+  // Then show first 3 chars of the next word (given name) for disambiguation.
+  const apellido = parts[0];
+  const p1 = parts[1];
+  const isMiddleInitial = p1.length === 1;
+  if (isMiddleInitial) {
+    const givenName = parts[2] ?? '';
+    return `${apellido} ${p1}. ${givenName.slice(0, 3)}`;
+  }
+  // No middle initial — parts[1] is the given name
+  return `${apellido} ${p1.slice(0, 3)}`;
 }
 
 // ── Race label helper: C089, V012, etc. ──
@@ -174,23 +187,23 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
       <div className="grid items-center py-[3px] gap-x-0"
         style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
         {/* Fecha dd-mm */}
-        <span className="text-[9px] text-white font-mono">{shortDate(h.date)}</span>
+        <span className="text-[9px] text-gray-400 font-mono">{shortDate(h.date)}</span>
         {/* Carrera anual C089 */}
-        <span className="text-[9px] font-mono text-gray-300">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
-        {/* Posición */}
-        <span className="text-[10px] font-extrabold text-center" style={{ color: col }}>
+        <span className="text-[9px] font-mono text-gray-400">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
+        {/* Posición — dato clave, siempre prominente */}
+        <span className="text-[12px] font-black text-center" style={{ color: col }}>
           {pos}{typeof pos === 'number' ? '°' : ''}
         </span>
         {/* Distancia */}
-        <span className="text-[9px] text-white">{h.distance}m</span>
+        <span className="text-[9px] text-gray-300">{h.distance}m</span>
         {/* Dif vs 1° */}
-        <span className="text-[9px] text-amber-200 font-mono font-bold">{diff}</span>
-        {/* T.1° */}
-        <span className="text-[9px] font-mono text-yellow-400">{h.winnerTime ?? '—'}</span>
-        {/* T.Ej */}
-        <span className="text-[9px] font-mono font-bold" style={{ color: col }}>{h.officialTime ?? '—'}</span>
-        {/* Ganador o 2° — truncado pero visible */}
-        <span className="text-[9px] text-gray-300 truncate">{refName}</span>
+        <span className="text-[9px] text-amber-300 font-mono">{diff}</span>
+        {/* T.1° — referencia, menos prominente */}
+        <span className="text-[9px] font-mono text-gray-400">{h.winnerTime ?? '—'}</span>
+        {/* T.Ej — dato clave, máxima prominencia */}
+        <span className="text-[11px] font-black" style={{ color: isWinner ? GOLD : '#ffffff' }}>{h.officialTime ?? '—'}</span>
+        {/* Ganador o 2° */}
+        <span className="text-[9px] text-gray-400 truncate">{refName}</span>
       </div>
       {/* Fila secundaria — jinete */}
       {h.jockeyName && (
