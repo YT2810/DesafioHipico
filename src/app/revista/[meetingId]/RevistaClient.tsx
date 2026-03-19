@@ -110,7 +110,15 @@ function posColor(pos: number | null) {
 
 function shortDate(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleDateString('es-VE', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${dd}-${mm}`;
+}
+
+function daysSince(iso: string): number {
+  const d = new Date(iso);
+  const now = new Date();
+  return Math.floor((now.getTime() - d.getTime()) / 86400000);
 }
 
 // ── Race label helper: C089, V012, etc. ──
@@ -124,48 +132,62 @@ function raceLabel(trackCode: string, annualRaceNumber: string | null, raceNumbe
   return `${prefix}${raceNumber}`;
 }
 
-// ── Historial inline — 1 línea compacta estilo Gaceta ──
+// ── Encabezado de columnas del historial ──
+function HistoryHeader() {
+  return (
+    <div className="grid text-[8px] font-bold uppercase tracking-wider text-gray-700 pb-0.5 border-b border-gray-800/60"
+      style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
+      <span>Fecha</span>
+      <span>Carr.</span>
+      <span className="text-center">Pos</span>
+      <span>Dist</span>
+      <span>Dif</span>
+      <span>T.1°</span>
+      <span>T.Ej</span>
+      <span>Gan / 2°</span>
+    </div>
+  );
+}
+
+// ── Historial — tabla con columnas fijas ──
 function HistoryRow({ h }: { h: RaceHistoryItem }) {
   const pos = h.isScratched ? 'R' : (h.finishPosition ?? '?');
   const col = posColor(h.finishPosition);
   const isWinner = h.finishPosition === 1;
-  const diff = isWinner ? 'GANÓ' : (h.diffVsFirst ?? h.distanceMargin ?? '');
+  const diff = isWinner ? '—' : (h.diffVsFirst ?? h.distanceMargin ?? '—');
   const refName = isWinner
-    ? (h.secondName ? `2° ${h.secondName}` : '')
-    : (h.winnerName ? `1° ${h.winnerName}` : '');
+    ? (h.secondName ? `2° ${h.secondName}` : '—')
+    : (h.winnerName ? `1° ${h.winnerName}` : '—');
 
   return (
-    <div className="history-row flex items-baseline gap-1.5 py-1 border-t border-gray-800/40 flex-wrap leading-tight">
-      {/* Fecha corta */}
-      <span className="text-[9px] text-gray-600 shrink-0 w-[4.2rem]">{shortDate(h.date)}</span>
-      {/* Carrera anual */}
-      <span className="text-[9px] font-mono text-gray-600 shrink-0">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
-      {/* Posición — color según puesto */}
-      <span className="text-[10px] font-extrabold shrink-0 w-5 text-center" style={{ color: col }}>
-        {pos}{typeof pos === 'number' ? '°' : ''}
-      </span>
-      {/* Distancia */}
-      <span className="text-[9px] text-gray-600 shrink-0">{h.distance}m</span>
-      {/* Cuerpos de diferencia */}
-      {diff && <span className="text-[9px] text-gray-500 shrink-0">{diff}</span>}
-      {/* Separador */}
-      <span className="text-[9px] text-gray-800 shrink-0">·</span>
-      {/* Jinete */}
-      {h.jockeyName && (
-        <span className="text-[9px] text-gray-500 italic shrink-0 max-w-[7rem] truncate">{h.jockeyName}</span>
-      )}
-      {/* Tiempos */}
-      {!isWinner && h.winnerTime && (
-        <span className="text-[9px] font-mono text-yellow-600/60 shrink-0">1°:{h.winnerTime}</span>
-      )}
-      {h.officialTime && (
-        <span className="text-[9px] font-mono shrink-0" style={{ color: col }}>
-          {isWinner ? '' : 'Ej:'}{h.officialTime}
+    <div className="border-t border-gray-800/30">
+      {/* Fila principal — 8 columnas fijas */}
+      <div className="grid items-center py-[3px] gap-x-0"
+        style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
+        {/* Fecha dd-mm */}
+        <span className="text-[9px] text-gray-500 font-mono">{shortDate(h.date)}</span>
+        {/* Carrera anual C089 */}
+        <span className="text-[9px] font-mono text-gray-600">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
+        {/* Posición */}
+        <span className="text-[10px] font-extrabold text-center" style={{ color: col }}>
+          {pos}{typeof pos === 'number' ? '°' : ''}
         </span>
-      )}
-      {/* Ganador o 2° */}
-      {refName && (
-        <span className="text-[9px] text-gray-600 truncate min-w-0">{refName}</span>
+        {/* Distancia */}
+        <span className="text-[9px] text-gray-500">{h.distance}m</span>
+        {/* Dif vs 1° */}
+        <span className="text-[9px] text-gray-500 font-mono">{diff}</span>
+        {/* T.1° */}
+        <span className="text-[9px] font-mono text-yellow-700/70">{h.winnerTime ?? '—'}</span>
+        {/* T.Ej */}
+        <span className="text-[9px] font-mono" style={{ color: col }}>{h.officialTime ?? '—'}</span>
+        {/* Ganador o 2° — truncado pero visible */}
+        <span className="text-[9px] text-gray-600 truncate">{refName}</span>
+      </div>
+      {/* Fila secundaria — jinete (siempre visible, debajo) */}
+      {h.jockeyName && (
+        <p className="text-[9px] text-amber-400/60 italic pb-[2px] pl-[72px] leading-none truncate">
+          {h.jockeyName}
+        </p>
       )}
     </div>
   );
@@ -271,13 +293,26 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
         </div>
 
         {/* ── Historial ── */}
-        {hasHistory && (
-          <div className="mt-1.5 ml-[2.875rem]">
-            {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
-          </div>
-        )}
+        {hasHistory && (() => {
+          const lastRace = entry.raceHistory[0];
+          const dsc = lastRace ? daysSince(lastRace.date) : null;
+          return (
+            <div className="mt-1.5 ml-[2.875rem]">
+              <HistoryHeader />
+              {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
+              {dsc !== null && (
+                <p className="text-[8px] text-gray-700 mt-1 font-mono">
+                  DSC: <span className={`font-bold ${dsc <= 7 ? 'text-green-700' : dsc <= 21 ? 'text-yellow-700' : 'text-gray-600'}`}>{dsc} días</span>
+                </p>
+              )}
+            </div>
+          );
+        })()}
         {!hasHistory && (
-          <p className="text-[10px] text-gray-800 italic ml-[2.875rem] mt-1">Sin historial</p>
+          <div className="ml-[2.875rem] mt-1">
+            <p className="text-[10px] text-gray-800 italic">Sin historial</p>
+            <p className="text-[8px] text-gray-700 font-mono mt-0.5">DSC: <span className="text-gray-600">N/A</span></p>
+          </div>
         )}
 
         {/* ── Trabajos ── */}
