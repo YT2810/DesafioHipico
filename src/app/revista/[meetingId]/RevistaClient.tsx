@@ -121,6 +121,13 @@ function daysSince(iso: string): number {
   return Math.floor((now.getTime() - d.getTime()) / 86400000);
 }
 
+function jockeyShort(name: string): string {
+  if (!name) return '—';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 1) return name;
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+}
+
 // ── Race label helper: C089, V012, etc. ──
 function raceLabel(trackCode: string, annualRaceNumber: string | null, raceNumber: number): string {
   const prefix = trackCode || '';
@@ -135,7 +142,7 @@ function raceLabel(trackCode: string, annualRaceNumber: string | null, raceNumbe
 // ── Encabezado de columnas del historial ──
 function HistoryHeader() {
   return (
-    <div className="grid text-[8px] font-bold uppercase tracking-wider text-gray-700 pb-0.5 border-b border-gray-800/60"
+    <div className="grid text-[8px] font-bold uppercase tracking-wider text-gray-500 pb-0.5 border-b border-gray-700/60"
       style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
       <span>Fecha</span>
       <span>Carr.</span>
@@ -160,33 +167,33 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
     : (h.winnerName ? `1° ${h.winnerName}` : '—');
 
   return (
-    <div className="border-t border-gray-800/30">
+    <div className="border-t border-gray-700/40">
       {/* Fila principal — 8 columnas fijas */}
       <div className="grid items-center py-[3px] gap-x-0"
         style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
         {/* Fecha dd-mm */}
-        <span className="text-[9px] text-gray-500 font-mono">{shortDate(h.date)}</span>
+        <span className="text-[9px] text-gray-300 font-mono">{shortDate(h.date)}</span>
         {/* Carrera anual C089 */}
-        <span className="text-[9px] font-mono text-gray-600">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
+        <span className="text-[9px] font-mono text-gray-400">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
         {/* Posición */}
         <span className="text-[10px] font-extrabold text-center" style={{ color: col }}>
           {pos}{typeof pos === 'number' ? '°' : ''}
         </span>
         {/* Distancia */}
-        <span className="text-[9px] text-gray-500">{h.distance}m</span>
+        <span className="text-[9px] text-gray-300">{h.distance}m</span>
         {/* Dif vs 1° */}
-        <span className="text-[9px] text-gray-500 font-mono">{diff}</span>
+        <span className="text-[9px] text-gray-300 font-mono">{diff}</span>
         {/* T.1° */}
-        <span className="text-[9px] font-mono text-yellow-700/70">{h.winnerTime ?? '—'}</span>
+        <span className="text-[9px] font-mono text-yellow-500/80">{h.winnerTime ?? '—'}</span>
         {/* T.Ej */}
-        <span className="text-[9px] font-mono" style={{ color: col }}>{h.officialTime ?? '—'}</span>
+        <span className="text-[9px] font-mono font-bold" style={{ color: col }}>{h.officialTime ?? '—'}</span>
         {/* Ganador o 2° — truncado pero visible */}
-        <span className="text-[9px] text-gray-600 truncate">{refName}</span>
+        <span className="text-[9px] text-gray-400 truncate">{refName}</span>
       </div>
-      {/* Fila secundaria — jinete (siempre visible, debajo) */}
+      {/* Fila secundaria — jinete */}
       {h.jockeyName && (
-        <p className="text-[9px] text-amber-400/60 italic pb-[2px] pl-[72px] leading-none truncate">
-          {h.jockeyName}
+        <p className="text-[9px] text-amber-300/80 italic pb-[2px] pl-[72px] leading-none">
+          {jockeyShort(h.jockeyName)}
         </p>
       )}
     </div>
@@ -200,16 +207,16 @@ function WorkoutRow({ w }: { w: WorkoutItem }) {
       <span className={`shrink-0 text-[8px] font-bold px-1 py-0.5 rounded border leading-none ${WORKOUT_COLORS[w.workoutType] ?? WORKOUT_COLORS.galopo}`}>
         {WORKOUT_LABELS[w.workoutType] ?? w.workoutType}
       </span>
-      <span className="shrink-0 text-gray-500 w-[3.2rem]">{shortDate(w.workoutDate)}</span>
-      {w.distance > 0 && <span className="shrink-0 text-gray-600 w-[2.8rem]">{w.distance}m</span>}
+      <span className="shrink-0 text-gray-300 w-[3.2rem]">{shortDate(w.workoutDate)}</span>
+      {w.distance > 0 && <span className="shrink-0 text-gray-400 w-[2.8rem]">{w.distance}m</span>}
       {w.daysRest !== null && (
         <span className={`shrink-0 font-bold w-5 ${
           (w.daysRest ?? 99) <= 3 ? 'text-green-400' : (w.daysRest ?? 99) <= 7 ? 'text-yellow-500' : 'text-gray-600'
         }`}>{w.daysRest}d</span>
       )}
-      {w.splits && <span className="font-mono text-yellow-600/80">{w.splits}</span>}
-      {w.rm != null && <span className="shrink-0 font-bold text-yellow-400">{w.rm}</span>}
-      {w.comment && <span className="flex-1 text-gray-600 italic truncate">{w.comment}</span>}
+      {w.splits && <span className="font-mono text-yellow-400/90">{w.splits}</span>}
+      {w.rm != null && <span className="shrink-0 font-bold text-yellow-300">RM {w.rm}</span>}
+      {w.comment && <span className="flex-1 text-gray-400 italic truncate">{w.comment}</span>}
     </div>
   );
 }
@@ -266,16 +273,16 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">
-              Ent: <span className="text-gray-400">{entry.trainerName || '—'}</span>
-              {entry.studName && <span className="text-gray-600"> · {entry.studName}</span>}
+            <p className="text-[11px] text-gray-400 mt-0.5 leading-tight">
+              Ent: <span className="text-gray-200">{entry.trainerName || '—'}</span>
+              {entry.studName && <span className="text-gray-500"> · {entry.studName}</span>}
             </p>
             {entry.yearStats && entry.yearStats.starts > 0 && (
               <p className="text-[10px] mt-0.5 leading-tight">
-                <span className="text-gray-600">2026: </span>
-                <span className="font-bold text-gray-400">{entry.yearStats.starts}-{entry.yearStats.wins}</span>
+                <span className="text-gray-500">2026: </span>
+                <span className="font-bold text-gray-300">{entry.yearStats.starts}-{entry.yearStats.wins}</span>
                 {entry.yearStats.winless > 0 && (
-                  <span className="text-gray-600"> ({entry.yearStats.winless})</span>
+                  <span className="text-gray-500"> ({entry.yearStats.winless})</span>
                 )}
               </p>
             )}
@@ -286,8 +293,8 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
             <p className="text-[15px] font-extrabold text-white leading-tight">
               {entry.weightDeclared || '—'}<span className="text-[10px] font-normal text-gray-600"> kg</span>
             </p>
-            <p className="text-[11px] font-semibold text-amber-400/80 leading-tight max-w-[7rem] text-right truncate">
-              {entry.jockeyName || '—'}
+            <p className="text-[12px] font-bold text-amber-300 leading-tight text-right">
+              {jockeyShort(entry.jockeyName)}
             </p>
           </div>
         </div>
@@ -301,8 +308,8 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
               <HistoryHeader />
               {entry.raceHistory.map((h, i) => <HistoryRow key={i} h={h} />)}
               {dsc !== null && (
-                <p className="text-[8px] text-gray-700 mt-1 font-mono">
-                  DSC: <span className={`font-bold ${dsc <= 7 ? 'text-green-700' : dsc <= 21 ? 'text-yellow-700' : 'text-gray-600'}`}>{dsc} días</span>
+                <p className="text-[8px] text-gray-500 mt-1 font-mono">
+                  DSC: <span className={`font-bold ${dsc <= 7 ? 'text-green-400' : dsc <= 21 ? 'text-yellow-400' : 'text-gray-400'}`}>{dsc} días</span>
                 </p>
               )}
             </div>
@@ -310,8 +317,8 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
         })()}
         {!hasHistory && (
           <div className="ml-[2.875rem] mt-1">
-            <p className="text-[10px] text-gray-800 italic">Sin historial</p>
-            <p className="text-[8px] text-gray-700 font-mono mt-0.5">DSC: <span className="text-gray-600">N/A</span></p>
+            <p className="text-[10px] text-gray-500 italic">Sin historial</p>
+            <p className="text-[8px] text-gray-500 font-mono mt-0.5">DSC: <span className="text-gray-400">N/A</span></p>
           </div>
         )}
 
