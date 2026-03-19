@@ -50,6 +50,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 0.88,
     },
+    {
+      url: `${BASE}/traqueos`,
+      lastModified: now,
+      changeFrequency: freq,
+      priority: 0.92,
+    },
   ];
 
   // ── Dynamic: recent + upcoming meetings ───────────────────────────────────
