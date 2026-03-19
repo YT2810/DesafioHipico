@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
 import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
-import '@/models/Track';
+import WorkoutEntry from '@/models/WorkoutEntry';
+import Track from '@/models/Track';
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.desafiohipico.com';
 
@@ -111,5 +112,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // DB unavailable during build — return only static pages
   }
 
-  return [...staticPages, ...meetingPages];
+  // ── Dynamic: traqueos by date ─────────────────────────────────────────
+  let traqueoPages: MetadataRoute.Sitemap = [];
+  try {
+    const rinconada = await Track.findOne({ name: /rinconada/i }).lean() as any;
+    if (rinconada) {
+      const workoutDates = await WorkoutEntry.aggregate([
+        { $match: { trackId: rinconada._id } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$workoutDate' } }, lastMod: { $max: '$updatedAt' } } },
+        { $sort: { _id: -1 } },
+        { $limit: 60 },
+      ]);
+      traqueoPages = workoutDates.map((d: any) => ({
+        url: `${BASE}/traqueos/${d._id}`,
+        lastModified: d.lastMod ?? now,
+        changeFrequency: 'weekly' as const,
+        priority: 0.75,
+      }));
+    }
+  } catch { /* ignore */ }
+
+  return [...staticPages, ...meetingPages, ...traqueoPages];
 }
