@@ -124,8 +124,10 @@ function daysSince(iso: string): number {
 function jockeyShort(name: string): string {
   if (!name) return '—';
   const parts = name.trim().split(/\s+/);
-  if (parts.length <= 1) return name;
-  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+  if (parts.length <= 2) return parts.join(' ');
+  // Format in DB: APELLIDO [INICIAL] NOMBRE — e.g. "QUEVEDO M FRANCISCO"
+  // Show first 2 words only: "QUEVEDO M"
+  return `${parts[0]} ${parts[1]}`;
 }
 
 // ── Race label helper: C089, V012, etc. ──
@@ -142,7 +144,7 @@ function raceLabel(trackCode: string, annualRaceNumber: string | null, raceNumbe
 // ── Encabezado de columnas del historial ──
 function HistoryHeader() {
   return (
-    <div className="grid text-[8px] font-bold uppercase tracking-wider text-gray-500 pb-0.5 border-b border-gray-700/60"
+    <div className="grid text-[8px] font-bold uppercase tracking-wider text-gray-400 pb-0.5 border-b border-gray-600/60"
       style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
       <span>Fecha</span>
       <span>Carr.</span>
@@ -172,27 +174,27 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
       <div className="grid items-center py-[3px] gap-x-0"
         style={{ gridTemplateColumns: '34px 38px 20px 36px 34px 46px 46px 1fr' }}>
         {/* Fecha dd-mm */}
-        <span className="text-[9px] text-gray-300 font-mono">{shortDate(h.date)}</span>
+        <span className="text-[9px] text-white font-mono">{shortDate(h.date)}</span>
         {/* Carrera anual C089 */}
-        <span className="text-[9px] font-mono text-gray-400">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
+        <span className="text-[9px] font-mono text-gray-300">{raceLabel(h.trackCode, h.annualRaceNumber, h.raceNumber)}</span>
         {/* Posición */}
         <span className="text-[10px] font-extrabold text-center" style={{ color: col }}>
           {pos}{typeof pos === 'number' ? '°' : ''}
         </span>
         {/* Distancia */}
-        <span className="text-[9px] text-gray-300">{h.distance}m</span>
+        <span className="text-[9px] text-white">{h.distance}m</span>
         {/* Dif vs 1° */}
-        <span className="text-[9px] text-gray-300 font-mono">{diff}</span>
+        <span className="text-[9px] text-amber-200 font-mono font-bold">{diff}</span>
         {/* T.1° */}
-        <span className="text-[9px] font-mono text-yellow-500/80">{h.winnerTime ?? '—'}</span>
+        <span className="text-[9px] font-mono text-yellow-400">{h.winnerTime ?? '—'}</span>
         {/* T.Ej */}
         <span className="text-[9px] font-mono font-bold" style={{ color: col }}>{h.officialTime ?? '—'}</span>
         {/* Ganador o 2° — truncado pero visible */}
-        <span className="text-[9px] text-gray-400 truncate">{refName}</span>
+        <span className="text-[9px] text-gray-300 truncate">{refName}</span>
       </div>
       {/* Fila secundaria — jinete */}
       {h.jockeyName && (
-        <p className="text-[9px] text-amber-300/80 italic pb-[2px] pl-[72px] leading-none">
+        <p className="text-[9px] text-amber-300 font-semibold pb-[2px] pl-[72px] leading-none">
           {jockeyShort(h.jockeyName)}
         </p>
       )}
@@ -293,7 +295,7 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
             <p className="text-[15px] font-extrabold text-white leading-tight">
               {entry.weightDeclared || '—'}<span className="text-[10px] font-normal text-gray-600"> kg</span>
             </p>
-            <p className="text-[12px] font-bold text-amber-300 leading-tight text-right">
+            <p className="text-[13px] font-bold text-amber-200 leading-tight text-right">
               {jockeyShort(entry.jockeyName)}
             </p>
           </div>
