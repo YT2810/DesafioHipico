@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
 const PROTECTED_ROUTES: Record<string, string[]> = {
-  '/admin':      ['admin', 'staff'],
-  '/staff':      ['admin', 'staff'],
+  '/admin':       ['admin'],
+  '/staff':       ['admin', 'staff'],
   '/handicapper': ['handicapper', 'admin'],
 };
 

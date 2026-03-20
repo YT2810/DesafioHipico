@@ -305,77 +305,20 @@ export default function PerfilPage() {
           </button>
         </div>
 
-        {/* Admin / Staff links */}
-        {isPrivileged && (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">
-            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">Panel de administración</p>
-            <Link href="/admin/topup"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">💰 Recargas pendientes</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/handicapper-request"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">🎯 Solicitudes Handicapper</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/audios"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">🎧 Gestión de Audios</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/meetings"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">▶ Video Resumen Jornadas</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/workouts"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">📋 Trabajos de Entrenamiento</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/users"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">👥 Gestión de usuarios</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/exchange-rate"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">💱 Tasa de cambio BCV</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/ingest"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">📄 Ingestar PDF INH</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/intelligence"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">🧠 Inteligencia Hípica</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/staff/fuentes"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">📋 Catálogo de Fuentes</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/admin/forecast"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-              <span className="text-sm text-white">📋 Pronósticos por lote</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-            <Link href="/handicapper/forecast"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl text-black font-bold text-sm"
-              style={{ backgroundColor: GOLD }}>
-              <span>🎯 Subir pronóstico</span>
-              <span>›</span>
-            </Link>
-            <Link href="/handicapper/mis-audios"
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">
-              <span className="text-sm text-white">🎧 Mis audios VIP</span>
-              <span className="text-gray-500 text-sm">›</span>
-            </Link>
-          </div>
+        {/* Quick link to panel for privileged users */}
+        {roles.includes('admin') && (
+          <Link href="/admin"
+            className="flex items-center justify-between px-4 py-3 rounded-2xl border border-yellow-700/40 bg-yellow-950/20 hover:bg-yellow-950/40 transition-colors">
+            <span className="text-sm font-bold text-yellow-400">⚙️ Panel de Administración</span>
+            <span className="text-yellow-600 text-sm">›</span>
+          </Link>
+        )}
+        {!roles.includes('admin') && roles.includes('staff') && (
+          <Link href="/staff/panel"
+            className="flex items-center justify-between px-4 py-3 rounded-2xl border border-blue-700/40 bg-blue-950/20 hover:bg-blue-950/40 transition-colors">
+            <span className="text-sm font-bold text-blue-400">🛠️ Panel de Staff</span>
+            <span className="text-blue-600 text-sm">›</span>
+          </Link>
         )}
 
         {/* Handicapper section */}

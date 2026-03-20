@@ -121,6 +121,18 @@ export default function HomePage() {
                         className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
                         👤 Mi perfil
                       </Link>
+                      {roles.includes('admin') && (
+                        <Link href="/admin" onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2.5 text-sm text-yellow-400 hover:bg-gray-800 transition-colors border-t border-gray-800">
+                          ⚙️ Panel Admin
+                        </Link>
+                      )}
+                      {!roles.includes('admin') && roles.includes('staff') && (
+                        <Link href="/staff/panel" onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2.5 text-sm text-blue-400 hover:bg-gray-800 transition-colors border-t border-gray-800">
+                          🛠️ Panel Staff
+                        </Link>
+                      )}
                       {(isHandicapper || isPrivileged) && (
                         <Link href="/handicapper/forecast" onClick={() => setMenuOpen(false)}
                           className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">

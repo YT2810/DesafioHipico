@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 const GOLD = '#D4AF37';
@@ -39,7 +39,25 @@ const SECTIONS = [
   },
 ];
 
+interface BcvStatus {
+  rateVes?: number;
+  updatedAt?: string;
+  ageHours?: number;
+  stale: boolean;
+  message?: string;
+}
+
+function bcvAlertNeeded(status: BcvStatus | null): boolean {
+  if (!status) return false;
+  if (!status.stale) return false;
+  // No alert on Saturday (6), Sunday (0), Monday (1)
+  const day = new Date().getDay();
+  if ([0, 1, 6].includes(day)) return false;
+  return true;
+}
+
 export default function AdminPage() {
+  const [bcv, setBcv] = useState<BcvStatus | null>(null);
   const [goldIdentifier, setGoldIdentifier] = useState('');
   const [goldAmount, setGoldAmount] = useState('');
   const [goldNote, setGoldNote] = useState('');
@@ -48,6 +66,13 @@ export default function AdminPage() {
   const [goldLoading, setGoldLoading] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/exchange-rate')
+      .then(r => r.json())
+      .then(d => setBcv(d))
+      .catch(() => setBcv({ stale: true, message: 'No se pudo verificar la tasa BCV' }));
+  }, []);
 
   async function handleAssignGold() {
     if (!goldIdentifier.trim() || !goldAmount) return;
@@ -102,6 +127,23 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-8">
+
+        {/* BCV staleness alert */}
+        {bcvAlertNeeded(bcv) && (
+          <div className="flex items-start gap-3 bg-red-950/40 border border-red-700/60 rounded-2xl px-4 py-3">
+            <span className="text-xl shrink-0">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-red-400">Tasa BCV desactualizada</p>
+              <p className="text-xs text-red-300/70 mt-0.5">
+                Lleva {bcv?.ageHours?.toFixed(0)}h sin actualizarse. Actualízala antes de aprobar recargas.
+              </p>
+            </div>
+            <Link href="/admin/exchange-rate"
+              className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-700 hover:bg-red-600 text-white transition-colors">
+              Actualizar
+            </Link>
+          </div>
+        )}
 
         {/* Sections */}
         {SECTIONS.map(section => (
