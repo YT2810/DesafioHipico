@@ -55,6 +55,21 @@ export function extractWorkoutDate(text: string, filename: string): Date | null 
       const dt = new Date(`${yr}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}T12:00:00Z`);
       if (!isNaN(dt.getTime())) return dt;
     }
+    // Match compact formats used by Valencia: DDMMYYYY (06032026) or DDMMYY (060326)
+    // Must be exactly 8 digits (DDMMYYYY) or 6 digits (DDMMYY), surrounded by non-digits
+    const m3 = src.match(/(?<!\d)(\d{2})(\d{2})(\d{4})(?!\d)/);
+    if (m3) {
+      const [, dd, mm, yyyy] = m3;
+      const dt = new Date(`${yyyy}-${mm}-${dd}T12:00:00Z`);
+      if (!isNaN(dt.getTime()) && dt.getFullYear() >= 2020) return dt;
+    }
+    const m4 = src.match(/(?<!\d)(\d{2})(\d{2})(\d{2})(?!\d)/);
+    if (m4) {
+      const [, dd, mm, yy] = m4;
+      const yyyy = `20${yy}`;
+      const dt = new Date(`${yyyy}-${mm}-${dd}T12:00:00Z`);
+      if (!isNaN(dt.getTime()) && dt.getFullYear() >= 2020) return dt;
+    }
   }
   return null;
 }
