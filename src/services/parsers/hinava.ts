@@ -133,11 +133,19 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
 
     const horseName  = entryLines[i + 1] ? clean(entryLines[i + 1]) : '';
     if (!horseName || /^(PROGRAMACION|INSTITUTO|HIPODROMO|JUNTA|CARRERA|%|Mtrs)/i.test(horseName)) { i++; continue; }
+    // Skip lines that are clearly STUD/metadata names (come after STUD: label in previous entry)
+    if (i > 0 && /^(MED:|PROP:|CRIADOR:|STUD:|PESO|G:|C:|M:)/i.test(entryLines[i - 1] ?? '')) { i++; continue; }
 
-    // Layout: [i]=dorsal, [i+1]=horse, [i+2]=pedigree, [i+3]=med OR price, ...
+    // Layout: [i]=dorsal, [i+1]=horse, [i+2]=pedigree (may span 2 lines), [i+3]=med OR price, ...
     // Medication line is B.L / B,L / L — optional. Price is always 0,00.
     // Find medication and price dynamically.
-    let wi = i + 3;
+    // Handle split pedigree: if pedigree line ends with " -" the next line is the dam name
+    let pedigreeOffset = 3;
+    const pedigreeLine = entryLines[i + 2] ? clean(entryLines[i + 2]) : '';
+    if (pedigreeLine.endsWith(' -') || pedigreeLine.endsWith('-')) {
+      pedigreeOffset = 4; // pedigree split across 2 lines, skip both
+    }
+    let wi = i + pedigreeOffset;
     let medication: string | undefined;
     // Check if i+3 is a med marker (not a number)
     const maybeMed = entryLines[wi]?.trim() ?? '';
@@ -184,7 +192,16 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
       trainer,
     });
 
-    i = wi + 5; // advance past PP to next entry
+    // Skip the post-PP metadata block: MED:, year, PROP:, CRIADOR:, ..., STUD:, stud name, PESO, colors...
+    // Advance until we hit the next dorsal number or end of entries
+    let skip = wi + 5;
+    while (skip < entryLines.length) {
+      const sl = entryLines[skip].trim();
+      // Stop at the next standalone dorsal (1-2 digits, 1-30)
+      if (/^\d{1,2}$/.test(sl) && parseInt(sl) >= 1 && parseInt(sl) <= 30) break;
+      skip++;
+    }
+    i = skip;
   }
 
   return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
