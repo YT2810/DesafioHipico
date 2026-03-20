@@ -25,17 +25,6 @@ export default function ElMelliChat() {
   const roles: string[] = (session?.user as any)?.roles ?? [];
   const isAdmin = roles.includes('admin');
 
-  // Only render for admin in fase 1
-  if (status === 'loading') return null;
-  if (!isAdmin) return null;
-
-  // Stop pulse after first open
-  const handleOpen = () => {
-    setOpen(true);
-    setPulse(false);
-    if (!snapshotLoaded) loadSnapshot();
-  };
-
   const loadSnapshot = async () => {
     try {
       const res = await fetch('/api/melli/snapshot');
@@ -45,11 +34,16 @@ export default function ElMelliChat() {
       }
     } catch {}
     setSnapshotLoaded(true);
-    // Welcome message from El Melli
     setMessages([{
       role: 'assistant',
       content: '¡Buen día, socio! Soy **El Melli**, tu analista hípico digital. Aquí tengo cargada la data de Desafío Hípico — próximas reuniones, traqueos y pronósticos.\n\n¿Qué quieres analizar hoy? Dime un caballo, una carrera, o pregúntame lo que sea del hipismo criollo. 🏇',
     }]);
+  };
+
+  const handleOpen = () => {
+    setOpen(true);
+    setPulse(false);
+    if (!snapshotLoaded) loadSnapshot();
   };
 
   const sendMessage = async () => {
@@ -113,6 +107,9 @@ export default function ElMelliChat() {
         : <span key={i}>{part}</span>
     );
   };
+
+  // Not ready yet or not admin — render nothing
+  if (status === 'loading' || !isAdmin) return null;
 
   return (
     <>
