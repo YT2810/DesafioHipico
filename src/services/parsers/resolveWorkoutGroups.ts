@@ -13,9 +13,7 @@
 
 import { ParsedWorkout } from './workouts';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
-const OPENROUTER_MODEL   = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
-const OPENROUTER_URL     = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface GroupEntry {
   index: number;           // index in workouts array
@@ -64,6 +62,8 @@ function extractGroups(workouts: ParsedWorkout[]): GroupEntry[] {
 }
 
 async function resolveGroupWithAI(group: GroupEntry): Promise<string[]> {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
+  const OPENROUTER_MODEL   = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
   if (!OPENROUTER_API_KEY) return Array(group.nHorses).fill(group.groupKey);
 
   const prompt = `Eres un experto en carreras de caballos venezolanas del hipódromo de Valencia.
@@ -128,25 +128,28 @@ export async function resolveWorkoutGroups(workouts: ParsedWorkout[]): Promise<n
 
   let resolved = 0;
 
-  // Process groups in parallel (usually 0-4 per file)
-  await Promise.all(groups.map(async (group) => {
+  // Process groups sequentially to avoid race conditions on shared array
+  for (const group of groups) {
     const names = await resolveGroupWithAI(group);
 
-    // Update the workouts array with resolved names
-    let pos = 0;
-    for (let i = group.index; i < workouts.length && pos < group.nHorses; i++) {
-      if (workouts[i].horseName.startsWith(`[GRUPO ${pos + 1}/${group.nHorses}]`)) {
-        const resolvedName = names[pos] ?? group.groupKey;
-        workouts[i] = {
-          ...workouts[i],
-          horseName: resolvedName,
-          rawBlock: workouts[i].rawBlock.replace('[GRUPO] ', '[AI_RESOLVED] '),
-        };
-        pos++;
-        resolved++;
-      }
+    // Scan entire array matching by [GRUPO pos/total] + groupKey
+    for (let i = 0; i < workouts.length; i++) {
+      const m = workouts[i].horseName.match(/^\[GRUPO\s+(\d+)\/(\d+)\]\s+(.+)$/);
+      if (!m) continue;
+      const pos   = parseInt(m[1]) - 1; // 0-indexed
+      const total = parseInt(m[2]);
+      const key   = m[3].trim();
+      if (key !== group.groupKey || total !== group.nHorses) continue;
+
+      const resolvedName = names[pos] ?? group.groupKey;
+      workouts[i] = {
+        ...workouts[i],
+        horseName: resolvedName,
+        rawBlock: workouts[i].rawBlock.replace('[GRUPO] ', '[AI] '),
+      };
+      resolved++;
     }
-  }));
+  }
 
   return resolved;
 }
