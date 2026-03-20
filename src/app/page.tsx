@@ -30,6 +30,7 @@ interface MeetingItem {
   date: string;
   trackName: string;
   raceCount: number;
+  status?: string;
 }
 
 export default function HomePage() {
@@ -40,7 +41,10 @@ export default function HomePage() {
   const [previewForecasts, setPreviewForecasts] = useState<PreviewForecast[]>([]);
   const [topRanking, setTopRanking] = useState<RankingEntry[]>([]);
   const [hasRecentWorkouts, setHasRecentWorkouts] = useState(false);
-  const [hasRecentProgram, setHasRecentProgram] = useState(false);
+  const [latestWorkoutTrack, setLatestWorkoutTrack] = useState('');
+  const [todayMeetingTrack, setTodayMeetingTrack] = useState('');
+  const [hasRecentResults, setHasRecentResults] = useState(false);
+  const [latestResultsDate, setLatestResultsDate] = useState('');
 
   useEffect(() => {
     // Fetch meetings + ranking in parallel
@@ -52,14 +56,35 @@ export default function HomePage() {
       const ms: MeetingItem[] = meetingsData.meetings ?? [];
       setMeetings(ms);
       if (rankingData?.ranking) setTopRanking((rankingData.ranking as RankingEntry[]).slice(0, 3));
-      // Check if workouts uploaded in last 3 days
+
+      // Traqueos: check if uploaded in last 3 days
       if (workoutsData?.dates?.length) {
         const latestDate = new Date(workoutsData.dates[0]);
         const diffDays = (Date.now() - latestDate.getTime()) / 86400000;
-        setHasRecentWorkouts(diffDays <= 3);
+        if (diffDays <= 3) {
+          setHasRecentWorkouts(true);
+          setLatestWorkoutTrack(workoutsData.trackName ?? '');
+        }
       }
-      // Check if upcoming meeting exists (program available)
-      setHasRecentProgram(ms.length > 0);
+
+      // Programa HOY (sáb o dom): buscar meeting cuya fecha sea hoy
+      const todayISO = new Date().toISOString().slice(0, 10);
+      const todayMeeting = ms.find((m: MeetingItem) => m.date?.slice(0, 10) === todayISO);
+      if (todayMeeting) setTodayMeetingTrack(todayMeeting.trackName ?? '');
+
+      // Resultados recientes: buscar meeting con status 'results' en últimos 3 días
+      const recentResult = ms.find((m: MeetingItem) => {
+        if (m.status !== 'results' && m.status !== 'closed') return false;
+        const d = new Date(m.date);
+        return (Date.now() - d.getTime()) / 86400000 <= 3;
+      });
+      if (recentResult) {
+        setHasRecentResults(true);
+        const d = new Date(recentResult.date);
+        const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        setLatestResultsDate(`${dias[d.getDay()]} ${d.getDate()}`);
+      }
+
       const lrc = ms.find((m: MeetingItem) => !m.trackName.toLowerCase().includes('valencia'));
       const previewMeeting = lrc ?? ms[0];
       if (previewMeeting?.id) {
@@ -177,7 +202,10 @@ export default function HomePage() {
         streak={(session?.user as any)?.loginStreak ?? 0}
         isLoggedIn={isLoggedIn}
         hasRecentWorkouts={hasRecentWorkouts}
-        hasRecentProgram={hasRecentProgram}
+        latestWorkoutTrack={latestWorkoutTrack}
+        todayMeetingTrack={todayMeetingTrack}
+        hasRecentResults={hasRecentResults}
+        latestResultsDate={latestResultsDate}
       />
 
       {/* ── Main ── */}

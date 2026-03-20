@@ -6,7 +6,10 @@ interface Props {
   streak: number;
   isLoggedIn: boolean;
   hasRecentWorkouts?: boolean;
-  hasRecentProgram?: boolean;
+  latestWorkoutTrack?: string;
+  todayMeetingTrack?: string;   // nombre del hipódromo si hay programa HOY
+  hasRecentResults?: boolean;
+  latestResultsDate?: string;   // "sábado 15" etc.
 }
 
 interface BannerConfig {
@@ -17,8 +20,18 @@ interface BannerConfig {
   borderColor: string;
 }
 
-function getBanner(streak: number, isLoggedIn: boolean, hasRecentWorkouts: boolean, hasRecentProgram: boolean): BannerConfig {
-  // Racha — milestone (cada 7 días)
+function getBanner(
+  streak: number,
+  isLoggedIn: boolean,
+  hasRecentWorkouts: boolean,
+  latestWorkoutTrack: string,
+  todayMeetingTrack: string,
+  hasRecentResults: boolean,
+  latestResultsDate: string,
+): BannerConfig {
+  const day = new Date().getDay(); // 0=Dom 1=Lun ... 5=Vie 6=Sáb
+
+  // Racha — milestone cada 7 días (prioridad máxima)
   if (isLoggedIn && streak > 0 && streak % 7 === 0) {
     return {
       text: `🔥 ¡${streak} días de racha! Eres de los más constantes en la plataforma`,
@@ -28,7 +41,7 @@ function getBanner(streak: number, isLoggedIn: boolean, hasRecentWorkouts: boole
     };
   }
 
-  // Racha activa (3+ días)
+  // Racha activa (3–6 días)
   if (isLoggedIn && streak >= 3) {
     return {
       text: `🔥 ${streak} días de racha — el día 7 desbloqueas un bonus Gold especial`,
@@ -38,10 +51,22 @@ function getBanner(streak: number, isLoggedIn: boolean, hasRecentWorkouts: boole
     };
   }
 
-  // Traqueos recientes (solo si realmente existen)
-  if (hasRecentWorkouts) {
+  // Sábado o domingo — día de carreras (solo si hay programa real ese día)
+  if ((day === 6 || day === 0) && todayMeetingTrack) {
     return {
-      text: '⏱ Nuevos traqueos disponibles — revisa cómo viene tu favorito',
+      text: `🏇 ¡Hoy es día de carreras en ${todayMeetingTrack}! Consulta los pronósticos`,
+      href: '/pronosticos',
+      bg: 'from-green-900/60 to-green-800/30',
+      textColor: 'text-green-300',
+      borderColor: 'border-green-700/40',
+    };
+  }
+
+  // Viernes — traqueos (solo si hay traqueos reales recientes)
+  if (day === 5 && hasRecentWorkouts) {
+    const track = latestWorkoutTrack ? ` de ${latestWorkoutTrack}` : '';
+    return {
+      text: `⏱ Nuevos traqueos${track} disponibles — revisa cómo viene tu favorito`,
       href: '/traqueos',
       bg: 'from-blue-900/60 to-blue-800/30',
       textColor: 'text-blue-300',
@@ -49,14 +74,27 @@ function getBanner(streak: number, isLoggedIn: boolean, hasRecentWorkouts: boole
     };
   }
 
-  // Programa reciente (solo si realmente existe)
-  if (hasRecentProgram) {
+  // Lunes — resultados (solo si hay resultados reales recientes)
+  if (day === 1 && hasRecentResults) {
+    const fecha = latestResultsDate ? ` del ${latestResultsDate}` : ' del fin de semana';
     return {
-      text: '📋 El programa está disponible — consulta los pronósticos',
-      href: '/pronosticos',
-      bg: 'from-green-900/60 to-green-800/30',
-      textColor: 'text-green-300',
-      borderColor: 'border-green-700/40',
+      text: `📊 Resultados${fecha} disponibles — revisa cómo le fue a tu caballo`,
+      href: '/resultados',
+      bg: 'from-purple-900/60 to-purple-800/30',
+      textColor: 'text-purple-300',
+      borderColor: 'border-purple-700/40',
+    };
+  }
+
+  // Traqueos recientes cualquier día
+  if (hasRecentWorkouts) {
+    const track = latestWorkoutTrack ? ` de ${latestWorkoutTrack}` : '';
+    return {
+      text: `⏱ Nuevos traqueos${track} disponibles — revisa cómo viene tu favorito`,
+      href: '/traqueos',
+      bg: 'from-blue-900/60 to-blue-800/30',
+      textColor: 'text-blue-300',
+      borderColor: 'border-blue-700/40',
     };
   }
 
@@ -80,8 +118,16 @@ function getBanner(streak: number, isLoggedIn: boolean, hasRecentWorkouts: boole
   };
 }
 
-export default function ContextualBanner({ streak, isLoggedIn, hasRecentWorkouts = false, hasRecentProgram = false }: Props) {
-  const banner = getBanner(streak, isLoggedIn, hasRecentWorkouts, hasRecentProgram);
+export default function ContextualBanner({
+  streak,
+  isLoggedIn,
+  hasRecentWorkouts = false,
+  latestWorkoutTrack = '',
+  todayMeetingTrack = '',
+  hasRecentResults = false,
+  latestResultsDate = '',
+}: Props) {
+  const banner = getBanner(streak, isLoggedIn, hasRecentWorkouts, latestWorkoutTrack, todayMeetingTrack, hasRecentResults, latestResultsDate);
 
   const inner = (
     <div className={`bg-gradient-to-r ${banner.bg} border-b ${banner.borderColor} px-4 py-2.5 text-center`}>
