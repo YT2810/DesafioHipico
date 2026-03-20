@@ -70,7 +70,7 @@ export const authConfig: NextAuthConfig = {
             },
             $setOnInsert: {
               roles: ['customer'],
-              balance: { golds: 0, diamonds: 0 },
+              balance: { golds: 15, diamonds: 0 },
               meetingConsumptions: [],
               followedHandicappers: [],
             },
@@ -108,7 +108,7 @@ export const authConfig: NextAuthConfig = {
             $setOnInsert: {
               alias: user.name ?? email.split('@')[0],
               roles: extraRoles,
-              balance: { golds: 0, diamonds: 0 },
+              balance: { golds: 15, diamonds: 0 },
               meetingConsumptions: [],
               followedHandicappers: [],
             },
@@ -127,12 +127,31 @@ export const authConfig: NextAuthConfig = {
     async jwt({ token, user, trigger, session }) {
       if (user) {
         await dbConnect();
-        const dbUser = await User.findOne({
+        const query = {
           $or: [
             ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
             ...((user as any).telegramId ? [{ telegramId: (user as any).telegramId }] : []),
           ],
-        }).lean() as any;
+        };
+
+        // Daily login reward: 3 Gold if first login of the day
+        const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const updatedUser = await User.findOneAndUpdate(
+          {
+            ...query,
+            $or: [
+              { lastLoginDate: { $ne: todayStr } },
+              { lastLoginDate: { $exists: false } },
+            ],
+          },
+          {
+            $inc: { 'balance.golds': 3 },
+            $set: { lastLoginDate: todayStr },
+          },
+          { new: true }
+        ).lean() as any;
+
+        const dbUser = updatedUser ?? await User.findOne(query).lean() as any;
 
         if (dbUser) {
           token.userId    = dbUser._id.toString();
