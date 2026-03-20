@@ -293,47 +293,69 @@ function parseLayoutAB(allRows: string[][], layout: SheetLayout, workouts: Parse
     // ── Multi-horse logic ──────────────────────────────────────────────────
     const rmLines   = col2.split('\n').map(s => s.trim());
     const workLines = col1.split('\n').map(s => s.trim());
-    const nameLines = col0.split('\n').map(s => s.trim());
+    const nameLines = col0.split('\n').map(s => s.trim()).filter(s => s);
 
-    const nHorses = Math.max(
-      countNonEmptyTrailing(rmLines),
-      countNonEmptyTrailing(workLines),
-      countNonEmptyTrailing(nameLines),
-      1
-    );
+    // RM count is authoritative (each horse has exactly one RM line)
+    const nByRm   = countNonEmptyTrailing(rmLines);
+    const nByWork = countNonEmptyTrailing(workLines);
+    const nHorses = Math.max(nByRm, nByWork, nameLines.length, 1);
 
     const jockeyList  = splitPersonNames(col3);
     const trainerList = splitPersonNames(col4);
 
-    let horseNames: string[];
-    if (nameLines.length === nHorses) {
-      horseNames = nameLines;
-    } else if (nameLines.length === 1 && nHorses > 1) {
-      // Concatenated names — tag for AI resolution
-      horseNames = Array.from({ length: nHorses }, (_, i) =>
-        `[GRUPO ${i + 1}/${nHorses}] ${col0.trim()}`
-      );
+    // Build an expanded list of (horseName, workIdx, rmIdx) for each horse.
+    // Each name line may cover 1 or more horses (if concatenated).
+    // Distribute extra horses onto the first name lines that don't look like a single clean name.
+    const horseSlots: Array<{ name: string; isGroup: boolean; workIdx: number; rmIdx: number }> = [];
+
+    if (nameLines.length === 0) {
+      // No names at all — skip
+    } else if (nameLines.length >= nHorses) {
+      // Enough name lines — each line is one horse
+      for (let i = 0; i < nHorses; i++) {
+        horseSlots.push({ name: nameLines[i] ?? '', isGroup: false, workIdx: i, rmIdx: i });
+      }
     } else {
-      horseNames = nameLines.slice(0, nHorses);
-      while (horseNames.length < nHorses) {
-        horseNames.push(horseNames[horseNames.length - 1] ?? col0.trim());
+      // Fewer name lines than horses — some lines are concatenated.
+      // Distribute the extra horses among the name lines (greedy from front).
+      const extraHorses = nHorses - nameLines.length;
+      let globalIdx = 0;
+      for (let li = 0; li < nameLines.length; li++) {
+        const line = nameLines[li];
+        // Lines before the last get the extra horses if they look concatenated
+        const extraForThisLine = li < nameLines.length - 1
+          ? (li === 0 ? extraHorses : 0)  // put all extras on first line
+          : 0;
+        const countForLine = 1 + (li === 0 ? extraHorses : 0);
+        if (countForLine === 1) {
+          horseSlots.push({ name: line, isGroup: false, workIdx: globalIdx, rmIdx: globalIdx });
+          globalIdx++;
+        } else {
+          // This line has multiple concatenated horses
+          for (let ci = 0; ci < countForLine; ci++) {
+            horseSlots.push({
+              name: `[GRUPO ${globalIdx + 1}/${nHorses}] ${line}`,
+              isGroup: true,
+              workIdx: globalIdx,
+              rmIdx: globalIdx,
+            });
+            globalIdx++;
+          }
+        }
+        void extraForThisLine; // suppress unused warning
       }
     }
 
-    const workAssigned = workLines.slice(0, nHorses);
-    while (workAssigned.length < nHorses) workAssigned.push(workLines[0] ?? '');
-
-    for (let hi = 0; hi < nHorses; hi++) {
-      const rawName   = horseNames[hi] ?? '';
-      const isGroup   = rawName.startsWith('[GRUPO');
+    for (const slot of horseSlots) {
+      const { name: rawName, isGroup, workIdx, rmIdx } = slot;
       const horseName = isGroup ? rawName : cleanHorseName(rawName);
       if (!horseName || horseName.length < 2) continue;
       if (!isGroup && !isValidHorseName(horseName)) continue;
 
-      const workStr     = workAssigned[hi] ?? '';
-      const rm          = parseRm(rmLines[hi] ?? '');
-      const jockeyName  = jockeyList[hi]  ?? '';
-      const trainerName = trainerList[hi] ?? '';
+      const workStr     = workLines[workIdx] ?? workLines[0] ?? '';
+      const rm          = parseRm(rmLines[rmIdx] ?? '');
+      const jockeyName  = jockeyList[workIdx]  ?? jockeyList[0]  ?? '';
+      const trainerName = trainerList[workIdx] ?? trainerList[0] ?? '';
       const jockMismatch = jockeyList.length !== nHorses || trainerList.length !== nHorses;
 
       const { distance, workoutType, splits, comment } = parseWorkLine(workStr);
@@ -348,7 +370,7 @@ function parseLayoutAB(allRows: string[][], layout: SheetLayout, workouts: Parse
         rm,
         jockeyName,
         trainerName,
-        rawBlock: `${isGroup ? '[GRUPO] ' : ''}${jockMismatch ? '[JOCK?] ' : ''}${horseName}|${workStr}|${rmLines[hi] ?? ''}|${jockeyName}|${trainerName}`,
+        rawBlock: `${isGroup ? '[GRUPO] ' : ''}${jockMismatch ? '[JOCK?] ' : ''}${horseName}|${workStr}|${rmLines[rmIdx] ?? ''}|${jockeyName}|${trainerName}`,
       });
     }
   }
