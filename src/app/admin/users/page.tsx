@@ -36,6 +36,9 @@ export default function AdminUsersPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [saveErr, setSaveErr] = useState('');
+  const [goldAmount, setGoldAmount] = useState('');
+  const [goldMsg, setGoldMsg] = useState('');
+  const [goldLoading, setGoldLoading] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -70,6 +73,29 @@ export default function AdminUsersPage() {
     setEditRoles(prev =>
       prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
     );
+  }
+
+  async function handleAssignGold() {
+    if (!selected || !goldAmount) return;
+    setGoldLoading(true);
+    setGoldMsg('');
+    try {
+      const res = await fetch('/api/admin/users/gold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: selected.email ?? selected.alias, amount: parseInt(goldAmount) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setGoldMsg(`✅ Nuevo saldo: ${data.newBalance} Gold`);
+      setUsers(prev => prev.map(u => u._id === selected._id ? { ...u, balance: { golds: data.newBalance } } : u));
+      setSelected(prev => prev ? { ...prev, balance: { golds: data.newBalance } } : null);
+      setGoldAmount('');
+    } catch (e: any) {
+      setGoldMsg(`⚠️ ${e.message}`);
+    } finally {
+      setGoldLoading(false);
+    }
   }
 
   async function handleSaveRoles() {
@@ -226,6 +252,28 @@ export default function AdminUsersPage() {
                           <p className="text-gray-600 mb-0.5">Registrado</p>
                           <p className="text-white">{new Date(u.createdAt).toLocaleDateString('es-VE')}</p>
                         </div>
+                      </div>
+
+                      {/* Gold assignment */}
+                      <div className="border-t border-gray-800 pt-3 space-y-2">
+                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Asignar / quitar Gold</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            placeholder="Ej: 15 o -10"
+                            value={goldAmount}
+                            onChange={e => setGoldAmount(e.target.value)}
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+                          />
+                          <button
+                            onClick={handleAssignGold}
+                            disabled={goldLoading || !goldAmount}
+                            className="px-4 py-2 rounded-xl text-sm font-bold text-black disabled:opacity-40"
+                            style={{ backgroundColor: GOLD }}>
+                            {goldLoading ? '...' : 'Aplicar'}
+                          </button>
+                        </div>
+                        {goldMsg && <p className="text-xs text-green-400">{goldMsg}</p>}
                       </div>
 
                       {saveErr && <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2">⚠️ {saveErr}</p>}
