@@ -7,6 +7,7 @@ import TopUpModal from '@/components/TopUpModal';
 import NotificationBell from '@/components/NotificationBell';
 import GoldToast from '@/components/GoldToast';
 import ContextualBanner from '@/components/ContextualBanner';
+import InactivitySignout from '@/components/InactivitySignout';
 
 const GOLD = '#D4AF37';
 
@@ -106,6 +107,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       <GoldToast />
+      <InactivitySignout />
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
