@@ -292,11 +292,19 @@ export default function PerfilPage() {
           </div>
         </div>
 
-        {/* Gold balance */}
+        {/* Gold balance + racha */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-gray-500 mb-0.5">Saldo</p>
             <p className="text-2xl font-extrabold" style={{ color: GOLD }}>🪙 {golds} <span className="text-base font-semibold">Golds</span></p>
+            {(user as any)?.loginStreak >= 1 && (
+              <p className="text-xs mt-1 font-semibold text-orange-400">
+                🔥 {(user as any).loginStreak} {(user as any).loginStreak === 1 ? 'día' : 'días'} de racha
+                {(user as any).loginStreak < 7 && (
+                  <span className="text-gray-600 font-normal"> · día 7 = bonus Gold</span>
+                )}
+              </p>
+            )}
           </div>
           <button onClick={() => setShowTopUp(true)}
             className="px-4 py-2.5 rounded-xl text-sm font-bold text-black shrink-0"

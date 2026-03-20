@@ -39,16 +39,27 @@ export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [previewForecasts, setPreviewForecasts] = useState<PreviewForecast[]>([]);
   const [topRanking, setTopRanking] = useState<RankingEntry[]>([]);
+  const [hasRecentWorkouts, setHasRecentWorkouts] = useState(false);
+  const [hasRecentProgram, setHasRecentProgram] = useState(false);
 
   useEffect(() => {
     // Fetch meetings + ranking in parallel
     Promise.all([
       fetch('/api/meetings/upcoming?limit=4').then(r => r.json()),
       fetch('/api/handicapper/ranking').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([meetingsData, rankingData]) => {
+      fetch('/api/traqueos?limit=1').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([meetingsData, rankingData, workoutsData]) => {
       const ms: MeetingItem[] = meetingsData.meetings ?? [];
       setMeetings(ms);
       if (rankingData?.ranking) setTopRanking((rankingData.ranking as RankingEntry[]).slice(0, 3));
+      // Check if workouts uploaded in last 3 days
+      if (workoutsData?.dates?.length) {
+        const latestDate = new Date(workoutsData.dates[0]);
+        const diffDays = (Date.now() - latestDate.getTime()) / 86400000;
+        setHasRecentWorkouts(diffDays <= 3);
+      }
+      // Check if upcoming meeting exists (program available)
+      setHasRecentProgram(ms.length > 0);
       const lrc = ms.find((m: MeetingItem) => !m.trackName.toLowerCase().includes('valencia'));
       const previewMeeting = lrc ?? ms[0];
       if (previewMeeting?.id) {
@@ -162,7 +173,12 @@ export default function HomePage() {
       </header>
 
       {/* ── Contextual Banner ── */}
-      <ContextualBanner streak={(session?.user as any)?.loginStreak ?? 0} isLoggedIn={isLoggedIn} />
+      <ContextualBanner
+        streak={(session?.user as any)?.loginStreak ?? 0}
+        isLoggedIn={isLoggedIn}
+        hasRecentWorkouts={hasRecentWorkouts}
+        hasRecentProgram={hasRecentProgram}
+      />
 
       {/* ── Main ── */}
       <main className="flex-1 mx-auto w-full max-w-lg px-4 pt-8 pb-10 flex flex-col items-center text-center gap-6">
