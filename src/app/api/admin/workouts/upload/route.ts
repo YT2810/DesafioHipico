@@ -5,6 +5,7 @@ import Track from '@/models/Track';
 import Horse from '@/models/Horse';
 import { parseWorkoutsPdfBuffer, extractWorkoutDate } from '@/services/parsers/workouts';
 import { parseWorkoutsXlsx } from '@/services/parsers/workoutsXlsx';
+import { parseWorkoutsXlsxValencia } from '@/services/parsers/workoutsXlsxValencia';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,9 +35,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se pudo extraer la fecha del archivo. Verifica el nombre (ej: TRABAJOS SABADO 14 DE MARZO 2026.pdf)' }, { status: 400 });
     }
 
+    // Detect Valencia track to use the correct xlsx parser
+    // We need track name — do a quick lookup before date validation
+    let isValenciaTrack = false;
+    try {
+      await connectMongo();
+      const trackDoc = await Track.findById(trackId).lean() as any;
+      if (trackDoc?.name) {
+        isValenciaTrack = /valencia/i.test(trackDoc.name);
+      }
+    } catch { /* non-critical, fall back to La Rinconada parser */ }
+
     let rows;
     if (isXlsx) {
-      rows = parseWorkoutsXlsx(buffer);
+      rows = isValenciaTrack
+        ? parseWorkoutsXlsxValencia(buffer)
+        : parseWorkoutsXlsx(buffer);
     } else {
       rows = await parseWorkoutsPdfBuffer(buffer);
     }
@@ -54,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     await connectMongo();
 
-    const track = await Track.findById(trackId).lean();
+    const track = await Track.findById(trackId).lean() as any;
     if (!track) return NextResponse.json({ error: 'Track no encontrado' }, { status: 404 });
 
     const dateStart = new Date(finalDate); dateStart.setUTCHours(0, 0, 0, 0);
