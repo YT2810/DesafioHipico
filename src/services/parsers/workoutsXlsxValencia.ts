@@ -167,13 +167,30 @@ export function parseWorkoutsXlsxValencia(buffer: Buffer): ParsedWorkout[] {
         continue;
       }
 
-      // ── Use RM line count as authoritative horse count ───────────────────
-      const rmLines    = col2.split('\n').map(s => s.trim()).filter(Boolean);
-      const workLines  = col1.split('\n').map(s => s.trim()).filter(Boolean);
-      const nByRm      = rmLines.length || 1;
+      // ── Use max line count across all columns as authoritative horse count ─
+      // Keep empty lines (don't filter) so a horse with no RM isn't dropped.
+      // e.g. col2 = "13\"2\n\n12\"1" → 3 lines, horse 2 has no RM (null).
+      const rmLines   = col2.split('\n').map(s => s.trim());
+      const workLines = col1.split('\n').map(s => s.trim());
+      // The authoritative count is the maximum non-empty trailing lines
+      // across names, works and RMs — avoids losing horses with empty RM
+      const countLines = (lines: string[]) => {
+        // Trim trailing empty lines only
+        let last = lines.length;
+        while (last > 0 && !lines[last - 1]) last--;
+        return last;
+      };
+      const namesByNlRaw = col0.split('\n').map(s => s.trim());
+      const nByRm  = Math.max(
+        countLines(rmLines),
+        countLines(workLines),
+        countLines(namesByNlRaw),
+        1
+      );
 
       // Split names: prefer \n, else single line (may be multiple horses concatenated)
-      const namesByNl  = col0.split('\n').map(s => s.trim()).filter(Boolean);
+      // Use namesByNlRaw (no trailing-empty trim, no filter) for index alignment
+      const namesByNl = namesByNlRaw;
       // Split jockeys and trainers by INITIAL.LASTNAME pattern
       const jockeyList = splitPersonNames(col3);
       const trainerList = splitPersonNames(col4);
