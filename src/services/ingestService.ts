@@ -27,11 +27,17 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
   const warnings = [...doc.warnings];
 
   // 1. Upsert Track
+  // Normalize Valencia track name — any variant (HIPODROMO DE VALENCIA, etc.) → NACIONAL DE VALENCIA
+  const rawTrackName = doc.meeting.track.name;
+  const trackName = /valencia/i.test(rawTrackName) && !/rinconada/i.test(rawTrackName)
+    ? 'NACIONAL DE VALENCIA'
+    : rawTrackName;
+
   const track = await Track.findOneAndUpdate(
-    { name: doc.meeting.track.name, country: doc.meeting.track.country },
+    { name: trackName, country: doc.meeting.track.country },
     {
       $set: {
-        name: doc.meeting.track.name,
+        name: trackName,
         location: doc.meeting.track.location,
         country: doc.meeting.track.country,
       },
