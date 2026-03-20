@@ -6,6 +6,7 @@ import Horse from '@/models/Horse';
 import { parseWorkoutsPdfBuffer, extractWorkoutDate } from '@/services/parsers/workouts';
 import { parseWorkoutsXlsx } from '@/services/parsers/workoutsXlsx';
 import { parseWorkoutsXlsxValencia } from '@/services/parsers/workoutsXlsxValencia';
+import { resolveWorkoutGroups } from '@/services/parsers/resolveWorkoutGroups';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,9 +49,13 @@ export async function POST(req: NextRequest) {
 
     let rows;
     if (isXlsx) {
-      rows = isValenciaTrack
-        ? parseWorkoutsXlsxValencia(buffer)
-        : parseWorkoutsXlsx(buffer);
+      if (isValenciaTrack) {
+        rows = parseWorkoutsXlsxValencia(buffer);
+        // Resolve [GRUPO] entries (concatenated multi-horse names) using AI
+        await resolveWorkoutGroups(rows).catch(() => { /* non-critical */ });
+      } else {
+        rows = parseWorkoutsXlsx(buffer);
+      }
     } else {
       rows = await parseWorkoutsPdfBuffer(buffer);
     }
