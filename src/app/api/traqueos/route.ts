@@ -10,8 +10,13 @@ export async function GET(req: NextRequest) {
   await connectMongo();
   const { searchParams } = new URL(req.url);
   const dateStr = searchParams.get('date');
+  const trackParam = searchParams.get('track') ?? 'rinconada';
+  const searchQ = searchParams.get('q') ?? '';
 
-  const track = await Track.findOne({ name: /rinconada/i }).lean() as any;
+  const trackFilter = trackParam === 'valencia'
+    ? { name: /nacional de valencia/i }
+    : { name: /rinconada/i };
+  const track = await Track.findOne(trackFilter).lean() as any;
   const trackId = track?._id;
 
   // Get available dates (last 60 days, most recent first)
@@ -22,6 +27,15 @@ export async function GET(req: NextRequest) {
     { $limit: 60 },
   ]);
 
+  // Search across all dates by horse name
+  if (searchQ && trackId) {
+    const entries = await WorkoutEntry.find({
+      trackId,
+      horseName: { $regex: searchQ, $options: 'i' },
+    }).sort({ workoutDate: -1, workoutType: 1 }).limit(200).lean();
+    return NextResponse.json({ entries, dates: [], nextMeeting: null, searchMode: true });
+  }
+
   // If date requested, return entries for that date
   if (dateStr && trackId) {
     const start = new Date(`${dateStr}T00:00:00Z`);
@@ -31,7 +45,6 @@ export async function GET(req: NextRequest) {
       workoutDate: { $gte: start, $lte: end },
     }).sort({ workoutType: 1, horseName: 1 }).lean();
 
-    // Also find next meeting for CTA
     const now2 = new Date();
     const nm = await Meeting.findOne({ trackId, date: { $gte: now2 } }).sort({ date: 1 }).lean() as any
       ?? await Meeting.findOne({ trackId }).sort({ date: -1 }).lean() as any;

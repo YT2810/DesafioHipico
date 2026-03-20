@@ -46,7 +46,9 @@ function trackGA(eventName: string, params: Record<string, string | number>) {
   }
 }
 
-export default function TraqueosClient() {
+type TrackId = 'rinconada' | 'valencia';
+
+export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackId }) {
   const [dates, setDates] = useState<DateItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [entries, setEntries] = useState<WorkoutEntry[]>([]);
@@ -54,30 +56,37 @@ export default function TraqueosClient() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [globalResults, setGlobalResults] = useState<WorkoutEntry[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState(false);
   const timeOnPageRef = useRef<number>(Date.now());
+  const globalSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const apiTrack = track === 'valencia' ? '&track=valencia' : '';
+  const trackLabel = track === 'valencia' ? 'Valencia' : 'La Rinconada';
 
   // Load available dates on mount
   useEffect(() => {
-    fetch('/api/traqueos')
+    fetch(`/api/traqueos?${apiTrack}`)
       .then(r => r.json())
       .then(d => {
         setDates(d.dates ?? []);
         if (d.dates?.length > 0) setSelectedDate(d.dates[0]._id);
         if (d.nextMeeting) setNextMeeting(d.nextMeeting);
       });
-
-    // Track time on page when leaving
     return () => {
       const seconds = Math.round((Date.now() - timeOnPageRef.current) / 1000);
-      trackGA('traqueos_time_on_page', { seconds, page: 'traqueos' });
+      trackGA('traqueos_time_on_page', { seconds, page: `traqueos_${track}` });
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track]);
 
   // Load entries when date changes
   useEffect(() => {
-    if (!selectedDate) return;
+    if (!selectedDate || searchMode) return;
     setLoading(true);
-    fetch(`/api/traqueos?date=${selectedDate}`)
+    fetch(`/api/traqueos?date=${selectedDate}${apiTrack}`)
       .then(r => r.json())
       .then(d => {
         setEntries(d.entries ?? []);
@@ -85,7 +94,27 @@ export default function TraqueosClient() {
         trackGA('traqueos_date_view', { date: selectedDate, count: d.entries?.length ?? 0 });
       })
       .finally(() => setLoading(false));
-  }, [selectedDate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, searchMode]);
+
+  // Global search with debounce
+  useEffect(() => {
+    if (globalSearchTimer.current) clearTimeout(globalSearchTimer.current);
+    if (globalSearch.length < 2) {
+      setSearchMode(false);
+      setGlobalResults([]);
+      return;
+    }
+    setSearchMode(true);
+    globalSearchTimer.current = setTimeout(() => {
+      setGlobalLoading(true);
+      fetch(`/api/traqueos?q=${encodeURIComponent(globalSearch)}${apiTrack}`)
+        .then(r => r.json())
+        .then(d => setGlobalResults(d.entries ?? []))
+        .finally(() => setGlobalLoading(false));
+    }, 400);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalSearch]);
 
   const workoutTypes = ['all', ...Array.from(new Set(entries.map(e => e.workoutType))).sort()];
 
@@ -97,10 +126,43 @@ export default function TraqueosClient() {
 
   const selectedDateObj = dates.find(d => d._id === selectedDate);
 
+  function WorkoutCard({ e, showDate }: { e: WorkoutEntry & { workoutDate?: string }; showDate?: boolean }) {
+    const wLabel = WORKOUT_LABELS[e.workoutType] ?? e.workoutType;
+    const wColor = WORKOUT_COLORS[e.workoutType] ?? WORKOUT_COLORS.galopo;
+    return (
+      <div className="px-4 py-3">
+        {showDate && e.workoutDate && (
+          <p className="text-[10px] text-gray-500 mb-1">{formatDate(e.workoutDate)}</p>
+        )}
+        <div className="flex items-start gap-2.5">
+          <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border leading-none mt-0.5 ${wColor}`}>
+            {wLabel}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-[13px] font-bold text-white">{e.horseName}</span>
+              {e.distance > 0 && <span className="text-[11px] text-gray-400">{e.distance}m</span>}
+              {e.rm != null && <span className="text-[11px] font-bold text-yellow-300">RM {e.rm}</span>}
+              {e.trainerName && <span className="text-[10px] text-gray-500">Ent: {e.trainerName}</span>}
+              {e.jockeyName && <span className="text-[10px] text-amber-400/80">{e.jockeyName}</span>}
+            </div>
+            {e.splits && <p className="text-[11px] font-mono text-yellow-500/80 mt-0.5 leading-tight">{e.splits}</p>}
+            {e.comment && <p className="text-[11px] text-gray-400 italic mt-0.5 leading-tight">{e.comment}</p>}
+          </div>
+          {e.daysRest != null && (
+            <span className={`shrink-0 text-[10px] font-bold ${
+              e.daysRest <= 3 ? 'text-green-400' : e.daysRest <= 7 ? 'text-yellow-400' : 'text-gray-500'
+            }`}>{e.daysRest}d</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
 
-      {/* ── Header SEO ── */}
+      {/* ── Header ── */}
       <div className="border-b border-gray-800 bg-gray-900">
         <div className="max-w-3xl mx-auto px-4 py-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -109,7 +171,7 @@ export default function TraqueosClient() {
                 ← Desafío Hípico
               </Link>
               <h1 className="text-2xl font-black text-white mt-1 leading-tight">
-                Traqueos La Rinconada
+                Traqueos {trackLabel}
               </h1>
               <p className="text-sm text-gray-400 mt-0.5">
                 Trabajos y parciales oficiales · División de Toma Tiempos INH
@@ -117,15 +179,13 @@ export default function TraqueosClient() {
             </div>
             <div className="flex gap-2 flex-wrap">
               {nextMeeting && (
-                <Link
-                  href={`/revista/${nextMeeting.id}`}
+                <Link href={`/revista/${nextMeeting.id}`}
                   onClick={() => trackGA('traqueos_cta_click', { destination: 'revista' })}
                   className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold border border-yellow-700/60 text-yellow-400 hover:bg-yellow-950/40 transition-colors">
-                  Revista Reunión {nextMeeting.meetingNumber} →
+                  Revista R{nextMeeting.meetingNumber} →
                 </Link>
               )}
-              <Link
-                href="/pronosticos"
+              <Link href="/pronosticos"
                 onClick={() => trackGA('traqueos_cta_click', { destination: 'pronosticos' })}
                 className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-black transition-colors hover:brightness-110"
                 style={{ backgroundColor: GOLD }}>
@@ -133,50 +193,97 @@ export default function TraqueosClient() {
               </Link>
             </div>
           </div>
+
+          {/* ── Tabs hipódromo ── */}
+          <div className="flex gap-1 mt-4">
+            <Link href="/traqueos"
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                track === 'rinconada' ? 'text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+              style={track === 'rinconada' ? { backgroundColor: GOLD } : {}}>
+              La Rinconada
+            </Link>
+            <Link href="/traqueos/valencia"
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                track === 'valencia' ? 'text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+              style={track === 'valencia' ? { backgroundColor: GOLD } : {}}>
+              Valencia
+            </Link>
+          </div>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-5 space-y-4">
 
-        {/* ── Selector de fecha ── */}
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4 space-y-3">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Selecciona la sesión</p>
-          <div className="flex gap-2 flex-wrap">
-            {dates.map(d => (
-              <button
-                key={d._id}
-                onClick={() => setSelectedDate(d._id)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors ${
-                  selectedDate === d._id
-                    ? 'text-black border-yellow-600'
-                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                }`}
-                style={selectedDate === d._id ? { backgroundColor: GOLD } : {}}>
-                {shortDate(d._id)}
-                <span className="ml-1 opacity-60">{d.count}</span>
-              </button>
-            ))}
-          </div>
+        {/* ── Búsqueda global por caballo ── */}
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4 space-y-2">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Buscar ejemplar (todas las fechas)</p>
+          <input
+            type="text"
+            placeholder={`Ej: CORREDORA CE, SKY DIVE...`}
+            value={globalSearch}
+            onChange={e => setGlobalSearch(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+          />
+          {globalSearch.length >= 2 && (
+            <p className="text-[11px] text-gray-500">
+              {globalLoading ? 'Buscando...' : `${globalResults.length} trabajos encontrados para "${globalSearch}"`}
+              {' · '}
+              <button onClick={() => setGlobalSearch('')} className="text-yellow-600 hover:text-yellow-400">Limpiar</button>
+            </p>
+          )}
         </div>
 
-        {/* ── Filtros ── */}
-        {entries.length > 0 && (
+        {/* ── Resultados búsqueda global ── */}
+        {searchMode && (
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
+            {globalLoading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-7 h-7 rounded-full border-2 border-yellow-600 border-t-transparent animate-spin" />
+              </div>
+            ) : globalResults.length === 0 ? (
+              <p className="text-center text-gray-600 py-10 text-sm">Sin resultados para "{globalSearch}".</p>
+            ) : (
+              <div className="divide-y divide-gray-800/50">
+                {globalResults.map((e, i) => <WorkoutCard key={i} e={e} showDate />)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Selector de fecha (oculto en modo búsqueda) ── */}
+        {!searchMode && (
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4 space-y-3">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Selecciona la sesión</p>
+            <div className="flex gap-2 flex-wrap">
+              {dates.map(d => (
+                <button key={d._id} onClick={() => setSelectedDate(d._id)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors ${
+                    selectedDate === d._id
+                      ? 'text-black border-yellow-600'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                  style={selectedDate === d._id ? { backgroundColor: GOLD } : {}}>
+                  {shortDate(d._id)}
+                  <span className="ml-1 opacity-60">{d.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Filtros por tipo (solo en modo fecha) ── */}
+        {!searchMode && entries.length > 0 && (
           <div className="flex gap-2 flex-wrap items-center">
-            <input
-              type="text"
-              placeholder="Buscar ejemplar..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+            <input type="text" placeholder="Filtrar en esta sesión..."
+              value={search} onChange={e => setSearch(e.target.value)}
               className="flex-1 min-w-[160px] bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
             />
             {workoutTypes.map(t => (
-              <button
-                key={t}
-                onClick={() => setFilter(t)}
+              <button key={t} onClick={() => setFilter(t)}
                 className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-colors ${
-                  filter === t
-                    ? 'text-black border-yellow-600'
-                    : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                  filter === t ? 'text-black border-yellow-600' : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
                 }`}
                 style={filter === t ? { backgroundColor: GOLD } : {}}>
                 {t === 'all' ? 'Todos' : (WORKOUT_LABELS[t] ?? t)}
@@ -186,70 +293,30 @@ export default function TraqueosClient() {
         )}
 
         {/* ── Título de sesión ── */}
-        {selectedDate && (
+        {!searchMode && selectedDate && (
           <div>
-            <h2 className="text-base font-bold text-white capitalize">
-              {formatDate(selectedDate)}
-            </h2>
-            {selectedDateObj && (
-              <p className="text-[11px] text-gray-500 mt-0.5">{selectedDateObj.sourceFile}</p>
-            )}
+            <h2 className="text-base font-bold text-white capitalize">{formatDate(selectedDate)}</h2>
+            {selectedDateObj && <p className="text-[11px] text-gray-500 mt-0.5">{selectedDateObj.sourceFile}</p>}
           </div>
         )}
 
-        {/* ── Lista de trabajos ── */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 rounded-full border-2 border-yellow-600 border-t-transparent animate-spin" />
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
-            {filtered.length === 0 ? (
-              <p className="text-center text-gray-600 py-10 text-sm">No hay trabajos para esta selección.</p>
-            ) : (
-              <div className="divide-y divide-gray-800/50">
-                {filtered.map((e, i) => {
-                  const wLabel = WORKOUT_LABELS[e.workoutType] ?? e.workoutType;
-                  const wColor = WORKOUT_COLORS[e.workoutType] ?? WORKOUT_COLORS.galopo;
-                  return (
-                    <div key={i} className="px-4 py-3">
-                      <div className="flex items-start gap-2.5">
-                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border leading-none mt-0.5 ${wColor}`}>
-                          {wLabel}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-[13px] font-bold text-white">{e.horseName}</span>
-                            {e.distance > 0 && <span className="text-[11px] text-gray-400">{e.distance}m</span>}
-                            {e.rm != null && (
-                              <span className="text-[11px] font-bold text-yellow-300">RM {e.rm}</span>
-                            )}
-                            {e.trainerName && (
-                              <span className="text-[10px] text-gray-500">Ent: {e.trainerName}</span>
-                            )}
-                            {e.jockeyName && (
-                              <span className="text-[10px] text-amber-400/80">{e.jockeyName}</span>
-                            )}
-                          </div>
-                          {e.splits && (
-                            <p className="text-[11px] font-mono text-yellow-500/80 mt-0.5 leading-tight">{e.splits}</p>
-                          )}
-                          {e.comment && (
-                            <p className="text-[11px] text-gray-400 italic mt-0.5 leading-tight">{e.comment}</p>
-                          )}
-                        </div>
-                        {e.daysRest != null && (
-                          <span className={`shrink-0 text-[10px] font-bold ${
-                            e.daysRest <= 3 ? 'text-green-400' : e.daysRest <= 7 ? 'text-yellow-400' : 'text-gray-500'
-                          }`}>{e.daysRest}d</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+        {/* ── Lista de trabajos por fecha ── */}
+        {!searchMode && (
+          loading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 rounded-full border-2 border-yellow-600 border-t-transparent animate-spin" />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
+              {filtered.length === 0 ? (
+                <p className="text-center text-gray-600 py-10 text-sm">No hay trabajos para esta selección.</p>
+              ) : (
+                <div className="divide-y divide-gray-800/50">
+                  {filtered.map((e, i) => <WorkoutCard key={i} e={e} />)}
+                </div>
+              )}
+            </div>
+          )
         )}
 
         {/* ── CTAs cruzados ── */}
