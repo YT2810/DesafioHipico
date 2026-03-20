@@ -454,6 +454,7 @@ type RaceOption = { raceNumber: number; annualRaceNumber: number | null; distanc
 function ResultsTab() {
   const [meetings, setMeetings] = useState<{ _id: string; meetingNumber: number; date: string; trackName?: string }[]>([]);
   const [meetingId, setMeetingId] = useState('');
+  const [trackFilter, setTrackFilter] = useState<'all' | string>('all');
   const [raceNumber, setRaceNumber] = useState('');
   const [raceDistance, setRaceDistance] = useState<number | null>(null);
   const [races, setRaces] = useState<RaceOption[]>([]);
@@ -474,7 +475,7 @@ function ResultsTab() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useState(() => {
-    fetch('/api/meetings/recent?limit=20').then(r => r.json()).then(d => {
+    fetch('/api/meetings/recent?limit=30').then(r => r.json()).then(d => {
       const list = d.meetings ?? [];
       setMeetings(list);
       if (list.length > 0) setMeetingId(list[0]._id);
@@ -637,36 +638,86 @@ function ResultsTab() {
       {/* Step 1 */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">1. Reunión y carrera</p>
-        <div className="flex flex-wrap gap-4">
-          {/* Reunión */}
-          <div className="flex-1 min-w-48">
-            <label className="text-xs text-gray-500 mb-1 block">Reunión</label>
-            <select value={meetingId} onChange={e => setMeetingId(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500">
-              {meetings.map(m => (
-                <option key={m._id} value={m._id}>
-                  R{m.meetingNumber} — {m.trackName ?? 'Hipódromo'} — {new Date(m.date).toLocaleDateString('es-VE')}
-                </option>
+
+        {/* Track filter tabs */}
+        {(() => {
+          const tracks = ['all', ...Array.from(new Set(meetings.map(m => m.trackName ?? 'Hipódromo')))];
+          return (
+            <div className="flex gap-1 flex-wrap">
+              {tracks.map(t => (
+                <button key={t} onClick={() => { setTrackFilter(t); setMeetingId(''); setRaceNumber(''); }}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    trackFilter === t
+                      ? 'bg-amber-500 text-black'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}>
+                  {t === 'all' ? 'Todos' : t.replace('NACIONAL DE VALENCIA','Valencia').replace('HIPODROMO DE VALENCIA','Hipódromo Valencia').replace('LA RINCONADA','La Rinconada')}
+                </button>
               ))}
-            </select>
+            </div>
+          );
+        })()}
+
+        {/* Meeting buttons */}
+        {(() => {
+          const filtered = meetings.filter(m => trackFilter === 'all' || (m.trackName ?? 'Hipódromo') === trackFilter);
+          return (
+            <div>
+              <label className="text-xs text-gray-500 mb-2 block">Reunión</label>
+              <div className="flex flex-wrap gap-2">
+                {filtered.map(m => {
+                  const active = meetingId === m._id;
+                  const label = m.trackName?.includes('RINCONADA') ? 'LR'
+                    : m.trackName?.toUpperCase().includes('HIPODROMO') ? 'HV'
+                    : m.trackName?.toUpperCase().includes('NACIONAL') ? 'NV' : 'H';
+                  const dateStr = new Date(m.date).toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit' });
+                  return (
+                    <button key={m._id}
+                      onClick={() => { setMeetingId(m._id); setRaceNumber(''); }}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs transition-colors ${
+                        active
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                      }`}>
+                      <span className="font-bold">{label} R{m.meetingNumber}</span>
+                      <span className="text-gray-500 text-[10px]">{dateStr}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Race buttons */}
+        {races.length > 0 && (
+          <div>
+            <label className="text-xs text-gray-500 mb-2 block">Carrera</label>
+            <div className="flex flex-wrap gap-2">
+              {races.map(r => {
+                const active = raceNumber === String(r.raceNumber);
+                const done = r.status === 'finished';
+                return (
+                  <button key={r.raceNumber}
+                    onClick={() => setRaceNumber(String(r.raceNumber))}
+                    className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs transition-colors ${
+                      active
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                        : done
+                          ? 'bg-green-950/40 border-green-800 text-green-500 hover:border-green-600'
+                          : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
+                    }`}>
+                    <span className="font-bold">C{r.raceNumber}{done ? ' ✓' : ''}</span>
+                    {r.distance ? <span className="text-[10px] text-gray-500">{r.distance}m</span> : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          {/* Carrera — dropdown poblado desde BD */}
-          <div className="w-52">
-            <label className="text-xs text-gray-500 mb-1 block">Carrera</label>
-            <select
-              value={raceNumber}
-              onChange={e => setRaceNumber(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
-            >
-              <option value="">— Selecciona —</option>
-              {races.map(r => (
-                <option key={r.raceNumber} value={r.raceNumber}>
-                  C{r.raceNumber}{r.distance ? ` · ${r.distance}m` : ''}{r.status === 'finished' ? ' ✓' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
+        {meetingId && races.length === 0 && (
+          <p className="text-xs text-gray-600 italic">No hay carreras registradas para esta reunión.</p>
+        )}
         {/* N° Anual — solo lectura, editable si se necesita corregir */}
         {raceNumber && (
           <div className="flex items-center gap-3 pt-1">
