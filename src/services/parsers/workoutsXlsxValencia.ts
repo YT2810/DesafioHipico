@@ -33,7 +33,34 @@ function cleanHorseName(name: string): string {
 }
 
 function isHeader(s: string): boolean {
-  return /^(EJEMPLARES?|PARCIALES?\s*Y\s*COMENTARIOS?|ENTRENADORES?|JINETES?|RM)$/i.test(s.trim());
+  const t = s.trim();
+  if (!t) return true;
+  // Column header names
+  if (/^(EJEMPLARES?|PARCIALES?\s*Y\s*COMENTARIOS?|ENTRENADORES?|JINETES?|RM)$/i.test(t)) return true;
+  // Document title lines Valencia: "EJERCICIOS VALENCIA FECHA = ...", "DIVISION DE TOMATIEMPOS..."
+  if (/^EJERCICIOS\s+(?:EJEMPLARES\s+)?(?:TOMATIEMPO|VALENCIA)/i.test(t)) return true;
+  if (/^DIVISION\s+DE\s+TOMATIEMPOS/i.test(t)) return true;
+  if (/ESTADO\s+DE\s+LA\s+PISTA/i.test(t)) return true;
+  if (/^INH\s*[/\\]/i.test(t)) return true;
+  // Any line that starts with a date pattern (not a horse name)
+  if (/^FECHA\s*=/i.test(t)) return true;
+  // Lines that are clearly too long to be a horse name (>60 chars in a single token) but have no workout data
+  if (t.length > 80 && !/["´']/.test(t)) return true;
+  return false;
+}
+
+/** A valid horse name: ALL CAPS words, no digits, no workout markers */
+function isValidHorseName(s: string): boolean {
+  const t = s.trim();
+  if (!t || t.length < 2) return false;
+  if (isHeader(t)) return false;
+  // Must not look like a workout (starts with digit-quote pattern)
+  if (/^\d+["´'"]\d*/.test(t)) return false;
+  // Must not look like a jockey name only (INITIAL.LASTNAME without spaces)
+  if (/^[A-Z]{1,4}\.[A-Z][A-Z]+$/.test(t)) return false;
+  // Must not be all digits/punctuation
+  if (/^[\d\s"´'.,\-]+$/.test(t)) return false;
+  return true;
 }
 
 /** Valencia RM format: "13\"" or "13\"1" or "13,1" — always 10-30 range */
@@ -131,21 +158,32 @@ export function parseWorkoutsXlsxValencia(buffer: Buffer): ParsedWorkout[] {
       const row = rawRows[ri].map(c => (c ?? '').toString());
       while (row.length < 5) row.push('');
 
-      const col0 = row[0];
-      const col1 = row[1];
-      const col2 = row[2];
-      const col3 = row[3];
-      const col4 = row[4];
+      // ── Skip document header rows (titles, date lines, division headers) ─
+      const raw0 = row[0], raw1 = row[1], raw2 = row[2], raw3 = row[3], raw4 = row[4];
+      if (isHeader(raw0.split('\n')[0]) && (isHeader(raw1.split('\n')[0]) || !raw1.trim())) continue;
+      if (!raw0.trim() && !raw1.trim()) continue;
 
-      if (isHeader(col0.split('\n')[0])) continue;
-      if (!col0.trim() && !col1.trim()) continue;
+      // ── Layout detection: some Valencia files have inverted columns ────────
+      // If col0 looks like a workout string and col1 looks like a horse name → swap
+      // e.g. 12022026.xlsx: col0="15" - 28"2..." col1="MISS FRIEND" col2=jockey col3=trainer col4=RM
+      let c0 = raw0, c1 = raw1, c2 = raw2, c3 = raw3, c4 = raw4;
+      const firstLine0 = c0.split('\n')[0].trim();
+      const firstLine1 = c1.split('\n')[0].trim();
+      const col0IsWork  = /^\d+["´']/.test(firstLine0) || /\bE\/[PS]\b/i.test(firstLine0);
+      const col1IsHorse = isValidHorseName(firstLine1) && !/^\d+["´']/.test(firstLine1);
+      if (col0IsWork && col1IsHorse) {
+        const rmInCol4 = parseRm(c4.split('\n')[0]) !== null;
+        if (rmInCol4) {
+          [c0, c1, c2, c3, c4] = [c1, c0, c4, c2, c3];
+        } else {
+          [c0, c1] = [c1, c0];
+        }
+      }
 
-      // ── Case: malformed — everything concatenated in col0, other cols empty
-      if (col0.trim() && !col1.trim() && !col2.trim()) {
-        // Pattern: "NAME   splits   RM   jockey   trainer"
-        // Name ends where the first digit-quote pattern begins
+      // ── Case: malformed — everything concatenated in c0, other cols empty ─
+      if (c0.trim() && !c1.trim() && !c2.trim()) {
         const mfRx = /^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{1,35}?)\s{2,}(\d+["´'"]\d*[\s\S]{10,}?)\s{2,}(\d+["´'"]\d*)\s{2,}([A-Z]{1,4}\.(?:\s*[A-Z]{1,4}\.)*\s*[A-ZÁÉÍÓÚÑ]+[\s\S]+?)\s{2,}([A-Z]{1,4}\.(?:\s*[A-Z]{1,4}\.)*\s*[A-ZÁÉÍÓÚÑ]+[\s\S]*)$/;
-        const mf = col0.trim().match(mfRx);
+        const mf = c0.trim().match(mfRx);
         if (mf) {
           const horseName = cleanHorseName(mf[1]);
           if (horseName && horseName.length >= 2) {
@@ -160,12 +198,15 @@ export function parseWorkoutsXlsxValencia(buffer: Buffer): ParsedWorkout[] {
               rm: parseRm(mf[3]),
               jockeyName: mf[4].trim(),
               trainerName: mf[5].trim(),
-              rawBlock: `[MALFORMED]|${col0.slice(0, 100)}`,
+              rawBlock: `[MALFORMED]|${c0.slice(0, 100)}`,
             });
           }
         }
         continue;
       }
+
+      // ── Use c0–c4 (layout-corrected) from here on ─────────────────────────
+      const col0 = c0, col1 = c1, col2 = c2, col3 = c3, col4 = c4;
 
       // ── Use max line count across all columns as authoritative horse count ─
       // Keep empty lines (don't filter) so a horse with no RM isn't dropped.
@@ -223,7 +264,7 @@ export function parseWorkoutsXlsxValencia(buffer: Buffer): ParsedWorkout[] {
         const isGroup   = rawName.startsWith('[GRUPO');
         const horseName = isGroup ? rawName : cleanHorseName(rawName);
         if (!horseName || horseName.length < 2) continue;
-        if (!isGroup && isHeader(horseName)) continue;
+        if (!isGroup && !isValidHorseName(horseName)) continue;
 
         const workStr     = workAssigned[hi] ?? '';
         const rm          = parseRm(rmLines[hi] ?? '');

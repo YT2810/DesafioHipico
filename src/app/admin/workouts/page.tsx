@@ -394,28 +394,35 @@ export default function AdminWorkoutsPage() {
         </div>
 
         {/* Borrar trabajos */}
-        <DeleteSection />
+        <DeleteSection tracks={tracks} />
 
       </main>
     </div>
   );
 }
 
-function DeleteSection() {
-  const [from, setFrom] = useState('2025-01-01');
+function DeleteSection({ tracks }: { tracks: { _id: string; name: string }[] }) {
+  const [delTrackId, setDelTrackId] = useState('');
+  const [from, setFrom] = useState('2026-01-01');
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState('');
 
+  const trackName = tracks.find(t => t._id === delTrackId)?.name ?? '';
+
   async function handleDelete() {
-    if (!confirm(`¿Borrar TODOS los trabajos entre ${from} y ${to}? Esta acción no se puede deshacer.`)) return;
+    if (!delTrackId) { setResult('Selecciona un hipódromo primero.'); return; }
+    if (!confirm(`¿Borrar TODOS los trabajos de ${trackName} entre ${from} y ${to}?\n\nEsta acción NO se puede deshacer.`)) return;
     setDeleting(true);
     setResult('');
     try {
-      const res = await fetch(`/api/admin/workouts/delete?from=${from}&to=${to}`, { method: 'DELETE' });
+      const res = await fetch(
+        `/api/admin/workouts/delete?from=${from}&to=${to}&trackId=${delTrackId}`,
+        { method: 'DELETE' }
+      );
       const data = await res.json();
       if (!res.ok) setResult(`Error: ${data.error}`);
-      else setResult(`✅ ${data.deleted} trabajos eliminados`);
+      else setResult(`✅ ${data.deleted} trabajos de ${trackName} eliminados`);
     } catch {
       setResult('Error de red');
     } finally {
@@ -425,7 +432,16 @@ function DeleteSection() {
 
   return (
     <div className="rounded-2xl border border-red-900/30 bg-red-950/10 p-4 space-y-3">
-      <p className="text-xs font-bold text-red-500/80 uppercase tracking-wide">⚠️ Borrar trabajos por rango de fecha</p>
+      <p className="text-xs font-bold text-red-500/80 uppercase tracking-wide">⚠️ Borrar trabajos por hipódromo y rango de fecha</p>
+      <p className="text-[11px] text-gray-600">Solo borra los trabajos del hipódromo seleccionado — los demás no se tocan.</p>
+      <div>
+        <label className="block text-[10px] text-gray-600 mb-1">Hipódromo</label>
+        <select value={delTrackId} onChange={e => setDelTrackId(e.target.value)}
+          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-600">
+          <option value="">— Seleccionar hipódromo —</option>
+          {tracks.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+        </select>
+      </div>
       <div className="flex gap-2 items-end">
         <div className="flex-1">
           <label className="block text-[10px] text-gray-600 mb-1">Desde</label>
@@ -437,7 +453,7 @@ function DeleteSection() {
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
             className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-600" />
         </div>
-        <button onClick={handleDelete} disabled={deleting}
+        <button onClick={handleDelete} disabled={deleting || !delTrackId}
           className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-800/60 border border-red-700/40 hover:bg-red-700/60 disabled:opacity-40 transition-colors">
           {deleting ? 'Borrando...' : 'Borrar'}
         </button>
