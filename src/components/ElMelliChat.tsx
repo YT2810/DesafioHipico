@@ -108,15 +108,14 @@ export default function ElMelliChat() {
     );
   };
 
-  // Not ready yet or not admin — render nothing
-  if (status === 'loading' || !isAdmin) return null;
+  if (status === 'loading') return null;
 
   return (
     <>
       {/* ── Floating Button ── */}
       {!open && (
         <button
-          onClick={handleOpen}
+          onClick={isAdmin ? handleOpen : () => setOpen(true)}
           className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95 pr-4"
           style={{
             background: `linear-gradient(135deg, #1a1200 0%, #2a1e00 100%)`,
@@ -144,8 +143,36 @@ export default function ElMelliChat() {
         </button>
       )}
 
-      {/* ── Chat Panel ── */}
-      {open && (
+      {/* ── Coming Soon Panel (non-admin) ── */}
+      {open && !isAdmin && (
+        <div
+          className="fixed bottom-4 right-4 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl border"
+          style={{
+            width: 'min(320px, calc(100vw - 2rem))',
+            background: '#0d0d0d',
+            borderColor: `${GOLD}40`,
+            boxShadow: `0 0 40px ${GOLD}20`,
+          }}
+        >
+          <div className="flex items-center gap-3 px-4 py-3" style={{ background: `linear-gradient(135deg, #1a1200, #2a1e00)`, borderBottom: `1px solid ${GOLD}30` }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-black shrink-0" style={{ backgroundColor: GOLD, color: '#000' }}>🏇</div>
+            <div className="flex-1">
+              <p className="text-sm font-black leading-none" style={{ color: GOLD }}>El Melli</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Analista Hípico IA</p>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-gray-600 hover:text-gray-300 transition-colors text-lg px-1">✕</button>
+          </div>
+          <div className="px-5 py-6 text-center space-y-3">
+            <p className="text-2xl">⏳</p>
+            <p className="text-sm font-black" style={{ color: GOLD }}>¡El Melli llega pronto, socio!</p>
+            <p className="text-xs text-gray-400 leading-relaxed">El analista hípico IA de Desafío Hípico está en fase de entrenamiento. Pronto podrás consultarle traqueos, inscritos y pronósticos.</p>
+            <p className="text-[10px] font-bold tracking-widest mt-2" style={{ color: `${GOLD}60` }}>YA CORRIÓ · YA GANÓ · YA COBRÓ</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Chat Panel (admin only) ── */}
+      {open && isAdmin && (
         <div
           className="fixed bottom-4 right-4 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl border"
           style={{
