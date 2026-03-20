@@ -1,15 +1,22 @@
 /**
  * Parser de Excel (.xlsx) de trabajos INH — Valencia
  *
- * Layouts conocidos:
- *   Layout A (5 cols):  [nombre, trabajo, RM, jockey, entrenador]        — mayoría de archivos
- *   Layout B (10 cols): [nombre, trabajo, '', '', RM, '', jockey, '', entrenador, ''] — 060326.xlsx
+ * Layouts detectados en los archivos reales:
  *
- * Casos especiales:
- *   - Múltiples caballos separados por \n en la misma celda
- *   - Múltiples caballos en una sola línea sin separador → [GRUPO N/total]
- *   - Filas con columna de trabajo desplazada a col2 (col1 vacía)
- *   - Filas de cabecera del documento
+ *   Layout A (5 cols, header): [nombre, trabajo, RM, jockey, entrenador]
+ *     Header row: ['EJEMPLARES', 'PARCIALES...', 'RM', 'JOCKEY', 'ENTRENADOR']
+ *     Archivos: 130326, 200226, 27022026
+ *
+ *   Layout B (10 cols sparse): col0=nombre, col1=trabajo, col4=RM, col6=jockey, col8=entrenador
+ *     Header row: ['EJEMPLARES', 'PARCIALES...', '', '', 'RM', '', 'JOCKEY', '', 'ENTRENADOR', '']
+ *     Archivo: 060326
+ *
+ *   Layout C (5 cols transpuesto): col0=trabajo, col1=RM, col2=jockey, col3=entrenador, col4=nombre
+ *     El nombre en col4[i] corresponde a los datos de la fila i (mismo row).
+ *     Header row: ['PARCIALES...', 'RM', 'JOCKEY', 'ENTRENADOR', primer_caballo]
+ *     Archivo: 12022026
+ *     Nota: algunas celdas de col1/col2/col3 contienen nombres de caballos (artefacto
+ *     de dos bloques paralelos en el Excel original). Se filtran por parseRm/isJockey.
  */
 
 import { ParsedWorkout } from './workouts';
@@ -42,10 +49,14 @@ function isValidHorseName(s: string): boolean {
   const t = s.trim();
   if (!t || t.length < 2) return false;
   if (isHeader(t)) return false;
-  if (/^\d+["]\d*/.test(t)) return false;
+  if (/^\d+"/.test(t)) return false;
   if (/^[A-Z]{1,4}\.[A-Z][A-Z]+$/.test(t)) return false;
   if (/^[\d\s".,\-]+$/.test(t)) return false;
   return true;
+}
+
+function isJockeyStr(s: string): boolean {
+  return /^[A-Z]{1,4}\.[A-Z]/i.test(s.trim());
 }
 
 function parseRm(s: string): number | null {
@@ -90,7 +101,7 @@ function parseWorkLine(work: string): {
   }
 
   const clean = work.trim();
-  const splitRx = /^((?:\d+["]\d*(?:\s*[-]\s*)?)+)/;
+  const splitRx = /^((?:\d+"[\d]?(?:\s*[-]\s*)?)+)/;
   const splitMatch = clean.match(splitRx);
   let splits = '';
   let comment = clean;
@@ -108,33 +119,52 @@ function countNonEmptyTrailing(lines: string[]): number {
   return last;
 }
 
+type SheetLayout = 'A' | 'B' | 'C';
+
 /**
- * Compact a sparse 10-col row (060326.xlsx layout) to canonical 5-col:
- * [nombre, trabajo, RM, jockey, entrenador]
- * Header for 060326: [0]=EJEMPLARES [1]=PARCIALES [4]=RM [6]=JOCKEY [8]=ENTRENADOR
+ * Detect which layout this sheet uses based on the first non-empty rows.
+ *
+ * Layout A: col0 = horse name (letters), col1 = workout (digits+")
+ * Layout B: like A but 10 cols with RM at col4
+ * Layout C: col0 = workout (digits+"), col4 = horse name (letters)
  */
-function compactRow(row: string[]): string[] {
-  while (row.length < 5) row.push('');
-  if (row.length <= 5) return row.slice(0, 5);
+function detectLayout(rows: string[][]): SheetLayout {
+  // Find the first data row (skip headers)
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const r = rows[i];
+    const c0 = (r[0] ?? '').trim();
+    const c1 = (r[1] ?? '').trim();
+    const c4 = (r[4] ?? '').trim();
+    if (!c0) continue;
 
-  // Detect 10-col layout: RM at col4, jockey at col6
-  const col4IsRm = parseRm(row[4]?.split('\n')[0] ?? '') !== null;
-  const col6IsJockey = /^[A-Z]{1,4}\.[A-Z]/i.test((row[6] ?? '').split('\n')[0].trim());
-
-  if (col4IsRm || col6IsJockey) {
-    return [
-      row[0] ?? '',  // nombre
-      row[1] ?? '',  // trabajo
-      row[4] ?? '',  // RM
-      row[6] ?? '',  // jockey
-      row[8] ?? '',  // entrenador
-    ];
+    // Layout C: col0 is a workout string and col4 has a horse name
+    if (/^\d+"/.test(c0) && c4 && isValidHorseName(c4.split('\n')[0])) {
+      return 'C';
+    }
+    // Layout B: col0 is horse name and there are 10 cols
+    if (r.length >= 8 && isValidHorseName(c0) && /^\d+"/.test(c1)) {
+      return 'B';
+    }
+    // Layout A: col0 is horse name, col1 is workout
+    if (isValidHorseName(c0) && /^\d+"/.test(c1)) {
+      return 'A';
+    }
   }
+  return 'A'; // default
+}
 
-  // Fallback: take first 5 non-empty
-  const compact = row.filter(c => c.trim());
-  while (compact.length < 5) compact.push('');
-  return compact.slice(0, 5);
+/**
+ * For Layout B (10-col sparse): compact to 5-col canonical.
+ */
+function compactLayoutB(row: string[]): string[] {
+  while (row.length < 9) row.push('');
+  return [
+    row[0] ?? '',  // nombre
+    row[1] ?? '',  // trabajo
+    row[4] ?? '',  // RM
+    row[6] ?? '',  // jockey
+    row[8] ?? '',  // entrenador
+  ];
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -148,88 +178,178 @@ export function parseWorkoutsXlsxValencia(buffer: Buffer): ParsedWorkout[] {
   for (const sheetName of wb.SheetNames) {
     const ws = wb.Sheets[sheetName];
     const rawRows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+    const allRows = rawRows.map(r => r.map(c => (c ?? '').toString()));
 
-    for (let ri = 0; ri < rawRows.length; ri++) {
-      const rawRow = rawRows[ri].map(c => (c ?? '').toString());
-      const row = compactRow(rawRow);
+    const layout = detectLayout(allRows);
 
-      let [col0, col1, col2, col3, col4] = row;
-
-      // Skip empty / header rows
-      if (!col0.trim() && !col1.trim()) continue;
-      if (isHeader(col0.split('\n')[0]) && (isHeader(col1.split('\n')[0]) || !col1.trim())) continue;
-
-      // Handle shifted row: trabajo in col2, col1 empty
-      // e.g. "MONEY ROYAL" | "" | "16"1 - 31"2..." | "14"1" | jockey
-      if (!col1.trim() && col2.trim() && /^\d+"/.test(col2.split('\n')[0].trim())) {
-        col1 = col2; col2 = col3; col3 = col4; col4 = '';
-      }
-
-      // Authoritative horse count = max non-empty trailing lines across cols
-      const rmLines   = col2.split('\n').map(s => s.trim());
-      const workLines = col1.split('\n').map(s => s.trim());
-      const nameLines = col0.split('\n').map(s => s.trim());
-
-      const nHorses = Math.max(
-        countNonEmptyTrailing(rmLines),
-        countNonEmptyTrailing(workLines),
-        countNonEmptyTrailing(nameLines),
-        1
-      );
-
-      const jockeyList  = splitPersonNames(col3);
-      const trainerList = splitPersonNames(col4);
-
-      // Determine names array
-      let horseNames: string[];
-      if (nameLines.length === nHorses) {
-        horseNames = nameLines;
-      } else if (nameLines.length === 1 && nHorses > 1) {
-        // Concatenated names without separator — tag as [GRUPO]
-        horseNames = Array.from({ length: nHorses }, (_, i) =>
-          `[GRUPO ${i + 1}/${nHorses}] ${col0.trim()}`
-        );
-      } else {
-        horseNames = nameLines.slice(0, nHorses);
-        while (horseNames.length < nHorses) {
-          horseNames.push(horseNames[horseNames.length - 1] ?? col0.trim());
-        }
-      }
-
-      // Pad work lines
-      const workAssigned = workLines.slice(0, nHorses);
-      while (workAssigned.length < nHorses) workAssigned.push(workLines[0] ?? '');
-
-      for (let hi = 0; hi < nHorses; hi++) {
-        const rawName   = horseNames[hi] ?? '';
-        const isGroup   = rawName.startsWith('[GRUPO');
-        const horseName = isGroup ? rawName : cleanHorseName(rawName);
-        if (!horseName || horseName.length < 2) continue;
-        if (!isGroup && !isValidHorseName(horseName)) continue;
-
-        const workStr     = workAssigned[hi] ?? '';
-        const rm          = parseRm(rmLines[hi] ?? '');
-        const jockeyName  = jockeyList[hi]  ?? '';
-        const trainerName = trainerList[hi] ?? '';
-        const jockMismatch = jockeyList.length !== nHorses || trainerList.length !== nHorses;
-
-        const { distance, workoutType, splits, comment } = parseWorkLine(workStr);
-
-        workouts.push({
-          horseName,
-          daysRest: null,
-          distance,
-          workoutType,
-          splits,
-          comment,
-          rm,
-          jockeyName,
-          trainerName,
-          rawBlock: `${isGroup ? '[GRUPO] ' : ''}${jockMismatch ? '[JOCK?] ' : ''}${horseName}|${workStr}|${rmLines[hi] ?? ''}|${jockeyName}|${trainerName}`,
-        });
-      }
+    if (layout === 'C') {
+      parseLayoutC(allRows, workouts);
+    } else {
+      parseLayoutAB(allRows, layout, workouts);
     }
   }
 
   return workouts;
+}
+
+// ── Layout C parser ────────────────────────────────────────────────────────
+// col4=nombre, col0=trabajo, col1=RM, col2=jockey, col3=entrenador
+// The name in col4[i] goes with data in the SAME row i.
+// Skip rows where col1 is not RM-like (artefact rows from parallel block).
+
+function parseLayoutC(allRows: string[][], workouts: ParsedWorkout[]): void {
+  for (let ri = 0; ri < allRows.length; ri++) {
+    const r = allRows[ri];
+    const work  = (r[0] ?? '').trim();
+    const rmRaw = (r[1] ?? '').trim();
+    const c2    = (r[2] ?? '').trim();
+    const c3    = (r[3] ?? '').trim();
+    const name  = (r[4] ?? '').trim();
+
+    // Must have a workout in col0 and a horse name in col4
+    if (!work || !/^\d+"/.test(work)) continue;
+    if (!name || !isValidHorseName(name)) continue;
+
+    // col1 must be RM-like; if it's a name/jockey, this row is an artefact
+    const rm = parseRm(rmRaw);
+    if (rm === null && rmRaw && !isJockeyStr(rmRaw)) {
+      // rmRaw is something else (maybe a horse name from parallel block) — skip RM, keep row
+    }
+
+    // col2: jockey if it looks like one, otherwise skip
+    const jockeyName  = isJockeyStr(c2) ? c2 : '';
+    // col3: entrenador if it doesn't look like a horse name
+    const trainerName = (!isValidHorseName(c3) || isJockeyStr(c3)) ? c3 : '';
+
+    const horseName = cleanHorseName(name);
+    if (!horseName || horseName.length < 2) continue;
+
+    const { distance, workoutType, splits, comment } = parseWorkLine(work);
+
+    workouts.push({
+      horseName,
+      daysRest: null,
+      distance,
+      workoutType,
+      splits,
+      comment,
+      rm: rm,
+      jockeyName,
+      trainerName,
+      rawBlock: `${horseName}|${work}|${rmRaw}|${jockeyName}|${trainerName}`,
+    });
+  }
+}
+
+// ── Layout A/B parser ──────────────────────────────────────────────────────
+
+function parseLayoutAB(allRows: string[][], layout: SheetLayout, workouts: ParsedWorkout[]): void {
+  for (let ri = 0; ri < allRows.length; ri++) {
+    const rawRow = allRows[ri];
+    const row = layout === 'B' ? compactLayoutB(rawRow) : (() => {
+      const r = [...rawRow];
+      while (r.length < 5) r.push('');
+      return r.slice(0, 5);
+    })();
+
+    let [col0, col1, col2, col3, col4] = row;
+
+    // Skip empty / header rows
+    if (!col0.trim() && !col1.trim()) continue;
+    if (isHeader(col0.split('\n')[0]) && (isHeader(col1.split('\n')[0]) || !col1.trim())) continue;
+
+    // Handle shifted row: trabajo in col2, col1 empty
+    if (!col1.trim() && col2.trim() && /^\d+"/.test(col2.split('\n')[0].trim())) {
+      col1 = col2; col2 = col3; col3 = col4; col4 = '';
+    }
+
+    // Handle malformed row: everything in col0, other cols empty
+    // e.g. "HONOR AND GLORY   16"2 - 32" - ...  13"1  J. PRADO  J. BRICEÑO"
+    if (col0.trim() && !col1.trim() && !col2.trim()) {
+      const mf = col0.trim().match(
+        /^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{1,35}?)\s{2,}(\d+"[\s\S]{5,}?)\s{2,}(\d+"[\d]?)\s{2,}([A-Z]{1,4}\.[\s\S]+?)\s{2,}([A-Z]{1,4}\.[\s\S]*)$/
+      );
+      if (mf) {
+        const horseName = cleanHorseName(mf[1]);
+        if (horseName && horseName.length >= 2 && isValidHorseName(horseName)) {
+          const { distance, workoutType, splits, comment } = parseWorkLine(mf[2].trim());
+          workouts.push({
+            horseName,
+            daysRest: null,
+            distance,
+            workoutType,
+            splits,
+            comment,
+            rm: parseRm(mf[3]),
+            jockeyName: mf[4].trim(),
+            trainerName: mf[5].trim(),
+            rawBlock: `[MALFORMED]|${col0.slice(0, 120)}`,
+          });
+        }
+      }
+      continue;
+    }
+
+    // ── Multi-horse logic ──────────────────────────────────────────────────
+    const rmLines   = col2.split('\n').map(s => s.trim());
+    const workLines = col1.split('\n').map(s => s.trim());
+    const nameLines = col0.split('\n').map(s => s.trim());
+
+    const nHorses = Math.max(
+      countNonEmptyTrailing(rmLines),
+      countNonEmptyTrailing(workLines),
+      countNonEmptyTrailing(nameLines),
+      1
+    );
+
+    const jockeyList  = splitPersonNames(col3);
+    const trainerList = splitPersonNames(col4);
+
+    let horseNames: string[];
+    if (nameLines.length === nHorses) {
+      horseNames = nameLines;
+    } else if (nameLines.length === 1 && nHorses > 1) {
+      // Concatenated names — tag for AI resolution
+      horseNames = Array.from({ length: nHorses }, (_, i) =>
+        `[GRUPO ${i + 1}/${nHorses}] ${col0.trim()}`
+      );
+    } else {
+      horseNames = nameLines.slice(0, nHorses);
+      while (horseNames.length < nHorses) {
+        horseNames.push(horseNames[horseNames.length - 1] ?? col0.trim());
+      }
+    }
+
+    const workAssigned = workLines.slice(0, nHorses);
+    while (workAssigned.length < nHorses) workAssigned.push(workLines[0] ?? '');
+
+    for (let hi = 0; hi < nHorses; hi++) {
+      const rawName   = horseNames[hi] ?? '';
+      const isGroup   = rawName.startsWith('[GRUPO');
+      const horseName = isGroup ? rawName : cleanHorseName(rawName);
+      if (!horseName || horseName.length < 2) continue;
+      if (!isGroup && !isValidHorseName(horseName)) continue;
+
+      const workStr     = workAssigned[hi] ?? '';
+      const rm          = parseRm(rmLines[hi] ?? '');
+      const jockeyName  = jockeyList[hi]  ?? '';
+      const trainerName = trainerList[hi] ?? '';
+      const jockMismatch = jockeyList.length !== nHorses || trainerList.length !== nHorses;
+
+      const { distance, workoutType, splits, comment } = parseWorkLine(workStr);
+
+      workouts.push({
+        horseName,
+        daysRest: null,
+        distance,
+        workoutType,
+        splits,
+        comment,
+        rm,
+        jockeyName,
+        trainerName,
+        rawBlock: `${isGroup ? '[GRUPO] ' : ''}${jockMismatch ? '[JOCK?] ' : ''}${horseName}|${workStr}|${rmLines[hi] ?? ''}|${jockeyName}|${trainerName}`,
+      });
+    }
+  }
 }
