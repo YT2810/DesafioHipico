@@ -370,6 +370,11 @@ export default function PerfilPage() {
               <span>🎯 Subir pronóstico</span>
               <span>›</span>
             </Link>
+            <Link href="/handicapper/mis-audios"
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">
+              <span className="text-sm text-white">🎧 Mis audios VIP</span>
+              <span className="text-gray-500 text-sm">›</span>
+            </Link>
           </div>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">

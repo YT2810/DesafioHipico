@@ -12,13 +12,13 @@ const SECTIONS = [
       { href: '/admin/ingest',       icon: '🏁', label: 'Cargar Resultados',   desc: 'Sube fotos del tablero y guarda posiciones, pagos y dividendos.' },
       { href: '/admin/meetings',     icon: '📋', label: 'Subir Programa',       desc: 'Ingesta de PDFs con el programa de la reunión (INH / HINAVA).' },
       { href: '/admin/workouts',     icon: '⏱️', label: 'Subir Traqueos',       desc: 'Sube archivos Excel o PDF de la División de Toma Tiempos.' },
+      { href: '/admin/meetings',     icon: '▶️',  label: 'Video Resumen Jornadas', desc: 'Sube o enlaza el video resumen de la jornada para cada reunión.' },
     ],
   },
   {
     group: 'Pronósticos',
     items: [
       { href: '/admin/intelligence', icon: '🧠', label: 'Subir Pronóstico',     desc: 'Pega texto, imagen o URL de un handicapper. La IA extrae las marcas.' },
-      { href: '/admin/forecast',     icon: '📊', label: 'Pronósticos Guardados', desc: 'Revisa y edita los pronósticos ya procesados.' },
       { href: '/staff/fuentes',      icon: '📡', label: 'Fuentes y Handicappers', desc: 'Catálogo de handicappers conocidos y sus fuentes.' },
     ],
   },
