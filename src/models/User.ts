@@ -33,6 +33,7 @@ export interface IUser extends Document {
   meetingConsumptions: IMeetingConsumption[];
   followedHandicappers: Types.ObjectId[];
   lastLoginDate?: string;
+  loginStreak?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +67,7 @@ const UserSchema = new Schema<IUser>(
     meetingConsumptions: { type: [MeetingConsumptionSchema], default: [] },
     followedHandicappers: [{ type: Schema.Types.ObjectId, ref: 'HandicapperProfile' }],
     lastLoginDate: { type: String },
+    loginStreak: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

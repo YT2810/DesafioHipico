@@ -20,25 +20,29 @@ export default function GoldToast() {
     const user = session?.user as any;
     const goldEarned: number = user?.goldEarned ?? 0;
     const balance: number = user?.balance?.golds ?? 0;
+    const streak: number = user?.loginStreak ?? 0;
+    const isStreakBonus = goldEarned === 8;
 
-    // Determine what to show
-    // goldEarned > 0 means daily login reward was granted this session
     if (goldEarned > 0) {
-      // Check if this is a new user (balance == goldEarned + 15 welcome, or just goldEarned)
-      const isNew = balance <= 18; // 15 welcome + 3 daily = 18 max for brand new user
+      const isNew = balance <= 23 && streak <= 1; // brand new user
       if (isNew && balance >= 15) {
         setMessage(`🎉 ¡Bienvenido a Desafío Hípico!`);
         setSubMessage(`Recibiste 🪙 ${balance} Gold de bienvenida`);
+      } else if (isStreakBonus) {
+        setMessage(`🔥 ¡${streak} días seguidos! Bonus desbloqueado`);
+        setSubMessage(`+${goldEarned} Gold especial · Saldo: ${balance} Gold`);
+      } else if (streak >= 3) {
+        setMessage(`🔥 ${streak} días seguidos · +${goldEarned} Gold`);
+        setSubMessage(`¡Sigue así! El día 7 ganas un bonus extra`);
       } else {
         setMessage(`🪙 +${goldEarned} Gold por tu visita de hoy`);
         setSubMessage(`Saldo actual: ${balance} Gold`);
       }
       setShown(true);
-      // Animate in after short delay
       setTimeout(() => setToastState('enter'), 300);
       setTimeout(() => setToastState('visible'), 600);
-      setTimeout(() => setToastState('exit'), 4000);
-      setTimeout(() => setToastState('hidden'), 4600);
+      setTimeout(() => setToastState('exit'), 4500);
+      setTimeout(() => setToastState('hidden'), 5100);
     }
   }, [status, session, shown]);
 

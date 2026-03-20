@@ -35,6 +35,7 @@ export type NotificationType =
   | 'vip_purchase'
   | 'request_approved'
   | 'request_rejected'
+  | 'gold_received'
   | 'system';
 
 export const NOTIFICATION_TYPES: NotificationType[] = [
@@ -42,7 +43,7 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
   'topup_approved', 'topup_rejected',
   'followed_forecast', 'new_meeting', 'new_meeting_hcp',
   'gold_low', 'vip_purchase', 'request_approved', 'request_rejected',
-  'system',
+  'gold_received', 'system',
 ];
 
 export interface INotification extends Document {

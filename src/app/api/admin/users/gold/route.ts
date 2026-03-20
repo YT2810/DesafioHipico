@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
+import Notification from '@/models/Notification';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,18 @@ export async function POST(req: NextRequest) {
 
     user.balance.golds = Math.max(0, (user.balance.golds ?? 0) + amount);
     await user.save();
+
+    // Notify the user if Gold was added (not deducted)
+    if (amount > 0) {
+      const msgNote = note ? ` "${note}"` : '';
+      await Notification.create({
+        userId: user._id,
+        type: 'gold_received',
+        title: `¡Recibiste 🪙 ${amount} Gold!`,
+        body: `El equipo de Desafío Hípico te envió ${amount} Gold.${msgNote} Saldo actual: ${user.balance.golds} Gold.`,
+        link: '/perfil',
+      });
+    }
 
     return NextResponse.json({
       ok: true,

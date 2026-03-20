@@ -134,24 +134,38 @@ export const authConfig: NextAuthConfig = {
           ],
         };
 
-        // Daily login reward: 3 Gold if first login of the day
-        const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-        const updatedUser = await User.findOneAndUpdate(
-          {
-            ...query,
-            $or: [
-              { lastLoginDate: { $ne: todayStr } },
-              { lastLoginDate: { $exists: false } },
-            ],
-          },
-          {
-            $inc: { 'balance.golds': 3 },
-            $set: { lastLoginDate: todayStr },
-          },
-          { new: true }
-        ).lean() as any;
+        // Daily login reward + streak tracking
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
-        const dbUser = updatedUser ?? await User.findOne(query).lean() as any;
+        // Find user first to read current streak
+        const currentUser = await User.findOne(query).lean() as any;
+        const isFirstLoginToday = currentUser &&
+          currentUser.lastLoginDate !== todayStr;
+
+        let goldEarned = 0;
+        let updatedUser: any = null;
+
+        if (isFirstLoginToday) {
+          // Calculate new streak
+          const prevStreak: number = currentUser.loginStreak ?? 0;
+          const newStreak = currentUser.lastLoginDate === yesterdayStr
+            ? prevStreak + 1
+            : 1;
+          const isStreakBonus = newStreak % 7 === 0; // Bonus every 7 days
+          goldEarned = isStreakBonus ? 8 : 3; // 8 Gold on streak milestone
+
+          updatedUser = await User.findOneAndUpdate(
+            query,
+            {
+              $inc: { 'balance.golds': goldEarned },
+              $set: { lastLoginDate: todayStr, loginStreak: newStreak },
+            },
+            { new: true }
+          ).lean() as any;
+        }
+
+        const dbUser = updatedUser ?? currentUser;
 
         if (dbUser) {
           token.userId    = dbUser._id.toString();
@@ -164,8 +178,8 @@ export const authConfig: NextAuthConfig = {
           token.identityDocument = dbUser.identityDocument;
           token.phoneNumber      = dbUser.phoneNumber;
           token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument && dbUser.phoneNumber);
-          // Signal to frontend: earned Gold this login
-          token.goldEarned = updatedUser ? 3 : 0;
+          token.goldEarned  = goldEarned;
+          token.loginStreak = updatedUser?.loginStreak ?? dbUser.loginStreak ?? 0;
         }
       }
 
@@ -206,6 +220,7 @@ export const authConfig: NextAuthConfig = {
       session.user.phoneNumber      = token.phoneNumber as string | undefined;
       session.user.billingComplete  = token.billingComplete as boolean | undefined;
       session.user.goldEarned       = token.goldEarned as number | undefined;
+      session.user.loginStreak       = token.loginStreak as number | undefined;
       return session;
     },
   },

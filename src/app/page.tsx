@@ -6,6 +6,7 @@ import Link from 'next/link';
 import TopUpModal from '@/components/TopUpModal';
 import NotificationBell from '@/components/NotificationBell';
 import GoldToast from '@/components/GoldToast';
+import ContextualBanner from '@/components/ContextualBanner';
 
 const GOLD = '#D4AF37';
 
@@ -160,10 +161,8 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ── Launch Banner ── */}
-      <div className="bg-gradient-to-r from-yellow-900/70 to-yellow-800/40 border-b border-yellow-700/50 px-4 py-2.5 text-center">
-        <p className="text-xs font-bold text-yellow-300">🎁 ¡PROMO DE LANZAMIENTO! Todo el análisis hípico liberado por tiempo limitado</p>
-      </div>
+      {/* ── Contextual Banner ── */}
+      <ContextualBanner streak={(session?.user as any)?.loginStreak ?? 0} isLoggedIn={isLoggedIn} />
 
       {/* ── Main ── */}
       <main className="flex-1 mx-auto w-full max-w-lg px-4 pt-8 pb-10 flex flex-col items-center text-center gap-6">
