@@ -164,6 +164,8 @@ export const authConfig: NextAuthConfig = {
           token.identityDocument = dbUser.identityDocument;
           token.phoneNumber      = dbUser.phoneNumber;
           token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument && dbUser.phoneNumber);
+          // Signal to frontend: earned Gold this login
+          token.goldEarned = updatedUser ? 3 : 0;
         }
       }
 
@@ -203,6 +205,7 @@ export const authConfig: NextAuthConfig = {
       session.user.identityDocument = token.identityDocument as string | undefined;
       session.user.phoneNumber      = token.phoneNumber as string | undefined;
       session.user.billingComplete  = token.billingComplete as boolean | undefined;
+      session.user.goldEarned       = token.goldEarned as number | undefined;
       return session;
     },
   },

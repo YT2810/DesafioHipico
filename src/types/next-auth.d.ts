@@ -17,6 +17,7 @@ declare module 'next-auth' {
       identityDocument?: string;
       phoneNumber?: string;
       billingComplete?: boolean;
+      goldEarned?: number;
     };
   }
 
@@ -47,5 +48,6 @@ declare module 'next-auth/jwt' {
     identityDocument?: string;
     phoneNumber?: string;
     billingComplete?: boolean;
+    goldEarned?: number;
   }
 }

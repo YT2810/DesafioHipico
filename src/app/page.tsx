@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import TopUpModal from '@/components/TopUpModal';
 import NotificationBell from '@/components/NotificationBell';
+import GoldToast from '@/components/GoldToast';
 
 const GOLD = '#D4AF37';
 
@@ -67,6 +68,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+      <GoldToast />
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
