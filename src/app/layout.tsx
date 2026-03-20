@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
-import WhatsAppButton from "@/components/WhatsAppButton";
+import ElMelliChat from "@/components/ElMelliChat";
 import Script from "next/script";
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-DB6H4TPMJ1';
@@ -161,7 +161,7 @@ export default function RootLayout({
         />
         <SessionProviderWrapper>
           {children}
-          <WhatsAppButton />
+          <ElMelliChat />
         </SessionProviderWrapper>
       </body>
     </html>
