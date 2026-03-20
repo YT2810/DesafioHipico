@@ -47,6 +47,21 @@ interface BcvStatus {
   message?: string;
 }
 
+interface DayStats { date: string; registrations: number; logins: number; }
+interface AdminStats {
+  totalUsers: number;
+  roles: { customer: number; handicapper: number; staff: number; admin: number };
+  gold: { total: number; usersWithGold: number; usersNoGold: number; avg: number };
+  dailyStats: DayStats[];
+  recentUsers: { _id: string; email?: string; alias?: string; roles: string[]; balance: { golds: number }; createdAt: string; lastLoginDate?: string }[];
+}
+
+function fmtDay(iso: string) {
+  const [, , dd] = iso.split('-');
+  const names = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  return `${names[new Date(iso + 'T12:00:00').getDay()]} ${dd}`;
+}
+
 function bcvAlertNeeded(status: BcvStatus | null): boolean {
   if (!status) return false;
   if (!status.stale) return false;
@@ -58,6 +73,8 @@ function bcvAlertNeeded(status: BcvStatus | null): boolean {
 
 export default function AdminPage() {
   const [bcv, setBcv] = useState<BcvStatus | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [goldIdentifier, setGoldIdentifier] = useState('');
   const [goldAmount, setGoldAmount] = useState('');
   const [goldNote, setGoldNote] = useState('');
@@ -72,6 +89,12 @@ export default function AdminPage() {
       .then(r => r.json())
       .then(d => setBcv(d))
       .catch(() => setBcv({ stale: true, message: 'No se pudo verificar la tasa BCV' }));
+
+    fetch('/api/admin/stats')
+      .then(r => r.json())
+      .then(d => setStats(d))
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
   }, []);
 
   async function handleAssignGold() {
@@ -144,6 +167,98 @@ export default function AdminPage() {
             </Link>
           </div>
         )}
+
+        {/* ── Métricas ── */}
+        <div>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Resumen del día</p>
+          {statsLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[1,2,3,4].map(i => <div key={i} className="h-20 rounded-2xl bg-gray-900 animate-pulse" />)}
+            </div>
+          ) : stats ? (
+            <div className="space-y-4">
+              {/* KPI cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-gray-500 mb-1">Usuarios totales</p>
+                  <p className="text-2xl font-extrabold text-white">{stats.totalUsers}</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {stats.roles.handicapper} hcp · {stats.roles.staff} staff
+                  </p>
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-gray-500 mb-1">Gold en circulación</p>
+                  <p className="text-2xl font-extrabold" style={{ color: '#D4AF37' }}>{stats.gold.total.toLocaleString()}</p>
+                  <p className="text-xs text-gray-600 mt-1">Promedio {stats.gold.avg} / usuario</p>
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-gray-500 mb-1">Con Gold</p>
+                  <p className="text-2xl font-extrabold text-green-400">{stats.gold.usersWithGold}</p>
+                  <p className="text-xs text-gray-600 mt-1">{stats.gold.usersNoGold} sin Gold</p>
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-gray-500 mb-1">Logins hoy</p>
+                  <p className="text-2xl font-extrabold text-blue-400">
+                    {stats.dailyStats[stats.dailyStats.length - 1]?.logins ?? 0}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    +{stats.dailyStats[stats.dailyStats.length - 1]?.registrations ?? 0} nuevos
+                  </p>
+                </div>
+              </div>
+
+              {/* 7-day bar chart (CSS bars) */}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">Últimos 7 días</p>
+                <div className="flex items-end gap-2 h-20">
+                  {stats.dailyStats.map(d => {
+                    const maxLogins = Math.max(...stats.dailyStats.map(x => x.logins), 1);
+                    const pct = Math.round((d.logins / maxLogins) * 100);
+                    return (
+                      <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
+                        <p className="text-[10px] text-gray-600">{d.logins}</p>
+                        <div className="w-full rounded-t-md bg-blue-700/60" style={{ height: `${Math.max(pct, 4)}%` }} title={`${d.logins} logins`} />
+                        {d.registrations > 0 && (
+                          <div className="w-full rounded-t-sm bg-yellow-600/80" style={{ height: `${Math.round((d.registrations / maxLogins) * 100)}%`, marginTop: '-100%' }} title={`${d.registrations} nuevos`} />
+                        )}
+                        <p className="text-[10px] text-gray-600 leading-none">{fmtDay(d.date)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2.5 h-2.5 rounded-sm bg-blue-700/60 inline-block" /> Logins</span>
+                  <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-600/80 inline-block" /> Registros</span>
+                </div>
+              </div>
+
+              {/* Recent users */}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">Últimos registros</p>
+                <div className="space-y-2">
+                  {stats.recentUsers.map(u => (
+                    <div key={u._id} className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold text-black shrink-0"
+                        style={{ backgroundColor: GOLD }}>
+                        {(u.alias ?? u.email ?? 'U')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">{u.alias ?? u.email}</p>
+                        <p className="text-[10px] text-gray-600">{new Date(u.createdAt).toLocaleDateString('es-VE')}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-bold" style={{ color: GOLD }}>🪙 {u.balance?.golds ?? 0}</p>
+                        {u.lastLoginDate && (
+                          <p className="text-[10px] text-gray-600">login {u.lastLoginDate.slice(5)}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         {/* Sections */}
         {SECTIONS.map(section => (
