@@ -178,6 +178,17 @@ export const authConfig: NextAuthConfig = {
         }
       }
 
+      // Always sync balance from DB so admin Gold assignments are reflected immediately
+      if (!user && token.userId) {
+        try {
+          await dbConnect();
+          const fresh = await User.findById(token.userId).select('balance').lean() as any;
+          if (fresh?.balance) token.balance = fresh.balance;
+        } catch {
+          // silent — keep existing token value
+        }
+      }
+
       return token;
     },
 
