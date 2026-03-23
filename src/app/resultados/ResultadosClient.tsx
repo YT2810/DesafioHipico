@@ -237,7 +237,7 @@ export default function ResultadosClient() {
           <div className="flex items-center gap-3">
             <a href="/" className="text-xs text-gray-400 hover:text-white transition-colors">← Inicio</a>
             <span className="text-gray-700">|</span>
-            <h1 className="text-sm font-extrabold text-white tracking-tight">🏆 Resultados</h1>
+            <h1 className="text-sm font-extrabold text-white tracking-tight">🏆 Resultados Hípicos</h1>
           </div>
           <span className="text-[10px] text-gray-500 hidden sm:block">Hipódromos Venezuela</span>
         </div>
@@ -247,8 +247,9 @@ export default function ResultadosClient() {
         {/* SEO lead paragraph — visually subtle but crawlable */}
         <div className="bg-gray-900/40 border border-gray-800/40 rounded-2xl px-4 py-3">
           <p className="text-xs text-gray-500 leading-relaxed">
-            Resultados oficiales de carreras de caballos en Venezuela — <strong className="text-gray-400">Resultados La Rinconada</strong> (Caracas),{' '}
-            <strong className="text-gray-400">Resultados Valencia</strong> y demás hipódromos. Posiciones, tiempos oficiales, dividendos y video resumen de cada jornada.
+            <strong className="text-gray-400">Resultados hípicos de hoy domingo</strong> — posiciones, tiempos oficiales, dividendos del{' '}
+            <strong className="text-gray-400">5 y 6 La Rinconada</strong> y <strong className="text-gray-400">resultados INH</strong> actualizados cada jornada.{' '}
+            También <strong className="text-gray-400">resultados HINAVA hoy</strong> (Hipódromo de Valencia). Datos oficiales procesados por Desafío Hípico.
           </p>
         </div>
 
