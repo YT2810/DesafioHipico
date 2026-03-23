@@ -254,7 +254,21 @@ export default function ResultadosClient() {
 
         {loading && (
           <div className="space-y-4">
-            {[1,2,3].map(i => <div key={i} className="h-24 rounded-2xl bg-gray-900 animate-pulse"/>)}
+            {[1,2,3].map(i => (
+              <div key={i} className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden animate-pulse">
+                <div className="flex items-start gap-4 p-4">
+                  <div className="shrink-0 w-14 h-20 rounded-xl bg-gray-800" />
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="h-4 w-48 rounded bg-gray-800" />
+                    <div className="h-3 w-36 rounded bg-gray-800" />
+                    <div className="flex gap-2 mt-2">
+                      <div className="h-5 w-20 rounded-full bg-gray-800" />
+                      <div className="h-5 w-16 rounded-full bg-gray-800" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
