@@ -75,6 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           meetingNumber: meeting.meetingNumber,
           date: meeting.date,
           trackName: (meeting as any).trackName ?? 'Hipódromo',
+          raceCount: (meeting as any).raceCount ?? 0,
         }
       : null,
     races: racesWithForecasts,

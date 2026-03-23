@@ -73,7 +73,7 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
     if (sharing) return;
     setSharing(true);
     try {
-      const url = `/api/og/handicapper?id=${id}`;
+      const url = `/api/og/picks?id=${id}`;
       const res = await fetch(url);
       const blob = await res.blob();
       const filename = `pronosticos-${profile.pseudonym.replace(/\s+/g, '-').toLowerCase()}.png`;
