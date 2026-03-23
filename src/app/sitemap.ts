@@ -88,37 +88,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .populate('trackId', 'name')
       .lean() as any[];
 
-    meetingPages = meetings.flatMap(m => {
+    meetingPages = meetings.map(m => {
       const meetingDate = new Date(m.date);
       const isRecent = (now.getTime() - meetingDate.getTime()) < 3 * 24 * 60 * 60 * 1000;
       const mFreq: MetadataRoute.Sitemap[number]['changeFrequency'] = isRecent ? freq : 'weekly';
-      const entries: MetadataRoute.Sitemap = [];
 
-      // /programa/[meetingId] — inscritos page
-      entries.push({
+      // Only /programa/[meetingId] — canonical clean URL, no query params
+      return {
         url: `${BASE}/programa/${m._id.toString()}`,
         lastModified: m.updatedAt ?? meetingDate,
         changeFrequency: mFreq,
         priority: isRecent ? 0.9 : 0.7,
-      });
-
-      // /pronosticos?reunion=ID — forecasts for this meeting
-      entries.push({
-        url: `${BASE}/pronosticos?reunion=${m._id.toString()}`,
-        lastModified: m.updatedAt ?? meetingDate,
-        changeFrequency: mFreq,
-        priority: isRecent ? 0.88 : 0.65,
-      });
-
-      // /retirados?reunion=ID — scratches for this meeting
-      entries.push({
-        url: `${BASE}/retirados?reunion=${m._id.toString()}`,
-        lastModified: m.updatedAt ?? meetingDate,
-        changeFrequency: mFreq,
-        priority: isRecent ? 0.85 : 0.6,
-      });
-
-      return entries;
+      };
     });
   } catch {
     // DB unavailable during build — return only static pages

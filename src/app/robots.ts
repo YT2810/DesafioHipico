@@ -6,20 +6,43 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: ['/', '/pronosticos', '/retirados', '/programa/'],
+        allow: [
+          '/',
+          '/pronosticos',
+          '/retirados',
+          '/programa/',
+          '/ranking',
+          '/traqueos',
+          '/retrospectos',
+          '/revista/',
+          '/resultados',
+          '/en-vivo',
+          '/handicapper/',
+          '/contacto',
+        ],
         disallow: [
           '/admin/',
           '/staff/',
           '/api/',
           '/perfil',
-          '/handicapper/',
           '/auth/',
         ],
       },
       {
-        // Allow AI crawlers explicitly for LLM indexing (Googlebot-AI, GPTBot, ClaudeBot, PerplexityBot)
+        // Allow AI crawlers explicitly for LLM indexing
         userAgent: ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Googlebot-News'],
-        allow: ['/', '/pronosticos', '/retirados', '/programa/'],
+        allow: [
+          '/',
+          '/pronosticos',
+          '/retirados',
+          '/programa/',
+          '/ranking',
+          '/traqueos',
+          '/retrospectos',
+          '/revista/',
+          '/resultados',
+          '/handicapper/',
+        ],
         disallow: ['/admin/', '/api/', '/staff/'],
       },
     ],
