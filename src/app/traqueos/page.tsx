@@ -9,6 +9,8 @@ const BASE = 'https://www.desafiohipico.com';
 const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
+export const revalidate = 300; // ISR: re-fetch MongoDB cada 5 min
+
 export const metadata: Metadata = {
   title: 'Traqueos La Rinconada · Trabajos Oficiales INH Esta Semana',
   description:

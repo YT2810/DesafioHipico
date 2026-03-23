@@ -178,7 +178,8 @@ export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackI
               </p>
               <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed max-w-sm">
                 <strong className="text-gray-500">Datos hípicos La Rinconada</strong> — traqueos, parciales y remates de cada ejemplar.{' '}
-                <strong className="text-gray-500">Datos 5 y 6</strong> y trabajos oficiales INH para el próximo domingo.
+                <strong className="text-gray-500">Datos hípicos gratis</strong>: trabajos oficiales INH para el <strong className="text-gray-500">5 y 6</strong>.{' '}
+                <strong className="text-gray-500">Datos última hora La Rinconada</strong> actualizados cada sesión.
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
