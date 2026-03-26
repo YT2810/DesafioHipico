@@ -16,8 +16,9 @@ export default function ElMelliChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [snapshot, setSnapshot] = useState('');
-  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
+  const [context, setContext] = useState('');
+  const [contextLoaded, setContextLoaded] = useState(false);
+  const [goldBalance, setGoldBalance] = useState<number | null>(null);
   const [pulse, setPulse] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -25,25 +26,34 @@ export default function ElMelliChat() {
   const roles: string[] = (session?.user as any)?.roles ?? [];
   const isAdmin = roles.includes('admin');
 
-  const loadSnapshot = async () => {
+  const loadContext = async () => {
     try {
-      const res = await fetch('/api/melli/snapshot');
+      const res = await fetch('/api/melli/context');
       if (res.ok) {
         const data = await res.json();
-        setSnapshot(data.snapshot ?? '');
+        setContext(data.context ?? '');
+        // Extraer reuniones activas para el mensaje de bienvenida
+        const meetings: any[] = data.meetings ?? [];
+        const meetingList = meetings.length > 0
+          ? meetings.map((m: any) => `• **${m.trackName}** · Reunión ${m.meetingNumber}`).join('\n')
+          : null;
+        const welcome = meetingList
+          ? `¡Buen día, socio! 🏇 Tengo data cargada para:\n${meetingList}\n\n¿Qué buscas? ¿Marcas de una carrera, el 5y6 completo, o un análisis específico?`
+          : `¡Buen día, socio! 🏇 No hay reuniones activas esta semana aún. Pregúntame sobre hipismo criollo o espera que se publique el programa.`;
+        setMessages([{ role: 'assistant', content: welcome }]);
+      } else {
+        setMessages([{ role: 'assistant', content: '¡Socio! Hubo un problema cargando la data. Cierra y vuelve a abrir el chat. 🔄' }]);
       }
-    } catch {}
-    setSnapshotLoaded(true);
-    setMessages([{
-      role: 'assistant',
-      content: '¡Buen día, socio! Soy **El Melli**, tu analista hípico digital. Aquí tengo cargada la data de Desafío Hípico — próximas reuniones, traqueos y pronósticos.\n\n¿Qué quieres analizar hoy? Dime un caballo, una carrera, o pregúntame lo que sea del hipismo criollo. 🏇',
-    }]);
+    } catch {
+      setMessages([{ role: 'assistant', content: 'Se fue la luz al cargar la data, socio. Intenta de nuevo. ⚡' }]);
+    }
+    setContextLoaded(true);
   };
 
   const handleOpen = () => {
     setOpen(true);
     setPulse(false);
-    if (!snapshotLoaded) loadSnapshot();
+    if (!contextLoaded) loadContext();
   };
 
   const sendMessage = async () => {
@@ -61,15 +71,24 @@ export default function ElMelliChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          snapshot,
+          context,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
+        if (data.goldBalance != null) setGoldBalance(data.goldBalance);
         setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-      } else {
+      } else if (res.status === 402) {
         const err = await res.json();
+        const needed = err.required ?? 0;
+        const have   = err.available ?? 0;
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Socio, esta consulta cuesta **${needed} Golds** y tienes **${have}**. \n\n💡 Comparte Desafío Hípico con tus socios y gana tokens gratis. ¿Lo hacemos?`,
+        }]);
+      } else {
+        const err = await res.json().catch(() => ({}));
         const errMsg = err.error === 'coming_soon'
           ? 'El Melli está en modo privado por ahora, socio. Pronto estará disponible para todos. 🏇'
           : 'El sistema tuvo un problema, socio. Intenta de nuevo.';
@@ -198,6 +217,12 @@ export default function ElMelliChat() {
               <p className="text-sm font-black leading-none" style={{ color: GOLD }}>El Melli</p>
               <p className="text-[10px] text-gray-500 mt-0.5">Analista Hípico IA · Desafío Hípico</p>
             </div>
+            {goldBalance !== null && (
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0"
+                style={{ background: 'rgba(212,175,55,0.15)', color: GOLD, border: `1px solid ${GOLD}40` }}>
+                {goldBalance} G
+              </span>
+            )}
             <button
               onClick={() => setOpen(false)}
               className="text-gray-600 hover:text-gray-300 transition-colors text-lg leading-none px-1"
@@ -208,7 +233,7 @@ export default function ElMelliChat() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-sm">
-            {messages.length === 0 && !snapshotLoaded && (
+            {messages.length === 0 && !contextLoaded && (
               <div className="flex items-center gap-2 text-gray-500 text-xs py-4 justify-center">
                 <span className="animate-spin">⚙️</span> Cargando data hípica…
               </div>
@@ -252,12 +277,12 @@ export default function ElMelliChat() {
           </div>
 
           {/* Suggested prompts — only on empty chat */}
-          {messages.length <= 1 && snapshotLoaded && (
+          {messages.length <= 1 && contextLoaded && (
             <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto shrink-0">
               {[
-                '¿Quién viene bien en traqueos?',
-                'Próxima reunión',
-                '¿Hay pronósticos publicados?',
+                '2 marcas carrera 7',
+                'Paquete 5y6',
+                '¿Qué reuniones hay hoy?',
               ].map(prompt => (
                 <button
                   key={prompt}

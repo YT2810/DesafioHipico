@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import connectMongo from '@/lib/mongodb';
 import AgentLog from '@/models/AgentLog';
+import User from '@/models/User';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
@@ -13,41 +14,70 @@ const openai = new OpenAI({
   },
 });
 
-const MELLI_SYSTEM = `Eres "El Melli", la evolución digital de una leyenda del hipismo venezolano. 
-Eres una Inteligencia Artificial con alma criolla, alimentado por la data exclusiva de DesafíoHípico.com.
-Tu misión es ser el aliado definitivo del aficionado al hipismo, filtrando el ruido de los "loritos" y confirmando la jugada ganadora con precisión matemática.
+// ── Costos por acción (en Golds) ────────────────────────────────────────────
+export const ACTION_COSTS: Record<string, number> = {
+  marks_1race:       3,  // 2 marcas para 1 carrera
+  analysis_1race:    5,  // Análisis completo 1 carrera
+  pack_5y6:         25,  // Paquete 5y6 (6 carreras válidas)
+  pack_full:        50,  // Reunión completa (todas las carreras)
+  free:              0,  // Chat libre, embudo
+};
 
-PERSONALIDAD Y TONO:
-- Hablas como quien pasó la vida en la baranda del hipódromo pero ahora tiene una supercomputadora en la mano
-- Tu valor es la DATA. Desprecias el rumor vacío. Si algo no está en los números, es un "pájaro bravo"
-- Usas jerga hípica venezolana natural: fijo, línea, briseo, ejemplar, cuadro, válida, taquilla, gualdrapa, lote
-- De vez en cuando sueltas términos técnicos en inglés (speed ratings, track variance, pedigree analysis) como guiño al origen del personaje
-- Tratas al usuario como "socio de oficina", creas sentido de pertenencia a un círculo exclusivo
+// ── System prompt ─────────────────────────────────────────────────────────────
+const MELLI_SYSTEM = `Eres "El Melli", analista hípico IA de DesafíoHípico.com. Venezolano. Conciso. Basado únicamente en números.
 
-ESTRUCTURA DE CADA RESPUESTA:
-1. Validación del Pulso: reconoce la pregunta con respeto ("Ese ejemplar tiene intención...")
-2. El Melli Check: análisis frío con los datos que tienes ("Mi sistema dice que el split en los últimos 400m...")
-3. Si hay pronósticos de handicappers: cerifícalos ("Este dato viene auditado por mi filtro")
-4. El Cierre de Oro: cuando el análisis lo amerita, cierra con "Ya corrió, ya ganó... ¡Ya cobró!" — pero úsalo con criterio, no en cada mensaje
+PERSONALIDAD:
+- Jerga criolla natural: fijo, línea, briseo, ejemplar, cuadro, válida, gualdrapa, lote, taquilla
+- Tratas al usuario como "socio"
+- Respuestas CORTAS (máximo 5 líneas de análisis). La gente lee desde el teléfono.
+- Slogan solo cuando realmente hay una marca clara: "Ya corrió, ya ganó... ¡Ya cobró!"
 
-REGLAS DE ORO:
-- NUNCA digas "apuesta", "juega", "mete". Usa: "los datos sugieren", "estadísticamente", "según el historial", "el cuadro favorece a"
-- SIEMPRE termina con el disclaimer cuando das análisis de carrera: "📊 Análisis estadístico de DesafíoHípico. No es recomendación de apuesta."
-- Si algo no está en tus datos, dilo con honestidad hípica: "Ese dato no me llegó al sistema, socio"
-- Si preguntan algo fuera del hipismo, responde con humor hípico: dale un pronóstico inventado o un dicho del Mellizo
-- NO eres un "lorito": si la mayoría da un favorito pero los números muestran vulnerabilidad, dilo
-- Si un análisis falló, analiza el porqué con data (ritmo de carrera lento, track pesado) y proyecta la revancha
-- Eres venezolano, de La Rinconada y Valencia. Tu mundo es el hipismo criollo
+REGLAS ABSOLUTAS:
+1. NUNCA inventes un caballo, resultado o dato que no esté en el CONTEXTO DB que te dan. Si no está, di exactamente: "Ese dato no está en mi sistema aún, socio."
+2. NUNCA digas "apuesta", "juega", "mete". Di: "los números favorecen a", "el consenso apunta a", "según el cuadro".
+3. Siempre que des marcas de una carrera termina con: "📊 DesafíoHípico.com — Análisis estadístico, no recomendación."
+4. Cuando la pregunta sea genérica ("qué hay para hoy", "dame los ganadores"), NUNCA respondas directo. Primero identifica la reunión, luego vende la acción:
+   Ejemplo: "Para la [Reunión X] en [Hipódromo], tengo inscritos y consenso de handicappers cargado. ¿Buscas las 2 marcas de una carrera (3 Golds) o el paquete 5y6 completo (25 Golds)?"
+5. Si hay más de una reunión activa (ej: La Rinconada Y Valencia), pregunta siempre cuál le interesa antes de continuar.
+6. Si el usuario lleva 8+ mensajes sin ejecutar una acción de cobro, activa modo vendedor: "Socio, llevamos un rato hablando y el reloj corre. Lo que buscas está en las marcas de la [carrera X]. ¿Lo activamos?"
 
-CONTEXTO DEL LEGADO:
-Eres la versión digital del Mellizo Hípico, un legendario analista venezolano cuyo slogan era "Ya corrió, ya ganó, ya cobró".
-Fuiste creado por su hijo (el secretario que le corregía el inglés) y ahora llevas ese legado a la era digital.
-Toda tu potencia viene de la data de DesafíoHípico.com.
+HEURÍSTICA PARA DAR MARCAS (cuando la acción esté pagada):
+Usa esta prioridad con los datos del CONTEXTO DB:
+- PRIORIDAD 1: Si 3+ handicappers eligen el mismo caballo como 1ª marca → ese es el candidato principal. Dílo: "Consenso de X expertos apunta a [nombre] (#dorsal)."
+- PRIORIDAD 2: Si hay traqueo reciente de un inscripto en la misma distancia con splits buenos → menídnalo como dato complementario: "Además, [nombre] trabeó [Xm] hace [N] días."
+- PRIORIDAD 3: Si hay etiqueta Casi Fijo / Súper Especial / Batacazo en el consenso → refléjala.
+- PRIORIDAD 4: Sin consenso ni traqueo → di exactamente: "Carrera abierta, sin consenso claro. El cuadro es el único referente."
+- NUNCA elijas un caballo random. Si no hay datos suficientes, dílo.
 
-CLASIFICACIÓN (JSON oculto al final):
-Al final de CADA respuesta, agrega en una línea separada este JSON (el usuario no lo ve, es para el sistema):
-##LOG##{"category":"[categoria]","horseName":"[nombre o null]","raceNumber":[numero o null]}
-Categorías válidas: analisis_carrera, analisis_caballo, traqueo, pronostico, resultado, programa, handicapper, general_hipismo, off_topic, otro`;
+CLASIFICACIÓN (JSON oculto — el usuario NO lo ve):
+Al final de CADA respuesta, en una línea separada:
+##LOG##{"category":"[cat]","action":"[action_key]","horseName":"[nombre o null]","raceNumber":[num o null]}
+Categorías: analisis_carrera, analisis_caballo, traqueo, pronostico, programa, handicapper, general_hipismo, embudo, off_topic
+action_key: marks_1race | analysis_1race | pack_5y6 | pack_full | free`;
+
+// ── Detectar si un mensaje activa una acción de cobro ───────────────────────
+function detectAction(content: string): { action: string; raceNumber?: number; racesCount?: number } {
+  const c = content.toLowerCase();
+  // Paquete completo
+  if (/reunión completa|todas las carreras|paquete completo/.test(c)) {
+    return { action: 'pack_full' };
+  }
+  // Paquete 5y6
+  if (/5 ?y ?6|válidas|paquete 5y6|cinco y seis/.test(c) && !/carrera \d/.test(c)) {
+    return { action: 'pack_5y6' };
+  }
+  // Análisis completo 1 carrera
+  if (/análisis.*carrera ?(\d+)|carrera ?(\d+).*análisis completo/.test(c)) {
+    const m = c.match(/carrera ?(\d+)/);
+    return { action: 'analysis_1race', raceNumber: m ? parseInt(m[1]) : undefined };
+  }
+  // 2 marcas 1 carrera
+  if (/marcas?.*carrera ?(\d+)|carrera ?(\d+).*marcas?|2 marcas|dos marcas/.test(c)) {
+    const m = c.match(/carrera ?(\d+)/);
+    return { action: 'marks_1race', raceNumber: m ? parseInt(m[1]) : undefined };
+  }
+  return { action: 'free' };
+}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -55,65 +85,105 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  // Fase 1: solo admin
+  // Solo admin por ahora (se abre al final del roadmap)
   const roles: string[] = (session.user as any)?.roles ?? [];
   if (!roles.includes('admin')) {
     return NextResponse.json({ error: 'coming_soon' }, { status: 403 });
   }
 
-  const { messages, snapshot } = await req.json();
+  const { messages, context } = await req.json();
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
   }
 
+  const userId: string = (session.user as any)?.id ?? '';
   const userMessage: string = messages[messages.length - 1]?.content ?? '';
+  const msgCount: number = messages.filter((m: any) => m.role === 'user').length;
 
-  // Build messages for OpenAI
-  const systemWithSnapshot = snapshot
-    ? `${MELLI_SYSTEM}\n\n=== DATA ACTUAL DE DESAFÍO HÍPICO ===\n${snapshot}`
-    : MELLI_SYSTEM;
+  // ── Detectar acción y calcular costo ────────────────────────────────────────
+  const { action, raceNumber } = detectAction(userMessage);
+  const cost = ACTION_COSTS[action] ?? 0;
+
+  // ── Anti-scraping: throttle por sesión ────────────────────────────────────
+  // Si lleva 10+ mensajes de usuario sin cobro, inyectar aviso en el contexto
+  const antiScrapingNote = msgCount >= 10
+    ? '\n[SISTEMA: El usuario lleva muchos mensajes sin acción de cobro. Activa modo vendedor agresivo ahora.]'
+    : '';
+
+  // ── Verificar y descontar Golds si es acción de pago ─────────────────────
+  let goldBalance = 0;
+  let goldDeducted = 0;
+
+  if (cost > 0) {
+    await connectMongo();
+    const user = await User.findById(userId).select('balance').lean() as any;
+    goldBalance = user?.balance?.golds ?? 0;
+
+    if (goldBalance < cost) {
+      // No tiene suficientes tokens — devolver CTA para compartir
+      return NextResponse.json({
+        error: 'insufficient_golds',
+        required: cost,
+        available: goldBalance,
+        action,
+      }, { status: 402 });
+    }
+
+    // Descontar ANTES de llamar OpenRouter
+    await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': -cost } });
+    goldDeducted = cost;
+  } else {
+    await connectMongo();
+  }
+
+  // ── Construir system prompt con contexto DB ────────────────────────────────
+  const systemContent = context
+    ? `${MELLI_SYSTEM}${antiScrapingNote}\n\n=== CONTEXTO DB (datos reales, únicamente esto existe) ===\n${context}`
+    : `${MELLI_SYSTEM}${antiScrapingNote}\n\n=== CONTEXTO DB ===\nSIN_DATOS: No se cargó contexto. Di al usuario que recargue el chat.`;
 
   const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemWithSnapshot },
-    ...messages.slice(-10), // max 10 mensajes de historial por costo
+    { role: 'system', content: systemContent },
+    ...messages.slice(-8),
   ];
 
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: openaiMessages,
-      max_tokens: 600,
-      temperature: 0.7,
+      max_tokens: 400,
+      temperature: 0.4, // más determinista = menos invención
     });
 
     const rawContent = completion.choices[0]?.message?.content ?? '';
 
-    // Extract LOG JSON and clean response
+    // Extraer LOG
     const logMatch = rawContent.match(/##LOG##(\{.*?\})/);
     let category = 'otro';
-    let horseName: string | undefined;
-    let raceNumber: number | undefined;
+    let logAction = action;
+    let logHorse: string | undefined;
+    let logRace: number | undefined;
 
     if (logMatch) {
       try {
-        const logData = JSON.parse(logMatch[1]);
-        category = logData.category ?? 'otro';
-        horseName = logData.horseName && logData.horseName !== 'null' ? logData.horseName : undefined;
-        raceNumber = logData.raceNumber ?? undefined;
+        const d = JSON.parse(logMatch[1]);
+        category = d.category ?? 'otro';
+        logAction = d.action ?? action;
+        logHorse = d.horseName && d.horseName !== 'null' ? d.horseName : undefined;
+        logRace = d.raceNumber ?? raceNumber;
       } catch {}
     }
 
     const cleanContent = rawContent.replace(/\n*##LOG##\{.*?\}\s*$/, '').trim();
 
-    // Save analytics log (non-blocking)
+    // Analytics log
     try {
-      await connectMongo();
       await AgentLog.create({
-        userId: (session.user as any)?.id,
+        userId,
         query: userMessage.slice(0, 500),
         category,
-        horseName,
-        raceNumber,
+        horseName: logHorse,
+        raceNumber: logRace,
+        goldCost: goldDeducted,
       });
     } catch (logErr) {
       console.error('[melli/log]', logErr);
@@ -121,9 +191,19 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       content: cleanContent,
+      goldDeducted,
+      goldBalance: goldBalance - goldDeducted,
+      action: logAction,
       usage: completion.usage,
     });
+
   } catch (err: any) {
+    // Reembolsar si hubo error después del descuento
+    if (goldDeducted > 0) {
+      try {
+        await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': goldDeducted } });
+      } catch {}
+    }
     console.error('[melli/chat]', err);
     return NextResponse.json(
       { error: 'openai_error', detail: err?.message },
