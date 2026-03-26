@@ -107,6 +107,50 @@ export function calcularConsenso(forecasts: Array<{
 }
 
 /**
+ * Extrae parámetros de contexto del mensaje del usuario.
+ * Permite al frontend recargar /api/melli/context con meetingId o raceNumber
+ * cuando el usuario especifica una carrera o hipódromo.
+ */
+export interface ContextParams {
+  raceNumber?: number;
+  trackHint?: 'rinconada' | 'valencia';
+  needsRefresh: boolean;
+}
+
+export function extractContextParams(message: string): ContextParams {
+  const c = message.toLowerCase();
+
+  // Detectar número de carrera mencionado (numérico o cardinal/ordinal en español)
+  const ORDINALS: Record<string, number> = {
+    primera: 1, segundo: 2, segunda: 2, tercera: 3, tercero: 3,
+    cuarta: 4, cuarto: 4, quinta: 5, quinto: 5, sexta: 6, sexto: 6,
+    séptima: 7, septima: 7, séptimo: 7, septimo: 7,
+    octava: 8, octavo: 8, novena: 9, noveno: 9, décima: 10, decima: 10,
+    undécima: 11, undecima: 11, duodécima: 12, duodecima: 12,
+  };
+  const ORDINAL_WORDS = 'primera|segunda|tercera|cuarta|quinta|sexta|s[eé]ptima|octava|novena|d[eé]cima|und[eé]cima|duod[eé]cima';
+  const numericMatch = c.match(/(?:carrera|c)\s*(\d{1,2})/);
+  // "carrera primera" o "primera carrera"
+  const ordAfter  = c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`));
+  const ordBefore = c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`));
+  const ordWord   = ordAfter?.[1] ?? ordBefore?.[1];
+  const raceNumber = numericMatch
+    ? parseInt(numericMatch[1])
+    : ordWord ? ORDINALS[ordWord] : undefined;
+
+  // Detectar hipódromo mencionado
+  const isRinconada = /rinconada|la rinca|rinca/.test(c);
+  const isValencia  = /valencia/.test(c);
+  const trackHint: ContextParams['trackHint'] = isRinconada ? 'rinconada' : isValencia ? 'valencia' : undefined;
+
+  // Necesita refresh si menciona carrera específica, hipódromo, o pide traqueos/inscritos
+  const needsRefresh = !!(raceNumber || trackHint ||
+    /traqueos?|inscrito|programa|quién viene|quien viene/.test(c));
+
+  return { raceNumber, trackHint, needsRefresh };
+}
+
+/**
  * Verifica si un usuario tiene golds suficientes para una acción.
  */
 export function checkGoldBalance(

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import { extractContextParams } from '@/lib/melli-logic';
 
 const GOLD = '#D4AF37';
 
@@ -19,6 +20,7 @@ export default function ElMelliChat() {
   const [context, setContext] = useState('');
   const [contextLoaded, setContextLoaded] = useState(false);
   const [goldBalance, setGoldBalance] = useState<number | null>(null);
+  const [activeMeetings, setActiveMeetings] = useState<any[]>([]);
   const [pulse, setPulse] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,28 +28,40 @@ export default function ElMelliChat() {
   const roles: string[] = (session?.user as any)?.roles ?? [];
   const isAdmin = roles.includes('admin');
 
-  const loadContext = async () => {
+  const loadContext = async (meetingId?: string, raceNumber?: number) => {
     try {
-      const res = await fetch('/api/melli/context');
+      const params = new URLSearchParams();
+      if (meetingId)  params.set('meetingId', meetingId);
+      if (raceNumber) params.set('raceNumber', String(raceNumber));
+      const url = `/api/melli/context${params.size ? '?' + params.toString() : ''}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setContext(data.context ?? '');
-        // Extraer reuniones activas para el mensaje de bienvenida
-        const meetings: any[] = data.meetings ?? [];
-        const meetingList = meetings.length > 0
-          ? meetings.map((m: any) => `• **${m.trackName}** · Reunión ${m.meetingNumber}`).join('\n')
-          : null;
-        const welcome = meetingList
-          ? `¡Buen día, socio! 🏇 Tengo data cargada para:\n${meetingList}\n\n¿Qué buscas? ¿Marcas de una carrera, el 5y6 completo, o un análisis específico?`
-          : `¡Buen día, socio! 🏇 No hay reuniones activas esta semana aún. Pregúntame sobre hipismo criollo o espera que se publique el programa.`;
-        setMessages([{ role: 'assistant', content: welcome }]);
-      } else {
+        if (data.meetings?.length) setActiveMeetings(data.meetings);
+
+        // Solo mostrar bienvenida en la carga inicial (sin parámetros)
+        if (!meetingId && !raceNumber) {
+          const meetings: any[] = data.meetings ?? [];
+          const meetingList = meetings.length > 0
+            ? meetings.map((m: any) => `• **${m.trackName}** · Reunión ${m.meetingNumber}`).join('\n')
+            : null;
+          const welcome = meetingList
+            ? `¡Buen día, socio! 🏇 Tengo data cargada para:\n${meetingList}\n\n¿Qué buscas? ¿Marcas de una carrera, el 5y6 completo, o un análisis específico?`
+            : `¡Buen día, socio! 🏇 No hay reuniones activas esta semana aún. Pregúntame sobre hipismo criollo o espera que se publique el programa.`;
+          setMessages([{ role: 'assistant', content: welcome }]);
+          setContextLoaded(true);
+        }
+      } else if (!meetingId) {
         setMessages([{ role: 'assistant', content: '¡Socio! Hubo un problema cargando la data. Cierra y vuelve a abrir el chat. 🔄' }]);
+        setContextLoaded(true);
       }
     } catch {
-      setMessages([{ role: 'assistant', content: 'Se fue la luz al cargar la data, socio. Intenta de nuevo. ⚡' }]);
+      if (!meetingId) {
+        setMessages([{ role: 'assistant', content: 'Se fue la luz al cargar la data, socio. Intenta de nuevo. ⚡' }]);
+        setContextLoaded(true);
+      }
     }
-    setContextLoaded(true);
   };
 
   const handleOpen = () => {
@@ -65,13 +79,43 @@ export default function ElMelliChat() {
     setInput('');
     setLoading(true);
 
+    // Detectar si el mensaje menciona carrera/hipódromo específico y recargar contexto
+    let currentContext = context;
+    try {
+      const params = extractContextParams(text);
+      if (params.needsRefresh) {
+        // Encontrar meetingId del hipódromo mencionado
+        let meetingId: string | undefined;
+        if (params.trackHint && activeMeetings.length > 0) {
+          const match = activeMeetings.find((m: any) =>
+            params.trackHint === 'rinconada'
+              ? /rinconada/i.test(m.trackName)
+              : /valencia/i.test(m.trackName)
+          );
+          meetingId = match?.id;
+        } else if (activeMeetings.length === 1) {
+          meetingId = activeMeetings[0].id;
+        }
+        // Recargar contexto con datos específicos de carrera/reunión
+        const qp = new URLSearchParams();
+        if (meetingId)          qp.set('meetingId', meetingId);
+        if (params.raceNumber)  qp.set('raceNumber', String(params.raceNumber));
+        const res2 = await fetch(`/api/melli/context?${qp.toString()}`);
+        if (res2.ok) {
+          const d2 = await res2.json();
+          currentContext = d2.context ?? context;
+          setContext(currentContext);
+        }
+      }
+    } catch { /* contexto previo se mantiene */ }
+
     try {
       const res = await fetch('/api/melli/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          context,
+          context: currentContext,
         }),
       });
 

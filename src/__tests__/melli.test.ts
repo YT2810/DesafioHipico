@@ -9,6 +9,7 @@ import {
   validateDataForAction,
   calcularConsenso,
   checkGoldBalance,
+  extractContextParams,
   ACTION_COSTS,
 } from '@/lib/melli-logic';
 
@@ -222,6 +223,61 @@ describe('calcularConsenso — ranking de handicappers', () => {
     expect(result[0].primeraVeces).toBe(3);
     expect(result[1].horseName).toBe('LUNA');
     expect(result[1].primeraVeces).toBe(2);
+  });
+});
+
+// ── extractContextParams ──────────────────────────────────────────────────────
+
+describe('extractContextParams — recarga de contexto dinámico', () => {
+  // Casos de los screenshots (los bugs reales encontrados)
+  test('"los traqueos" → needsRefresh true (pide data real)', () => {
+    expect(extractContextParams('los traqueos').needsRefresh).toBe(true);
+  });
+  test('"dame el mejor trabajo en la primera carrera de la rinconada" → needsRefresh + trackHint rinconada + raceNumber 1', () => {
+    const r = extractContextParams('dame el mejor trabajo en la primera carrera de la rinconada');
+    expect(r.needsRefresh).toBe(true);
+    expect(r.trackHint).toBe('rinconada');
+    expect(r.raceNumber).toBe(1);
+  });
+  test('"que inscritos tienes" → needsRefresh true', () => {
+    expect(extractContextParams('que inscritos tienes').needsRefresh).toBe(true);
+  });
+  test('"la rinconada" → trackHint rinconada + needsRefresh true', () => {
+    const r = extractContextParams('la rinconada');
+    expect(r.trackHint).toBe('rinconada');
+    expect(r.needsRefresh).toBe(true);
+  });
+
+  // Hipódromos
+  test('"valencia" → trackHint valencia', () => {
+    expect(extractContextParams('valencia').trackHint).toBe('valencia');
+  });
+  test('"qué hay para hoy" → needsRefresh false (genérico, no requiere data específica)', () => {
+    expect(extractContextParams('qué hay para hoy').needsRefresh).toBe(false);
+  });
+  test('"hola" → needsRefresh false', () => {
+    expect(extractContextParams('hola').needsRefresh).toBe(false);
+  });
+
+  // Números de carrera
+  test('"marcas carrera 7" → raceNumber 7', () => {
+    expect(extractContextParams('marcas carrera 7').raceNumber).toBe(7);
+  });
+  test('"carrera 12" → raceNumber 12', () => {
+    expect(extractContextParams('carrera 12').raceNumber).toBe(12);
+  });
+  test('"carrera 7 la rinconada" → raceNumber 7 + trackHint rinconada', () => {
+    const r = extractContextParams('carrera 7 la rinconada');
+    expect(r.raceNumber).toBe(7);
+    expect(r.trackHint).toBe('rinconada');
+  });
+
+  // Traqueos y programa
+  test('"quién viene bien en traqueos" → needsRefresh true', () => {
+    expect(extractContextParams('quién viene bien en traqueos').needsRefresh).toBe(true);
+  });
+  test('"dame el programa" → needsRefresh true', () => {
+    expect(extractContextParams('dame el programa').needsRefresh).toBe(true);
   });
 });
 
