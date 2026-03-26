@@ -10,6 +10,7 @@ import {
   calcularConsenso,
   checkGoldBalance,
   extractContextParams,
+  shouldAutoRefund,
   ACTION_COSTS,
 } from '@/lib/melli-logic';
 
@@ -278,6 +279,43 @@ describe('extractContextParams — recarga de contexto dinámico', () => {
   });
   test('"dame el programa" → needsRefresh true', () => {
     expect(extractContextParams('dame el programa').needsRefresh).toBe(true);
+  });
+});
+
+// ── shouldAutoRefund ──────────────────────────────────────────────────────────
+
+describe('shouldAutoRefund — reembolso automático', () => {
+  // Sin cobro nunca reembolsa
+  test('sin cobro (0 golds) → no reembolsa aunque haya frase de no-data', () => {
+    expect(shouldAutoRefund('no tengo inscritos para esta carrera', 0)).toBe(false);
+  });
+
+  // Señal explícita del LLM
+  test('##REFUND## en respuesta → reembolsa', () => {
+    expect(shouldAutoRefund('Socio, tienes razón. ##REFUND##', 3)).toBe(true);
+  });
+
+  // Frases de no-data (los casos de los screenshots)
+  test('"no tengo inscritos" → reembolsa', () => {
+    expect(shouldAutoRefund('No tengo inscritos cargados para esta carrera aún, socio.', 3)).toBe(true);
+  });
+  test('"ese dato no está en mi sistema" → reembolsa', () => {
+    expect(shouldAutoRefund('Ese dato no está en mi sistema aún, socio.', 5)).toBe(true);
+  });
+  test('"vuelve cuando esté el programa" → reembolsa', () => {
+    expect(shouldAutoRefund('Vuelve cuando esté el programa oficial.', 3)).toBe(true);
+  });
+  test('"no hay pronósticos publicados" → reembolsa', () => {
+    expect(shouldAutoRefund('No hay pronósticos publicados para esta reunión.', 25)).toBe(true);
+  });
+
+  // Respuesta buena con data real → NO reembolsa
+  test('respuesta con marcas reales → no reembolsa', () => {
+    const goodResponse = 'Consenso de 6 expertos apunta a RELÁMPAGO (#4). Además trabeó 1000m hace 3 días. 📊 DesafíoHípico.com';
+    expect(shouldAutoRefund(goodResponse, 3)).toBe(false);
+  });
+  test('respuesta de embudo sin cobro → no reembolsa', () => {
+    expect(shouldAutoRefund('¿Buscas las 2 marcas de una carrera (3 Golds) o el paquete 5y6?', 0)).toBe(false);
   });
 });
 

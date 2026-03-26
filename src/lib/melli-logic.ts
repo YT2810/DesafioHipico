@@ -151,6 +151,26 @@ export function extractContextParams(message: string): ContextParams {
 }
 
 /**
+ * Determina si una respuesta del LLM debe gatillar reembolso automático.
+ * Condición: hubo cobro Y (el LLM pidió ##REFUND## O la respuesta no tiene data útil).
+ */
+const NO_DATA_PHRASES = [
+  'no tengo inscritos',
+  'ese dato no está en mi sistema',
+  'no tengo datos',
+  'no está en mi sistema',
+  'vuelve cuando esté el programa',
+  'no hay pronósticos publicados',
+];
+
+export function shouldAutoRefund(rawResponse: string, goldDeducted: number): boolean {
+  if (goldDeducted === 0) return false;
+  if (rawResponse.includes('##REFUND##')) return true;
+  const lower = rawResponse.toLowerCase();
+  return NO_DATA_PHRASES.some(p => lower.includes(p));
+}
+
+/**
  * Verifica si un usuario tiene golds suficientes para una acción.
  */
 export function checkGoldBalance(

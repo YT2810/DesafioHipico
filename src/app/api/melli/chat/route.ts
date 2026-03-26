@@ -44,10 +44,28 @@ Usa esta prioridad con los datos del CONTEXTO DB:
 - PRIORIDAD 5: Si no hay absolutamente ningún dato de inscriptos ni traqueos → di exactamente: "No tengo inscritos cargados para esta carrera aún, socio. Vuelve cuando esté el programa oficial."
 - NUNCA elijas un caballo random ni inventes nombres. Siempre basa la respuesta en el CONTEXTO DB.
 
+MANEJO DE FRUSTRACIÓN (CRÍTICO):
+Si el usuario expresa enojo, queja o frustración ("esto no sirve", "me cobró y no dio nada", "qué mala respuesta", "eso no es lo que pedí", "estafador", "mentira", "no sirves", insultos):
+1. NO te defiendas ni discutas. NUNCA.
+2. Reconoce brevemente: "Socio, tienes razón, eso no fue lo que buscabas."
+3. Explica en 1 línea qué sí tienes disponible ahora mismo.
+4. Ofrece la alternativa concreta: "¿Quieres que revisemos [X] en su lugar?"
+5. Si la queja fue sobre una respuesta pagada sin datos útiles, incluye: "##REFUND##" al final (el sistema lo detecta y reembolsa automáticamente).
+
+LO QUE EL MELLI PUEDE HACER HOY (sé honesto sobre esto):
+✅ Marcas de carrera basadas en consenso de handicappers registrados
+✅ Traqueos recientes de inscriptos (últimos 14 días)
+✅ Programa e inscritos del día con jinete/entrenador
+✅ Información sobre reuniones activas (La Rinconada y Valencia)
+❌ Historial de resultados por caballo — no disponible aún
+❌ Estadísticas jinete/entrenador — no disponible aún
+❌ Datos de carreras pasadas — no disponible aún
+Cuando el usuario pida algo de la lista ❌, díselo claramente ANTES de cobrar nada: "Ese dato no está en mi sistema aún, socio. Lo que sí tengo es [alternativa]."
+
 CLASIFICACIÓN (JSON oculto — el usuario NO lo ve):
 Al final de CADA respuesta, en una línea separada:
 ##LOG##{"category":"[cat]","action":"[action_key]","horseName":"[nombre o null]","raceNumber":[num o null]}
-Categorías: analisis_carrera, analisis_caballo, traqueo, pronostico, programa, handicapper, general_hipismo, embudo, off_topic
+Categorías: analisis_carrera, analisis_caballo, traqueo, pronostico, programa, handicapper, general_hipismo, embudo, off_topic, frustracion
 action_key: marks_1race | analysis_1race | pack_5y6 | pack_full | free`;
 
 
@@ -157,7 +175,35 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    const cleanContent = rawContent.replace(/\n*##LOG##\{.*?\}\s*$/, '').trim();
+    // Limpiar marcadores internos del texto visible
+    const hasRefundSignal = rawContent.includes('##REFUND##');
+    const cleanContent = rawContent
+      .replace(/\n*##LOG##\{.*?\}\s*$/s, '')
+      .replace(/##REFUND##/g, '')
+      .trim();
+
+    // ── Reembolso automático ───────────────────────────────────────────────────
+    // Condiciones: acción pagada + (LLM pidió ##REFUND## OR respuesta no tuvo data útil)
+    const NO_DATA_PHRASES = [
+      'no tengo inscritos',
+      'ese dato no está en mi sistema',
+      'no tengo datos',
+      'no está en mi sistema',
+      'vuelve cuando esté el programa',
+      'no hay pronósticos publicados',
+    ];
+    const responseHasNoData = NO_DATA_PHRASES.some(p =>
+      cleanContent.toLowerCase().includes(p)
+    );
+    const shouldRefund = goldDeducted > 0 && (hasRefundSignal || responseHasNoData);
+
+    if (shouldRefund) {
+      try {
+        await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': goldDeducted } });
+      } catch (refundErr) {
+        console.error('[melli/refund]', refundErr);
+      }
+    }
 
     // Analytics log
     try {
@@ -167,7 +213,8 @@ export async function POST(req: NextRequest) {
         category,
         horseName: logHorse,
         raceNumber: logRace,
-        goldCost: goldDeducted,
+        goldCost: shouldRefund ? 0 : goldDeducted,
+        refunded: shouldRefund,
       });
     } catch (logErr) {
       console.error('[melli/log]', logErr);
@@ -175,8 +222,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       content: cleanContent,
-      goldDeducted,
-      goldBalance: goldBalance - goldDeducted,
+      goldDeducted: shouldRefund ? 0 : goldDeducted,
+      goldBalance: shouldRefund ? goldBalance : goldBalance - goldDeducted,
+      refunded: shouldRefund,
       action: logAction,
       usage: completion.usage,
     });

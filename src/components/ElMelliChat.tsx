@@ -122,7 +122,10 @@ export default function ElMelliChat() {
       if (res.ok) {
         const data = await res.json();
         if (data.goldBalance != null) setGoldBalance(data.goldBalance);
-        setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+        const content = data.refunded
+          ? `${data.content}\n\n↩️ _Tus ${data.goldDeducted === 0 ? '' : data.goldDeducted + ' '}Golds fueron reembolsados automáticamente._`
+          : data.content;
+        setMessages(prev => [...prev, { role: 'assistant', content }]);
       } else if (res.status === 402) {
         const err = await res.json();
         const needed = err.required ?? 0;
