@@ -165,7 +165,7 @@ const NO_DATA_PHRASES = [
 
 export function shouldAutoRefund(rawResponse: string, goldDeducted: number): boolean {
   if (goldDeducted === 0) return false;
-  if (rawResponse.includes('##REFUND##')) return true;
+  // Solo frases objetivas del sistema — el LLM nunca puede activar el reembolso
   const lower = rawResponse.toLowerCase();
   return NO_DATA_PHRASES.some(p => lower.includes(p));
 }

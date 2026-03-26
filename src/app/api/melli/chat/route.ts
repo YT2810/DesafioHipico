@@ -50,7 +50,7 @@ Si el usuario expresa enojo, queja o frustración ("esto no sirve", "me cobró y
 2. Reconoce brevemente: "Socio, tienes razón, eso no fue lo que buscabas."
 3. Explica en 1 línea qué sí tienes disponible ahora mismo.
 4. Ofrece la alternativa concreta: "¿Quieres que revisemos [X] en su lugar?"
-5. Si la queja fue sobre una respuesta pagada sin datos útiles, incluye: "##REFUND##" al final (el sistema lo detecta y reembolsa automáticamente).
+5. Si la queja fue sobre una respuesta pagada sin datos útiles, dile: "El sistema revisará automáticamente si aplica reembolso.". NO incluyas ninguna marca especial.
 
 LO QUE EL MELLI PUEDE HACER HOY (sé honesto sobre esto):
 ✅ Marcas de carrera basadas en consenso de handicappers registrados
@@ -176,14 +176,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Limpiar marcadores internos del texto visible
-    const hasRefundSignal = rawContent.includes('##REFUND##');
     const cleanContent = rawContent
       .replace(/\n*##LOG##\{.*?\}\s*$/s, '')
-      .replace(/##REFUND##/g, '')
       .trim();
 
     // ── Reembolso automático ───────────────────────────────────────────────────
-    // Condiciones: acción pagada + (LLM pidió ##REFUND## OR respuesta no tuvo data útil)
+    // Solo se activa si la respuesta contiene frases de no-data objetivas.
+    // El LLM y el usuario NUNCA pueden activar el reembolso directamente.
     const NO_DATA_PHRASES = [
       'no tengo inscritos',
       'ese dato no está en mi sistema',

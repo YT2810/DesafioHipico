@@ -290,9 +290,9 @@ describe('shouldAutoRefund — reembolso automático', () => {
     expect(shouldAutoRefund('no tengo inscritos para esta carrera', 0)).toBe(false);
   });
 
-  // Señal explícita del LLM
-  test('##REFUND## en respuesta → reembolsa', () => {
-    expect(shouldAutoRefund('Socio, tienes razón. ##REFUND##', 3)).toBe(true);
+  // ##REFUND## ya NO activa reembolso — el LLM no puede manipularlo
+  test('##REFUND## en respuesta → NO reembolsa (LLM no puede activar reembolso)', () => {
+    expect(shouldAutoRefund('Socio, tienes razón. ##REFUND##', 3)).toBe(false);
   });
 
   // Frases de no-data (los casos de los screenshots)
