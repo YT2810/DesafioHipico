@@ -63,4 +63,24 @@ describe('cleanClaimPrice — limpieza de precio en nombre del caballo', () => {
   test('nombre que contiene "Precio" como parte del nombre → intacto (no hay $ después)', () => {
     expect(cleanClaimPrice('EL PRECIO JUSTO')).toBe('EL PRECIO JUSTO');
   });
+
+  // Casos reales Reunión 14 — C3 (reclamo $8000-$10000) tal como salen del preprocessText
+  test('ANCELOTTI Precio $: 8000,00 (con espacio antes de BUT) → ANCELOTTI', () => {
+    expect(cleanClaimPrice('ANCELOTTI Precio $: 8000,00 ')).toBe('ANCELOTTI');
+  });
+  test('MY STRIKING MATE Precio $: 10000,00 → MY STRIKING MATE', () => {
+    expect(cleanClaimPrice('MY STRIKING MATE Precio $: 10000,00')).toBe('MY STRIKING MATE');
+  });
+  test('MIDNIGHT CHAMPION Precio $: 10000,00 → MIDNIGHT CHAMPION', () => {
+    expect(cleanClaimPrice('MIDNIGHT CHAMPION Precio $: 10000,00')).toBe('MIDNIGHT CHAMPION');
+  });
+  test('CEDSRUNNER Precio $: 8000,00 → CEDSRUNNER', () => {
+    expect(cleanClaimPrice('CEDSRUNNER Precio $: 8000,00')).toBe('CEDSRUNNER');
+  });
+  test('THEO Precio $: 8000,00 → THEO', () => {
+    expect(cleanClaimPrice('THEO Precio $: 8000,00')).toBe('THEO');
+  });
+  test('ATHLETIC TIME Precio $: 10000,00 → ATHLETIC TIME', () => {
+    expect(cleanClaimPrice('ATHLETIC TIME Precio $: 10000,00')).toBe('ATHLETIC TIME');
+  });
 });
