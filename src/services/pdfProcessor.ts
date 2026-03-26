@@ -254,7 +254,8 @@ function parseEntryLine(line: string): ExtractedEntry | null {
   }
   if (!medMatch) return null;
 
-  const horseName = clean(medMatch[1]);
+  // Carreras de reclamo: el PDF concatena " Precio $: NNN,00" al nombre del caballo
+  const horseName = clean(medMatch[1]).replace(/\s+Precio\s+\$[\s:,.\d]+$/i, '').trim();
   const medication = clean(medMatch[2]);
   const weightRaw = medMatch[3].replace(',', '.');
   const afterWeight = medMatch[4];

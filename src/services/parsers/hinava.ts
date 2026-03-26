@@ -131,7 +131,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     const dorsal = parseInt(line);
     if (dorsal < 1 || dorsal > 30) { i++; continue; }
 
-    const horseName  = entryLines[i + 1] ? clean(entryLines[i + 1]) : '';
+    const horseName  = entryLines[i + 1] ? clean(entryLines[i + 1]).replace(/\s+Precio\s+\$[\s:,.\d]+$/i, '').trim() : '';
     if (!horseName || /^(PROGRAMACION|INSTITUTO|HIPODROMO|JUNTA|CARRERA|%|Mtrs)/i.test(horseName)) { i++; continue; }
     // Skip lines that are clearly STUD/metadata names (come after STUD: label in previous entry)
     if (i > 0 && /^(MED:|PROP:|CRIADOR:|STUD:|PESO|G:|C:|M:)/i.test(entryLines[i - 1] ?? '')) { i++; continue; }

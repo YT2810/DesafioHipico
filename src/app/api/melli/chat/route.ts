@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
 
     // Limpiar marcadores internos del texto visible
     const cleanContent = rawContent
-      .replace(/\n*##LOG##\{.*?\}\s*$/s, '')
+      .replace(/\n*##LOG##\{[\s\S]*?\}\s*$/, '')
       .trim();
 
     // ── Reembolso automático ───────────────────────────────────────────────────
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
     const responseHasNoData = NO_DATA_PHRASES.some(p =>
       cleanContent.toLowerCase().includes(p)
     );
-    const shouldRefund = goldDeducted > 0 && (hasRefundSignal || responseHasNoData);
+    const shouldRefund = goldDeducted > 0 && responseHasNoData;
 
     if (shouldRefund) {
       try {
