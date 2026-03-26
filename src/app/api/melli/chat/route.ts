@@ -111,6 +111,27 @@ export async function POST(req: NextRequest) {
     ? '\n[SISTEMA: El usuario lleva muchos mensajes sin acción de cobro. Activa modo vendedor agresivo ahora.]'
     : '';
 
+  // ── Verificar data mínima antes de cobrar ────────────────────────────────
+  // Extraer conteo de handicappers del contexto (línea "► CONSENSO N hcp:")
+  // Mínimos: La Rinconada ≥ 5, Valencia ≥ 3, cualquier otro ≥ 3
+  if (cost > 0 && context) {
+    const consensoMatch = context.match(/► CONSENSO (\d+) hcp/);
+    const hcpCount = consensoMatch ? parseInt(consensoMatch[1]) : 0;
+    const isValencia = /valencia/i.test(context);
+    const minRequired = isValencia ? 3 : 5;
+
+    if (hcpCount < minRequired) {
+      return NextResponse.json({
+        error: 'insufficient_data',
+        hcpCount,
+        minRequired,
+        message: hcpCount === 0
+          ? `Aún no hay pronósticos publicados para esta carrera, socio. Vuelve cuando los handicappers hayan subido su data (necesitamos al menos ${minRequired} para darte un análisis confiable).`
+          : `Solo hay ${hcpCount} pronóstico${hcpCount > 1 ? 's' : ''} publicado${hcpCount > 1 ? 's' : ''} — necesitamos al menos ${minRequired} para garantizarte un análisis sólido. Espera un poco más, socio.`,
+      }, { status: 422 });
+    }
+  }
+
   // ── Verificar y descontar Golds si es acción de pago ─────────────────────
   let goldBalance = 0;
   let goldDeducted = 0;
@@ -121,7 +142,6 @@ export async function POST(req: NextRequest) {
     goldBalance = user?.balance?.golds ?? 0;
 
     if (goldBalance < cost) {
-      // No tiene suficientes tokens — devolver CTA para compartir
       return NextResponse.json({
         error: 'insufficient_golds',
         required: cost,

@@ -87,6 +87,12 @@ export default function ElMelliChat() {
           role: 'assistant',
           content: `Socio, esta consulta cuesta **${needed} Golds** y tienes **${have}**. \n\n💡 Comparte Desafío Hípico con tus socios y gana tokens gratis. ¿Lo hacemos?`,
         }]);
+      } else if (res.status === 422) {
+        const err = await res.json();
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: err.message ?? 'Aún no hay suficiente data publicada para esta carrera, socio. Vuelve más tarde.',
+        }]);
       } else {
         const err = await res.json().catch(() => ({}));
         const errMsg = err.error === 'coming_soon'
