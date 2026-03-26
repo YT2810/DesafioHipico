@@ -4,6 +4,7 @@ import connectMongo from '@/lib/mongodb';
 import AgentLog from '@/models/AgentLog';
 import User from '@/models/User';
 import OpenAI from 'openai';
+import { ACTION_COSTS, detectAction, validateDataForAction } from '@/lib/melli-logic';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -14,14 +15,7 @@ const openai = new OpenAI({
   },
 });
 
-// ── Costos por acción (en Golds) ────────────────────────────────────────────
-export const ACTION_COSTS: Record<string, number> = {
-  marks_1race:       3,  // 2 marcas para 1 carrera
-  analysis_1race:    5,  // Análisis completo 1 carrera
-  pack_5y6:         25,  // Paquete 5y6 (6 carreras válidas)
-  pack_full:        50,  // Reunión completa (todas las carreras)
-  free:              0,  // Chat libre, embudo
-};
+// ACTION_COSTS y detectAction viven en @/lib/melli-logic (testeables con Jest)
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 const MELLI_SYSTEM = `Eres "El Melli", analista hípico IA de DesafíoHípico.com. Venezolano. Conciso. Basado únicamente en números.
@@ -56,29 +50,6 @@ Al final de CADA respuesta, en una línea separada:
 Categorías: analisis_carrera, analisis_caballo, traqueo, pronostico, programa, handicapper, general_hipismo, embudo, off_topic
 action_key: marks_1race | analysis_1race | pack_5y6 | pack_full | free`;
 
-// ── Detectar si un mensaje activa una acción de cobro ───────────────────────
-function detectAction(content: string): { action: string; raceNumber?: number; racesCount?: number } {
-  const c = content.toLowerCase();
-  // Paquete completo
-  if (/reunión completa|todas las carreras|paquete completo/.test(c)) {
-    return { action: 'pack_full' };
-  }
-  // Paquete 5y6
-  if (/5 ?y ?6|válidas|paquete 5y6|cinco y seis/.test(c) && !/carrera \d/.test(c)) {
-    return { action: 'pack_5y6' };
-  }
-  // Análisis completo 1 carrera
-  if (/análisis.*carrera ?(\d+)|carrera ?(\d+).*análisis completo/.test(c)) {
-    const m = c.match(/carrera ?(\d+)/);
-    return { action: 'analysis_1race', raceNumber: m ? parseInt(m[1]) : undefined };
-  }
-  // 2 marcas 1 carrera
-  if (/marcas?.*carrera ?(\d+)|carrera ?(\d+).*marcas?|2 marcas|dos marcas/.test(c)) {
-    const m = c.match(/carrera ?(\d+)/);
-    return { action: 'marks_1race', raceNumber: m ? parseInt(m[1]) : undefined };
-  }
-  return { action: 'free' };
-}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -112,22 +83,14 @@ export async function POST(req: NextRequest) {
     : '';
 
   // ── Verificar data mínima antes de cobrar ────────────────────────────────
-  // Extraer conteo de handicappers del contexto (línea "► CONSENSO N hcp:")
-  // Mínimos: La Rinconada ≥ 5, Valencia ≥ 3, cualquier otro ≥ 3
   if (cost > 0 && context) {
-    const consensoMatch = context.match(/► CONSENSO (\d+) hcp/);
-    const hcpCount = consensoMatch ? parseInt(consensoMatch[1]) : 0;
-    const isValencia = /valencia/i.test(context);
-    const minRequired = isValencia ? 3 : 5;
-
-    if (hcpCount < minRequired) {
+    const validation = validateDataForAction(context, action);
+    if (!validation.isValid) {
       return NextResponse.json({
         error: 'insufficient_data',
-        hcpCount,
-        minRequired,
-        message: hcpCount === 0
-          ? `Aún no hay pronósticos publicados para esta carrera, socio. Vuelve cuando los handicappers hayan subido su data (necesitamos al menos ${minRequired} para darte un análisis confiable).`
-          : `Solo hay ${hcpCount} pronóstico${hcpCount > 1 ? 's' : ''} publicado${hcpCount > 1 ? 's' : ''} — necesitamos al menos ${minRequired} para garantizarte un análisis sólido. Espera un poco más, socio.`,
+        hcpCount: validation.hcpCount,
+        minRequired: validation.minRequired,
+        message: validation.message,
       }, { status: 422 });
     }
   }
