@@ -100,6 +100,11 @@ export async function POST(req: NextRequest) {
   const userMessage: string = messages[messages.length - 1]?.content ?? '';
   const msgCount: number = messages.filter((m: any) => m.role === 'user').length;
 
+  // DEBUG — ver qué contexto llega al LLM (quitar en producción)
+  console.log('[melli/chat] userMessage:', userMessage);
+  console.log('[melli/chat] context length:', context?.length ?? 0);
+  console.log('[melli/chat] context preview:', context?.slice(0, 500) ?? '(vacío)');
+
   // ── Detectar acción y calcular costo ────────────────────────────────────────
   const { action, raceNumber } = detectAction(userMessage);
   const cost = ACTION_COSTS[action] ?? 0;
