@@ -19,22 +19,38 @@ export interface DetectedAction {
 export function detectAction(content: string): DetectedAction {
   const c = content.toLowerCase();
 
-  if (/reunión completa|reunion completa|todas las carreras|paquete completo/.test(c)) {
+  if (/reunión completa|reunion completa|paquete completo/.test(c)) {
     return { action: 'pack_full' };
   }
-  if (/5 ?y ?6|válidas|validas|paquete 5y6|cinco y seis/.test(c)
+
+  // "5y6" o "cinco y seis" explícito → pack_5y6 (pero no "válida" sola)
+  if (/5 ?y ?6|paquete 5y6|cinco y seis/.test(c)
       && !/carrera \d/.test(c)
       && !/cómo|como|qué es|que es|explica|funciona|información|info/.test(c)) {
     return { action: 'pack_5y6' };
   }
+
+  // "marcas de TODAS las carreras" / "las dos marcas para las carreras" (plural sin número) → top_picks_all
+  if (/(marcas?|fijos?|clavitos?).*(?:todas|las carreras|cada carrera|completas?)/.test(c)
+      || /(?:todas|las carreras|cada carrera).*(?:marcas?|fijos?|clavitos?)/.test(c)) {
+    return { action: 'pack_5y6' };
+  }
+
   if (/análisis.*carrera ?(\d+)|analisis.*carrera ?(\d+)|carrera ?(\d+).*análisis completo|carrera ?(\d+).*analisis completo/.test(c)) {
     const m = c.match(/carrera ?(\d+)/);
     return { action: 'analysis_1race', raceNumber: m ? parseInt(m[1]) : undefined };
   }
-  if (/marcas?.*carrera ?(\d+)|carrera ?(\d+).*marcas?|2 marcas|dos marcas/.test(c)) {
+
+  // "marcas de la carrera 3" / "2 marcas" / "dos marcas" con carrera específica
+  if (/marcas?.*carrera ?(\d+)|carrera ?(\d+).*marcas?/.test(c)) {
     const m = c.match(/carrera ?(\d+)/);
     return { action: 'marks_1race', raceNumber: m ? parseInt(m[1]) : undefined };
   }
+  // "dos marcas" / "2 marcas" sin "las carreras" (ya capturado arriba) → single race
+  if (/2 marcas|dos marcas/.test(c)) {
+    return { action: 'marks_1race' };
+  }
+
   return { action: 'free' };
 }
 
