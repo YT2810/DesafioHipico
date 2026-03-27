@@ -1,12 +1,30 @@
+/**
+ * POST /api/melli/chat
+ * 
+ * FLUJO LIMPIO:
+ * 1. Clasificar intención (jergario DB + regex)
+ * 2. Si es pedido de DATA → respuesta directa de DB (CERO alucinación, CERO OpenAI)
+ *    → Cobrar gold por el recurso
+ * 3. Si es CONVERSACIÓN → LLM con prompt ligero (SIN data de caballos)
+ *    → Solo embudo/personalidad, gratis
+ * 4. Guardar quejas para revisión
+ * 
+ * PRINCIPIO: El LLM NUNCA ve nombres de caballos, trabajos ni pronósticos.
+ * Toda data real sale de generateDirectResponse() que consulta MongoDB directamente.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import connectMongo from '@/lib/mongodb';
 import AgentLog from '@/models/AgentLog';
 import User from '@/models/User';
+import Meeting from '@/models/Meeting';
+import Race from '@/models/Race';
+import Forecast from '@/models/Forecast';
 import OpenAI from 'openai';
-import { ACTION_COSTS, detectAction, validateDataForAction } from '@/lib/melli-logic';
+import { ACTION_COSTS, detectAction } from '@/lib/melli-logic';
 import { classifyIntent } from '@/lib/melli-intent-classifier';
 import { generateDirectResponse } from '@/lib/melli-direct-responses';
+import '@/models/Track';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -17,69 +35,53 @@ const openai = new OpenAI({
   },
 });
 
-// ACTION_COSTS y detectAction viven en @/lib/melli-logic (testeables con Jest)
-
-// ── System prompt ─────────────────────────────────────────────────────────────
-const MELLI_SYSTEM = `Eres "El Melli", analista hípico IA de DesafíoHípico.com. Venezolano. Conciso. Basado únicamente en números.
+// ── Prompt LIGERO: solo personalidad + embudo. CERO data de caballos. ─────────
+const MELLI_FUNNEL = `Eres "El Melli", analista hípico IA de DesafíoHípico.com. Venezolano, conciso, jerga criolla.
 
 PERSONALIDAD:
-- Jerga criolla natural: fijo, línea, briseo, ejemplar, cuadro, válida, gualdrapa, lote, taquilla
-- Tratas al usuario como "socio"
-- Respuestas CORTAS (máximo 5 líneas de análisis). La gente lee desde el teléfono.
-- Slogan solo cuando realmente hay una marca clara: "Ya corrió, ya ganó... ¡Ya cobró!"
+- Jerga criolla: fijo, línea, briseo, ejemplar, cuadro, válida, gualdrapa, socio, taquilla
+- Respuestas CORTAS (máx 3-4 líneas). La gente lee del teléfono.
+- Tratas al usuario como "socio de oficina"
+
+TU ÚNICO TRABAJO EN ESTA CONVERSACIÓN:
+Guiar al usuario a pedir algo ESPECÍFICO. Cuando pida datos concretos, 
+el sistema responde con data real de la DB automáticamente. Tú solo manejas la conversación.
+
+QUÉ PUEDE PEDIR EL USUARIO:
+- "Marcas de la carrera 3" o "dame un dato en valencia" → 2 marcas por carrera (consenso de handicappers)
+- "Trabajos de la 5ta" o "traqueos" → trabajos recientes de inscritos
+- "5y6 completo" o "las válidas" → marcas de las 6 válidas
+- "Programa de la 3ra" → inscritos con jinete/entrenador
 
 REGLAS ABSOLUTAS:
-1. NUNCA inventes un caballo, resultado o dato que no esté en el CONTEXTO DB que te dan. Si no está, di exactamente: "Ese dato no está en mi sistema aún, socio."
-2. NUNCA digas "apuesta", "juega", "mete". Di: "los números favorecen a", "el consenso apunta a", "según el cuadro".
-3. Siempre que des marcas de una carrera termina con: "📊 DesafíoHípico.com — Análisis estadístico, no recomendación."
-4. Cuando la pregunta sea genérica ("qué hay para hoy", "dame los ganadores"), NUNCA respondas directo. Primero identifica la reunión, luego vende la acción:
-   Ejemplo: "Para la [Reunión X] en [Hipódromo], tengo inscritos y consenso de handicappers cargado. ¿Buscas las 2 marcas de una carrera (3 Golds) o el paquete 5y6 completo (25 Golds)?"
-5. Si hay más de una reunión activa (ej: La Rinconada Y Valencia), pregunta siempre cuál le interesa antes de continuar.
-6. Si el usuario lleva 8+ mensajes sin ejecutar una acción de cobro, activa modo vendedor: "Socio, llevamos un rato hablando y el reloj corre. Lo que buscas está en las marcas de la [carrera X]. ¿Lo activamos?"
+1. NUNCA menciones nombres de caballos, jinetes ni entrenadores. NO tienes esa información aquí.
+2. NUNCA inventes resultados, pronósticos, dorsales ni análisis de ningún tipo.
+3. Si piden datos de una carrera, diles: "Dime el número de carrera y te busco la data, socio."
+4. Si hay 2+ reuniones activas, pregunta cuál hipódromo.
+5. Si se quejan, reconoce brevemente sin discutir y ofrece alternativa.
+6. Fuera del hipismo → humor breve y redirige a lo que sí tienes.
+7. NUNCA digas "apuesta". Di: "los números favorecen", "el consenso apunta".
+8. Si el usuario lleva varios mensajes sin pedir data concreta, activa modo vendedor suave.`;
 
-FORMATO DE TRAQUEOS (para interpretar correctamente el campo "↳ Trabajo"):
-El formato es: [tipo] [distancia]m | [parciales] | hace [N]d
-El campo [distancia] es el PUNTO DE CORTE donde se registró la mejor medición, no necesariamente la distancia total del trabajo.
-Los parciales son tiempos ACUMULADOS cada 200m. Para cortes PARES (600, 800, 1000, 1200m) el primer parcial es a los 200m. Para cortes IMPARES (700, 900, 1100m) el primer parcial es a los 300m.
-El marcador "/" indica un corte cronometrado parcial. El marcador "//" indica el tiempo registrado en el punto de corte (el campo distancia). Después de "//" viene RM (récord del mes) y la calificación (COMODA, MUY COMODA, DURA, etc.).
-Ejemplo: "En Pelo 600m | 14,1 27,2 40// RM 12.1 MUY COMODA" → 200m:14,1s | 400m:27,2s | 600m:40s (corte) | calificación: MUY COMODA
-Cuando reportes un trabajo di: "[caballo] trabajó con corte en [distancia]m en [tiempo en el corte]s ([calificación]) hace [N] días."
+// Patrones de queja para guardar y revisar
+const COMPLAINT_RE = /no sirve|no funciona|mala respuesta|estafa|mentira|basura|p[eé]simo|horrible|cobr[óo] y no|robaron|robo|fraude|enga[ñn]o|in[uú]til|no sirves/i;
 
-HEURÍSTICA PARA DAR MARCAS (cuando la acción esté pagada):
-Usa esta prioridad con los datos del CONTEXTO DB:
-- PRIORIDAD 1: Si 3+ handicappers eligen el mismo caballo como 1ª marca → ese es el candidato principal. Dílo: "Consenso de X expertos apunta a [nombre] (#dorsal)."
-- PRIORIDAD 2: Si hay trabajó reciente de un inscripto en la misma distancia con splits buenos → menciónalo como dato complementario: "Además, [nombre] trabajó [Xm] hace [N] días."
-- PRIORIDAD 3: Si hay etiqueta Casi Fijo / Súper Especial / Batacazo en el consenso → refléjala.
-- PRIORIDAD 4: Sin consenso de handicappers pero HAY inscriptos en el CONTEXTO DB con línea "↳ Trabajo" → menciona los 2 con mejor trabajo reciente y aclara: "Sin consenso aún. Basado en trabajos recientes del programa oficial."
-- PRIORIDAD 5: Sin consenso Y sin ningún "↳ Trabajo" en el contexto → di exactamente: "Aún no tengo pronósticos publicados para esta carrera, socio. Vuelve cuando los handicappers hayan subido su data."
-- PRIORIDAD 6: Si no hay inscriptos cargados en el contexto → di exactamente: "No tengo inscritos cargados para esta carrera aún, socio. Vuelve cuando esté el programa oficial."
-- NUNCA inventes nombres de caballos. NUNCA menciones un caballo que no aparezca literalmente en el CONTEXTO DB con formato "#dorsal NOMBRE".
-- Si no ves ninguna línea "#dorsal NOMBRE" en el contexto para esa carrera, NO menciones ningún caballo.
+// Intents que disparan consulta directa a DB (sin LLM)
+const DATA_INTENTS = new Set([
+  'consensus_pick', 'top_picks_all', 'pack_5y6',
+  'best_workout', 'workouts_all',
+  'horse_detail', 'eliminated',
+  'race_program', 'full_program',
+]);
 
-MANEJO DE FRUSTRACIÓN (CRÍTICO):
-Si el usuario expresa enojo, queja o frustración ("esto no sirve", "me cobró y no dio nada", "qué mala respuesta", "eso no es lo que pedí", "estafador", "mentira", "no sirves", insultos):
-1. NO te defiendas ni discutas. NUNCA.
-2. Reconoce brevemente: "Socio, tienes razón, eso no fue lo que buscabas."
-3. Explica en 1 línea qué sí tienes disponible ahora mismo.
-4. Ofrece la alternativa concreta: "¿Quieres que revisemos [X] en su lugar?"
-5. Si la queja fue sobre una respuesta pagada sin datos útiles, dile: "El sistema revisará automáticamente si aplica reembolso.". NO incluyas ninguna marca especial.
-
-LO QUE EL MELLI PUEDE HACER HOY (sé honesto sobre esto):
-✅ Marcas de carrera basadas en consenso de handicappers registrados
-✅ Traqueos recientes de inscriptos (últimos 14 días)
-✅ Programa e inscritos del día con jinete/entrenador
-✅ Información sobre reuniones activas (La Rinconada y Valencia)
-❌ Historial de resultados por caballo — no disponible aún
-❌ Estadísticas jinete/entrenador — no disponible aún
-❌ Datos de carreras pasadas — no disponible aún
-Cuando el usuario pida algo de la lista ❌, díselo claramente ANTES de cobrar nada: "Ese dato no está en mi sistema aún, socio. Lo que sí tengo es [alternativa]."
-
-CLASIFICACIÓN (JSON oculto — el usuario NO lo ve):
-Al final de CADA respuesta, en una línea separada:
-##LOG##{"category":"[cat]","action":"[action_key]","horseName":"[nombre o null]","raceNumber":[num o null]}
-Categorías: analisis_carrera, analisis_caballo, traqueo, pronostico, programa, handicapper, general_hipismo, embudo, off_topic, frustracion
-action_key: marks_1race | analysis_1race | pack_5y6 | pack_full | free`;
-
+// Map de regex action → intent para fallback
+const ACTION_TO_INTENT: Record<string, string> = {
+  marks_1race: 'consensus_pick',
+  analysis_1race: 'consensus_pick',
+  pack_5y6: 'pack_5y6',
+  pack_full: 'top_picks_all',
+  workouts: 'workouts_all',
+};
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -87,128 +89,119 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  // Solo admin por ahora (se abre al final del roadmap)
   const roles: string[] = (session.user as any)?.roles ?? [];
   if (!roles.includes('admin')) {
     return NextResponse.json({ error: 'coming_soon' }, { status: 403 });
   }
 
   const body = await req.json();
-  const { messages, context, meetingId: reqMeetingId, raceNumber: reqRaceNumber, validaRef: reqValidaRef } = body;
+  const { messages, meetingId: reqMeetingId, raceNumber: reqRaceNumber, validaRef: reqValidaRef } = body;
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
   }
 
+  await connectMongo();
   const userId: string = (session.user as any)?.id ?? '';
   const userMessage: string = messages[messages.length - 1]?.content ?? '';
-  const msgCount: number = messages.filter((m: any) => m.role === 'user').length;
 
-  // DEBUG — ver qué contexto llega al LLM
-  console.log('[melli/chat] userMessage:', userMessage);
-  console.log('[melli/chat] context length:', context?.length ?? 0);
-  console.log('[melli/chat] context preview:', context?.slice(0, 500) ?? '(vacío)');
+  console.log('[melli] msg:', userMessage, '| meeting:', reqMeetingId, '| race:', reqRaceNumber);
 
-  // Si la API de contexto falló, no llamar al LLM — evitar alucinaciones
-  if (context === 'ERROR_CONTEXTO') {
-    return NextResponse.json({
-      content: 'Hubo un problema cargando la data de la reunión, socio. Cierra el chat y vuelve a abrirlo para recargar. 🔄',
-      goldBalance: 0,
-    });
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1: Guardar quejas para revisión
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (COMPLAINT_RE.test(userMessage)) {
+    try {
+      await AgentLog.create({
+        userId, query: userMessage.slice(0, 500),
+        category: 'complaint', goldCost: 0, refunded: false,
+      });
+    } catch {}
   }
 
-  // ── Clasificar intención con el jergario (sin LLM) ────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 2: Clasificar intención (doble vía: jergario semántico + regex)
+  // ═══════════════════════════════════════════════════════════════════════════
   const classified = await classifyIntent(userMessage);
-  console.log('[melli/chat] intent:', classified.intent, 'confidence:', classified.confidence, 'match:', classified.matchedPhrase);
+  const regexAction = detectAction(userMessage);
 
-  // Si la intención es clara y hay meetingId, intentar respuesta directa (sin OpenAI)
-  if (classified.confidence !== 'low' && classified.intent !== 'unknown' && reqMeetingId) {
+  // Determinar si es pedido de DATA
+  let resolvedIntent: string = classified.intent;
+  let resolvedRaceNum = reqRaceNumber;
+
+  // Vía 1: jergario matcheó un intent accionable
+  const jargonIsData = DATA_INTENTS.has(classified.intent) && classified.confidence !== 'low';
+
+  // Vía 2: regex detectó un patrón de acción explícito ("marcas carrera 3", "5y6")
+  const regexIsData = regexAction.action !== 'free';
+  if (regexIsData && !jargonIsData) {
+    resolvedIntent = ACTION_TO_INTENT[regexAction.action] ?? classified.intent;
+    if (regexAction.raceNumber) resolvedRaceNum = regexAction.raceNumber;
+  }
+
+  const isDataRequest = jargonIsData || regexIsData;
+
+  console.log('[melli] intent:', resolvedIntent, '| jargon:', classified.intent, '(' + classified.confidence + ')', '| regex:', regexAction.action, '| isData:', isDataRequest);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 3: DATA → Respuesta directa de DB (CERO alucinación, CERO OpenAI)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isDataRequest && reqMeetingId) {
     const directResponse = await generateDirectResponse({
-      intent: classified.intent,
+      intent: resolvedIntent as any,
       meetingId: reqMeetingId,
-      raceNumber: reqRaceNumber,
+      raceNumber: resolvedRaceNum,
       validaRef: reqValidaRef,
     });
 
     if (directResponse) {
-      // Log analytics
+      // Cobrar gold por el recurso
+      const cost = ACTION_COSTS[directResponse.action] ?? 0;
+      let goldBalance = 0;
+      let goldDeducted = 0;
+
+      if (cost > 0) {
+        const user = await User.findById(userId).select('balance').lean() as any;
+        goldBalance = user?.balance?.golds ?? 0;
+
+        if (goldBalance < cost) {
+          return NextResponse.json({
+            error: 'insufficient_golds',
+            required: cost, available: goldBalance, action: directResponse.action,
+          }, { status: 402 });
+        }
+
+        await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': -cost } });
+        goldDeducted = cost;
+      }
+
+      // Log
       try {
-        await connectMongo();
         await AgentLog.create({
-          userId,
-          query: userMessage.slice(0, 500),
-          category: 'pronostico',
+          userId, query: userMessage.slice(0, 500),
+          category: 'data_response',
           raceNumber: directResponse.raceNumber,
-          goldCost: 0,
-          refunded: false,
+          goldCost: goldDeducted, refunded: false,
         });
       } catch {}
 
       return NextResponse.json({
         content: directResponse.content,
-        goldDeducted: 0,
-        goldBalance: null, // frontend conserva el balance actual
+        goldDeducted,
+        goldBalance: goldBalance > 0 ? goldBalance - goldDeducted : null,
         refunded: false,
         action: directResponse.action,
         logRace: directResponse.raceNumber ?? null,
-        isDirect: true, // flag para debug
+        isDirect: true,
       });
     }
+    // Si generateDirectResponse retornó null, caer al LLM para embudo
   }
 
-  // ── Fallback: Detectar acción y calcular costo (ruta OpenAI) ──────────────
-  const { action, raceNumber } = detectAction(userMessage);
-  const cost = ACTION_COSTS[action] ?? 0;
-
-  // ── Anti-scraping: throttle por sesión ────────────────────────────────────
-  // Si lleva 10+ mensajes de usuario sin cobro, inyectar aviso en el contexto
-  const antiScrapingNote = msgCount >= 10
-    ? '\n[SISTEMA: El usuario lleva muchos mensajes sin acción de cobro. Activa modo vendedor agresivo ahora.]'
-    : '';
-
-  // ── Verificar data mínima antes de cobrar ────────────────────────────────
-  // Solo bloquea si no hay NINGÚN pronóstico (hcpCount === 0).
-  // Si hay al menos 1, el Melli responde con lo que tiene.
-  if (cost > 0 && context) {
-    const validation = validateDataForAction(context, action);
-    if (!validation.isValid && validation.hcpCount === 0) {
-      return NextResponse.json({
-        error: 'insufficient_data',
-        hcpCount: validation.hcpCount,
-        minRequired: validation.minRequired,
-        message: validation.message,
-      }, { status: 422 });
-    }
-  }
-
-  // ── Verificar y descontar Golds si es acción de pago ─────────────────────
-  let goldBalance = 0;
-  let goldDeducted = 0;
-
-  if (cost > 0) {
-    await connectMongo();
-    const user = await User.findById(userId).select('balance').lean() as any;
-    goldBalance = user?.balance?.golds ?? 0;
-
-    if (goldBalance < cost) {
-      return NextResponse.json({
-        error: 'insufficient_golds',
-        required: cost,
-        available: goldBalance,
-        action,
-      }, { status: 402 });
-    }
-
-    // Descontar ANTES de llamar OpenRouter
-    await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': -cost } });
-    goldDeducted = cost;
-  } else {
-    await connectMongo();
-  }
-
-  // ── Construir system prompt con contexto DB ────────────────────────────────
-  const systemContent = context
-    ? `${MELLI_SYSTEM}${antiScrapingNote}\n\n=== CONTEXTO DB (datos reales, únicamente esto existe) ===\n${context}`
-    : `${MELLI_SYSTEM}${antiScrapingNote}\n\n=== CONTEXTO DB ===\nSIN_DATOS: No se cargó contexto. Di al usuario que recargue el chat.`;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 4: CONVERSACIÓN → LLM con contexto LIGERO (sin data de caballos)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const lightContext = await buildLightContext();
+  const systemContent = `${MELLI_FUNNEL}\n\n${lightContext}`;
 
   const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemContent },
@@ -217,96 +210,63 @@ export async function POST(req: NextRequest) {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'openai/gpt-4o-mini',
       messages: openaiMessages,
-      max_tokens: 400,
-      temperature: 0.4, // más determinista = menos invención
+      max_tokens: 200,
+      temperature: 0.5,
     });
 
-    const rawContent = completion.choices[0]?.message?.content ?? '';
+    const content = completion.choices[0]?.message?.content?.trim() ?? '';
 
-    // Extraer LOG
-    const logMatch = rawContent.match(/##LOG##(\{.*?\})/);
-    let category = 'otro';
-    let logAction = action;
-    let logHorse: string | undefined;
-    let logRace: number | undefined;
-
-    if (logMatch) {
-      try {
-        const d = JSON.parse(logMatch[1]);
-        category = d.category ?? 'otro';
-        logAction = d.action ?? action;
-        logHorse = d.horseName && d.horseName !== 'null' ? d.horseName : undefined;
-        logRace = d.raceNumber ?? raceNumber;
-      } catch {}
-    }
-
-    // Limpiar marcadores internos del texto visible
-    const cleanContent = rawContent
-      .replace(/\n*##LOG##\{[\s\S]*?\}\s*$/, '')
-      .trim();
-
-    // ── Reembolso automático ───────────────────────────────────────────────────
-    // Solo se activa si la respuesta contiene frases de no-data objetivas.
-    // El LLM y el usuario NUNCA pueden activar el reembolso directamente.
-    const NO_DATA_PHRASES = [
-      'no tengo inscritos',
-      'ese dato no está en mi sistema',
-      'no tengo datos',
-      'no está en mi sistema',
-      'vuelve cuando esté el programa',
-      'no hay pronósticos publicados',
-    ];
-    const responseHasNoData = NO_DATA_PHRASES.some(p =>
-      cleanContent.toLowerCase().includes(p)
-    );
-    const shouldRefund = goldDeducted > 0 && responseHasNoData;
-
-    if (shouldRefund) {
-      try {
-        await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': goldDeducted } });
-      } catch (refundErr) {
-        console.error('[melli/refund]', refundErr);
-      }
-    }
-
-    // Analytics log
+    // Log
     try {
       await AgentLog.create({
-        userId,
-        query: userMessage.slice(0, 500),
-        category,
-        horseName: logHorse,
-        raceNumber: logRace,
-        goldCost: shouldRefund ? 0 : goldDeducted,
-        refunded: shouldRefund,
+        userId, query: userMessage.slice(0, 500),
+        category: COMPLAINT_RE.test(userMessage) ? 'complaint' : 'conversation',
+        goldCost: 0, refunded: false,
       });
-    } catch (logErr) {
-      console.error('[melli/log]', logErr);
-    }
+    } catch {}
 
     return NextResponse.json({
-      content: cleanContent,
-      goldDeducted: shouldRefund ? 0 : goldDeducted,
-      goldBalance: shouldRefund ? goldBalance : goldBalance - goldDeducted,
-      refunded: shouldRefund,
-      action: logAction,
-      logRace: logRace ?? null,
-      usage: completion.usage,
+      content,
+      goldDeducted: 0,
+      goldBalance: null,
+      refunded: false,
+      action: 'free',
+      logRace: null,
     });
 
   } catch (err: any) {
-    // Reembolsar si hubo error después del descuento
-    if (goldDeducted > 0) {
-      try {
-        await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': goldDeducted } });
-      } catch {}
-    }
-    console.error('[melli/chat]', err);
+    console.error('[melli/chat]', err?.message);
     return NextResponse.json(
       { error: 'openai_error', detail: err?.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
+}
+
+// ── Contexto ligero: SOLO qué reuniones hay, NO data de caballos ──────────────
+async function buildLightContext(): Promise<string> {
+  const now = new Date();
+  const future = new Date(now); future.setDate(future.getDate() + 10);
+  const past = new Date(now); past.setDate(past.getDate() - 1);
+
+  const meetings = await Meeting.find({
+    date: { $gte: past, $lte: future },
+    status: { $ne: 'cancelled' },
+  }).sort({ date: 1 }).populate('trackId', 'name').lean() as any[];
+
+  if (meetings.length === 0) {
+    return 'DISPONIBLE HOY: No hay reuniones programadas esta semana.';
+  }
+
+  const lines = ['DISPONIBLE HOY:'];
+  for (const m of meetings) {
+    const track = m.trackId?.name ?? 'Hipódromo';
+    const raceCount = await Race.countDocuments({ meetingId: m._id });
+    const forecastCount = await Forecast.countDocuments({ meetingId: m._id, isPublished: true });
+    lines.push(`• ${track} — Reunión ${m.meetingNumber} — ${raceCount} carreras — ${forecastCount} pronósticos publicados`);
+  }
+
+  return lines.join('\n');
 }

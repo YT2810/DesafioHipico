@@ -51,6 +51,18 @@ export function detectAction(content: string): DetectedAction {
     return { action: 'marks_1race' };
   }
 
+  // "trabajos" / "traqueos" → workouts
+  if (/trabajos?|traqueos?|briseos?/.test(c)) {
+    const m = c.match(/carrera ?(\d+)/);
+    return { action: 'workouts', raceNumber: m ? parseInt(m[1]) : undefined };
+  }
+
+  // "dame un dato" / "quien gana" / "que tienes" → generic data request (marks)
+  if (/dame.*dato|qui[eé]n gana|que tienes|qué tienes|dame.*línea|dame.*linea|dame.*fijo/.test(c)) {
+    const m = c.match(/carrera ?(\d+)/);
+    return { action: 'marks_1race', raceNumber: m ? parseInt(m[1]) : undefined };
+  }
+
   return { action: 'free' };
 }
 

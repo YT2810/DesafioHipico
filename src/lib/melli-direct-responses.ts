@@ -72,9 +72,10 @@ export async function generateDirectResponse(params: DirectResponseParams): Prom
       return await buildPack5y6(races, validasStart, maxRace, trackName, meeting);
 
     case 'best_workout':
+    case 'workouts_all':
       return targetRaceNum
-        ? await buildBestWorkout(races, targetRaceNum, trackName, meeting)
-        : null;
+        ? await buildRaceWorkouts(races, targetRaceNum, trackName, meeting)
+        : await buildAllWorkouts(races, trackName, meeting);
 
     case 'race_program':
       return targetRaceNum
@@ -293,4 +294,110 @@ async function buildFullProgram(races: any[], trackName: string): Promise<Direct
   }
 
   return { content: lines.join('\n'), action: 'free' };
+}
+
+// ── Workout handlers ──────────────────────────────────────────────────────────
+
+function formatWorkout(w: any, days: number): string {
+  const parts: string[] = [];
+  parts.push(`${w.workoutType ?? 'EP'} ${w.distance}m`);
+  if (w.splits) parts.push(w.splits);
+  if (w.comment) parts.push(w.comment);
+  if (w.rm) parts.push(`RM ${w.rm}`);
+  if (w.jockeyName) parts.push(`J: ${w.jockeyName}`);
+  parts.push(`hace ${days}d`);
+  return parts.join(' | ');
+}
+
+async function findWorkouts(horseName: string, limit = 2): Promise<Array<{ workout: any; days: number }>> {
+  const now = new Date();
+  const workouts = await WorkoutEntry.find({
+    horseName: { $regex: new RegExp(horseName.split(' ')[0], 'i') },
+    workoutDate: { $gte: new Date(now.getTime() - 14 * 24 * 3600 * 1000) },
+    distance: { $gt: 0 },
+  }).sort({ workoutDate: -1 }).limit(limit).lean() as any[];
+
+  return workouts.map(w => ({
+    workout: w,
+    days: Math.floor((now.getTime() - new Date(w.workoutDate).getTime()) / 86400000),
+  }));
+}
+
+async function buildAllWorkouts(races: any[], trackName: string, meeting: any): Promise<DirectResponse> {
+  const validasStart = Math.max(1, races.length - 5);
+  const lines: string[] = [`🏇 **Trabajos ${trackName}** — Reunión ${meeting.meetingNumber}\n`];
+
+  for (const race of races) {
+    const validaNum = race.raceNumber >= validasStart ? race.raceNumber - validasStart + 1 : null;
+    const tag = validaNum ? ` [V${validaNum}]` : '';
+
+    const entries = await Entry.find({ raceId: race._id, 'result.isScratched': { $ne: true } })
+      .populate('horseId', 'name')
+      .sort({ dorsalNumber: 1 })
+      .lean() as any[];
+
+    const raceLines: string[] = [];
+    for (const e of entries) {
+      const horse = e.horseId?.name ?? e.horseName ?? '';
+      if (!horse) continue;
+      const results = await findWorkouts(horse, 1);
+      if (results.length > 0) {
+        const { workout: w, days } = results[0];
+        raceLines.push(`  #${e.dorsalNumber} ${horse} | ${formatWorkout(w, days)}`);
+      }
+    }
+
+    if (raceLines.length > 0) {
+      lines.push(`**C${race.raceNumber}${tag}:**`);
+      lines.push(...raceLines);
+    } else {
+      lines.push(`C${race.raceNumber}${tag}: Sin trabajos recientes`);
+    }
+  }
+
+  lines.push(DISCLAIMER);
+  return { content: lines.join('\n'), action: 'marks_1race' };
+}
+
+async function buildRaceWorkouts(races: any[], raceNum: number, trackName: string, meeting: any): Promise<DirectResponse | null> {
+  const race = races.find((r: any) => r.raceNumber === raceNum);
+  if (!race) return null;
+
+  const validasStart = Math.max(1, races.length - 5);
+  const validaNum = raceNum >= validasStart ? raceNum - validasStart + 1 : null;
+  const validaTag = validaNum ? ` (Válida ${validaNum})` : '';
+
+  const entries = await Entry.find({ raceId: race._id, 'result.isScratched': { $ne: true } })
+    .populate('horseId', 'name')
+    .sort({ dorsalNumber: 1 })
+    .lean() as any[];
+
+  const lines: string[] = [`🏇 **Trabajos C${raceNum}${validaTag} ${trackName}** | ${race.distance ?? ''}m\n`];
+  let hasWorkouts = false;
+
+  for (const e of entries) {
+    const horse = e.horseId?.name ?? e.horseName ?? '';
+    if (!horse) continue;
+
+    const results = await findWorkouts(horse, 2);
+    if (results.length > 0) {
+      hasWorkouts = true;
+      for (const { workout: w, days } of results) {
+        lines.push(`#${e.dorsalNumber} ${horse} | ${formatWorkout(w, days)}`);
+      }
+    } else {
+      lines.push(`#${e.dorsalNumber} ${horse} | Sin trabajos recientes`);
+    }
+  }
+
+  if (!hasWorkouts) {
+    return {
+      content: `No hay trabajos recientes para la C${raceNum}${validaTag} de ${trackName}, socio.${DISCLAIMER}`,
+      raceNumber: raceNum,
+      action: 'free',
+    };
+  }
+
+  lines.push(DISCLAIMER);
+  return { content: lines.join('\n'), raceNumber: raceNum, action: 'marks_1race' };
 }
