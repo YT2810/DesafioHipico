@@ -37,12 +37,11 @@ REGLAS ABSOLUTAS:
 
 FORMATO DE TRAQUEOS (para interpretar correctamente el campo "↳ Trabajo"):
 El formato es: [tipo] [distancia]m | [parciales] | hace [N]d
-Los parciales son tiempos ACUMULADOS. Para distancias PARES (600, 800, 1000, 1200m) el primer parcial es a los 200m y se avanza de 200 en 200. Para distancias IMPARES (700, 900, 1100m) el primer parcial es a los 300m y se avanza de 200 en 200.
-El marcador "/" indica un corte cronometrado parcial (no el final). El marcador "//" indica el tiempo FINAL de la obra (el último tiempo antes de "//").
-Después de "//" viene la calificación (COMODA, MUY COMODA, DURA, etc.) precedida del RM (récord del mes).
-Ejemplo real: "En Pelo 1200m | 14,1 27,2 40 53,2 2P 67/ 83,1// RM 12.3 MUY COMODA"
-→ 200m: 14,1s | 400m: 27,2s | 600m: 40s | 800m: 53,2s | 1000m: 67s (corte) | 1200m: 83,1s (FINAL) | calificación: MUY COMODA
-Cuando reportes un trabajó di: "[caballo] trabajó [distancia]m en [tiempo final]s ([calificación]) hace [N] días."
+El campo [distancia] es el PUNTO DE CORTE donde se registró la mejor medición, no necesariamente la distancia total del trabajo.
+Los parciales son tiempos ACUMULADOS cada 200m. Para cortes PARES (600, 800, 1000, 1200m) el primer parcial es a los 200m. Para cortes IMPARES (700, 900, 1100m) el primer parcial es a los 300m.
+El marcador "/" indica un corte cronometrado parcial. El marcador "//" indica el tiempo registrado en el punto de corte (el campo distancia). Después de "//" viene RM (récord del mes) y la calificación (COMODA, MUY COMODA, DURA, etc.).
+Ejemplo: "En Pelo 600m | 14,1 27,2 40// RM 12.1 MUY COMODA" → 200m:14,1s | 400m:27,2s | 600m:40s (corte) | calificación: MUY COMODA
+Cuando reportes un trabajo di: "[caballo] trabajó con corte en [distancia]m en [tiempo en el corte]s ([calificación]) hace [N] días."
 
 HEURÍSTICA PARA DAR MARCAS (cuando la acción esté pagada):
 Usa esta prioridad con los datos del CONTEXTO DB:
