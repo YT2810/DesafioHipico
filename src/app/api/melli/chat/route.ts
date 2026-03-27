@@ -5,6 +5,8 @@ import AgentLog from '@/models/AgentLog';
 import User from '@/models/User';
 import OpenAI from 'openai';
 import { ACTION_COSTS, detectAction, validateDataForAction } from '@/lib/melli-logic';
+import { classifyIntent } from '@/lib/melli-intent-classifier';
+import { generateDirectResponse } from '@/lib/melli-direct-responses';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -91,7 +93,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'coming_soon' }, { status: 403 });
   }
 
-  const { messages, context } = await req.json();
+  const body = await req.json();
+  const { messages, context, meetingId: reqMeetingId, raceNumber: reqRaceNumber, validaRef: reqValidaRef } = body;
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
   }
@@ -113,7 +116,46 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── Detectar acción y calcular costo ────────────────────────────────────────
+  // ── Clasificar intención con el jergario (sin LLM) ────────────────────────
+  const classified = await classifyIntent(userMessage);
+  console.log('[melli/chat] intent:', classified.intent, 'confidence:', classified.confidence, 'match:', classified.matchedPhrase);
+
+  // Si la intención es clara y hay meetingId, intentar respuesta directa (sin OpenAI)
+  if (classified.confidence !== 'low' && classified.intent !== 'unknown' && reqMeetingId) {
+    const directResponse = await generateDirectResponse({
+      intent: classified.intent,
+      meetingId: reqMeetingId,
+      raceNumber: reqRaceNumber,
+      validaRef: reqValidaRef,
+    });
+
+    if (directResponse) {
+      // Log analytics
+      try {
+        await connectMongo();
+        await AgentLog.create({
+          userId,
+          query: userMessage.slice(0, 500),
+          category: 'pronostico',
+          raceNumber: directResponse.raceNumber,
+          goldCost: 0,
+          refunded: false,
+        });
+      } catch {}
+
+      return NextResponse.json({
+        content: directResponse.content,
+        goldDeducted: 0,
+        goldBalance: null, // frontend conserva el balance actual
+        refunded: false,
+        action: directResponse.action,
+        logRace: directResponse.raceNumber ?? null,
+        isDirect: true, // flag para debug
+      });
+    }
+  }
+
+  // ── Fallback: Detectar acción y calcular costo (ruta OpenAI) ──────────────
   const { action, raceNumber } = detectAction(userMessage);
   const cost = ACTION_COSTS[action] ?? 0;
 

@@ -83,6 +83,9 @@ export default function ElMelliChat() {
 
     // Detectar si el mensaje menciona carrera/hipódromo específico y recargar contexto
     let currentContext = context;
+    let resolvedMeetingId: string | undefined = focusedMeetingId;
+    let resolvedRaceNumber: number | undefined = focusedRaceNumber;
+    let resolvedValidaRef: number | undefined;
     try {
       const params = extractContextParams(text);
 
@@ -114,6 +117,11 @@ export default function ElMelliChat() {
       const effectiveRaceNumber = hasNewRaceFocus ? newRaceNumber  : focusedRaceNumber;
       const effectiveValidaRef  = hasNewRaceFocus ? newValidaRef   : undefined;
 
+      // Propagar a variables externas al try
+      resolvedMeetingId = meetingId ?? focusedMeetingId;
+      resolvedRaceNumber = effectiveRaceNumber;
+      resolvedValidaRef = effectiveValidaRef;
+
       // Recargar si hay algo nuevo O si hay foco activo que contextualiza esta pregunta
       if (params.needsRefresh || focusedMeetingId || focusedRaceNumber) {
         const qp = new URLSearchParams();
@@ -139,6 +147,9 @@ export default function ElMelliChat() {
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           context: currentContext,
+          meetingId: resolvedMeetingId,
+          raceNumber: resolvedRaceNumber,
+          validaRef: resolvedValidaRef,
         }),
       });
 
