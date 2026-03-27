@@ -18,6 +18,8 @@ export default function ElMelliChat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState('');
+  const [focusedMeetingId, setFocusedMeetingId] = useState<string | undefined>();
+  const [focusedRaceNumber, setFocusedRaceNumber] = useState<number | undefined>();
   const [contextLoaded, setContextLoaded] = useState(false);
   const [goldBalance, setGoldBalance] = useState<number | null>(null);
   const [activeMeetings, setActiveMeetings] = useState<any[]>([]);
@@ -83,29 +85,45 @@ export default function ElMelliChat() {
     let currentContext = context;
     try {
       const params = extractContextParams(text);
-      if (params.needsRefresh) {
-        // Encontrar meetingId del hipódromo mencionado
-        let meetingId: string | undefined;
-        if (params.trackHint && activeMeetings.length > 0) {
-          const match = activeMeetings.find((m: any) =>
-            params.trackHint === 'rinconada'
-              ? /rinconada/i.test(m.trackName)
-              : /valencia/i.test(m.trackName)
-          );
-          meetingId = match?.id;
-        } else if (activeMeetings.length === 1) {
-          meetingId = activeMeetings[0].id;
-        }
-        // Recargar contexto con datos específicos de carrera/reunión
+
+      // Resolver meetingId: del hint de hipódromo, o el único activo, o el que ya está en foco
+      let meetingId: string | undefined;
+      if (params.trackHint && activeMeetings.length > 0) {
+        const match = activeMeetings.find((m: any) =>
+          params.trackHint === 'rinconada'
+            ? /rinconada/i.test(m.trackName)
+            : /valencia/i.test(m.trackName)
+        );
+        meetingId = match?.id;
+      } else if (activeMeetings.length === 1) {
+        meetingId = activeMeetings[0].id;
+      } else {
+        meetingId = focusedMeetingId; // mantener el hipódromo del mensaje anterior
+      }
+
+      // Si el mensaje tiene referencia a carrera nueva → actualizar foco
+      // Si no tiene referencia pero ya hay un foco activo → reusar ese foco
+      const newRaceNumber  = params.raceNumber;
+      const newValidaRef   = params.validaRef;
+      const hasNewRaceFocus = !!(newRaceNumber || newValidaRef);
+
+      const effectiveRaceNumber = hasNewRaceFocus ? newRaceNumber  : focusedRaceNumber;
+      const effectiveValidaRef  = hasNewRaceFocus ? newValidaRef   : undefined;
+
+      // Recargar si hay algo nuevo O si hay foco activo que contextualiza esta pregunta
+      if (params.needsRefresh || focusedMeetingId || focusedRaceNumber) {
         const qp = new URLSearchParams();
-        if (meetingId)          qp.set('meetingId', meetingId);
-        if (params.raceNumber)  qp.set('raceNumber', String(params.raceNumber));
-        if (params.validaRef)   qp.set('validaRef',  String(params.validaRef));
+        if (meetingId)              qp.set('meetingId',  meetingId);
+        if (effectiveRaceNumber)    qp.set('raceNumber', String(effectiveRaceNumber));
+        if (effectiveValidaRef)     qp.set('validaRef',  String(effectiveValidaRef));
         const res2 = await fetch(`/api/melli/context?${qp.toString()}`);
         if (res2.ok) {
           const d2 = await res2.json();
           currentContext = d2.context ?? context;
           setContext(currentContext);
+          // Actualizar foco solo si el mensaje trajo info nueva
+          if (meetingId)         setFocusedMeetingId(meetingId);
+          if (hasNewRaceFocus)   setFocusedRaceNumber(effectiveRaceNumber);
         }
       }
     } catch { /* contexto previo se mantiene */ }

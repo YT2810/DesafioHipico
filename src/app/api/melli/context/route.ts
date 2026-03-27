@@ -155,8 +155,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 3. Si no hay meetingId: resumen de traqueos recientes (top 10) ──────────
-    if (!targetMeeting || !raceNumber) {
+    // ── 3. Traqueos recientes (top 10) — solo cuando NO hay carrera específica en foco ──
+    if (!raceNumber) {
       const recentWorkouts = await WorkoutEntry.find({
         workoutDate: { $gte: new Date(now.getTime() - 7 * 24 * 3600 * 1000) },
       }).sort({ workoutDate: -1 }).limit(10).populate('trackId', 'name').lean() as any[];
