@@ -145,6 +145,8 @@ export default function ElMelliChat() {
       if (res.ok) {
         const data = await res.json();
         if (data.goldBalance != null) setGoldBalance(data.goldBalance);
+        // Actualizar foco de carrera con lo que el LLM reportó en ##LOG##
+        if (data.logRace) setFocusedRaceNumber(data.logRace);
         const content = data.refunded
           ? `${data.content}\n\n↩️ _Tus ${data.goldDeducted === 0 ? '' : data.goldDeducted + ' '}Golds fueron reembolsados automáticamente._`
           : data.content;

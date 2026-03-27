@@ -250,6 +250,7 @@ export async function POST(req: NextRequest) {
       goldBalance: shouldRefund ? goldBalance : goldBalance - goldDeducted,
       refunded: shouldRefund,
       action: logAction,
+      logRace: logRace ?? null,
       usage: completion.usage,
     });
 
