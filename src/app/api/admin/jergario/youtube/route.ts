@@ -13,29 +13,31 @@ const openai = new OpenAI({
   },
 });
 
-const EXTRACTION_PROMPT = `Eres un experto en hipismo venezolano. Se te da un texto (transcripción o análisis hípico).
+const EXTRACTION_PROMPT = `Eres un lingüista venezolano experto en hipismo criollo. Tu trabajo es DESCUBRIR VOCABULARIO.
 
-IMPORTANTE: El texto puede tener MUCHOS TYPOS en nombres de caballos, jinetes y entrenadores por errores de transcripción de voz. IGNORA completamente los nombres propios. NO extraigas nombres de personas ni de caballos.
+Se te da un texto real de un pronosticador hípico venezolano (transcripción de YouTube, análisis, etc.). El texto tendrá TYPOS en nombres propios — ignóralos.
 
-Extrae SOLO frases, términos y JERGA HÍPICA genérica. Para cada una devuelve un JSON con:
-- phrase: el término o frase genérica (en minúsculas, SIN nombres propios)
-- intent: una de: consensus_pick, top_picks_all, pack_5y6, best_workout, workouts_all, horse_detail, eliminated, race_program, full_program, unknown
-- keywords: array de palabras clave para matching
-- description: explicación breve en español de qué significa el término
-- synonyms: variantes de la misma frase
+Tu misión: lee el texto como si estuvieras en la baranda del hipódromo escuchando hablar a la gente y EXTRAE toda palabra, frase o expresión que forme parte del lenguaje del hipismo venezolano o del español coloquial venezolano usado en ese contexto.
 
-Responde SOLO con un JSON array. Sin explicaciones fuera del JSON.
-Si no hay jerga hípica nueva, devuelve [].
+Incluye TODO lo que un extranjero no entendería:
+- Jerga hípica técnica: "traqueo", "briseo", "remate", "parciales", "split", "línea base"
+- Jerga hípica coloquial: "clavito", "penco", "gualdrapa", "fijo de la reunión", "el cuadro"
+- Expresiones venezolanas usadas en hipismo: "viene volao", "ese bicho arranca como un tiro", "le meten la presión", "está pa' eso"
+- Formas de referirse a apuestas: "el 5y6", "cuadro", "taquilla", "la jugada"
+- Verbos y frases de acción: "cerró fuerte", "se fue por fuera", "lo montaron atrás", "le dieron cancha"
+- Modismos del hipódromo: "lorito", "oficina", "dato de oficina", "la bulla"
+- Cualquier expresión criolla que tenga sentido en contexto hípico
 
-Enfócate SOLO en:
-- Formas de pedir pronósticos (clavito, fijo, línea, flecha, dato, casi fijo, súper especial, etc.)
-- Términos genéricos para caballos (ejemplar, gualdrapa, penco, puntero, etc.)
-- Términos de entrenamientos (traqueo, briseo, obra, split, remate, etc.)
-- Términos de apuestas (5y6, cuadro, taquilla, línea base, etc.)
-- Expresiones coloquiales del hipismo criollo venezolano
-- Verbos y frases comunes ("viene bien", "corrió fuerte", "cerró bien", "se fue por fuera", etc.)
+Para cada término devuelve un JSON con:
+- phrase: la palabra o frase (minúsculas, sin nombres propios)
+- intent: clasifícalo libremente con una etiqueta descriptiva (ej: "betting", "race_analysis", "slang", "general_hipismo", "track_conditions", "jockey_trainer", "consensus_pick", "workouts_all", etc.)
+- keywords: array de palabras sueltas que ayuden a encontrar esta frase por búsqueda
+- description: qué significa en español llano (como si le explicaras a alguien que nunca ha ido al hipódromo)
+- synonyms: otras formas de decir lo mismo
 
-NO extraigas: nombres de caballos, nombres de jinetes, nombres de entrenadores, números de carrera.`;
+Responde SOLO con un JSON array. Sin texto fuera del JSON.
+NO extraigas nombres de caballos, jinetes, entrenadores ni números de carrera.
+Sé GENEROSO extrayendo — es mejor tener de más que de menos.`;
 
 // POST — extraer jerga de texto pegado
 export async function POST(req: NextRequest) {

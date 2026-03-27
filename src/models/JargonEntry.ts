@@ -37,7 +37,7 @@ export interface IJargonEntry extends Document {
 const JargonEntrySchema = new Schema<IJargonEntry>(
   {
     phrase:      { type: String, required: true, unique: true, trim: true, lowercase: true },
-    intent:      { type: String, required: true, enum: ['consensus_pick','top_picks_all','pack_5y6','best_workout','workouts_all','horse_detail','eliminated','race_program','full_program','betting','race_analysis','jockey_trainer','track_conditions','general_hipismo','slang','greeting','off_topic','unknown'] },
+    intent:      { type: String, required: true, trim: true, lowercase: true },
     keywords:    [{ type: String, trim: true, lowercase: true }],
     description: { type: String, required: true },
     example:     { type: String },
