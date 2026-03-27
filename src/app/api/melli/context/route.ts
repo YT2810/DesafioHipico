@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
 
             if (recentWorkout) {
               const dDias = Math.floor((now.getTime() - new Date(recentWorkout.workoutDate).getTime()) / 86400000);
-              lines.push(`    ↳ Trabajo: ${recentWorkout.workoutType} ${recentWorkout.distance}m | splits:${recentWorkout.splits || 'N/A'} | hace ${dDias}d${recentWorkout.daysRest ? ` | descanso:${recentWorkout.daysRest}d` : ''}`);
+              lines.push(`    ↳ Trabajo: ${recentWorkout.workoutType} ${recentWorkout.distance}m | ${recentWorkout.splits} | hace ${dDias}d${recentWorkout.daysRest ? ` | descanso:${recentWorkout.daysRest}d` : ''}`);
             }
           }
 
