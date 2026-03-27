@@ -101,9 +101,11 @@ export async function POST(req: NextRequest) {
     : '';
 
   // ── Verificar data mínima antes de cobrar ────────────────────────────────
+  // Solo bloquea si no hay NINGÚN pronóstico (hcpCount === 0).
+  // Si hay al menos 1, el Melli responde con lo que tiene.
   if (cost > 0 && context) {
     const validation = validateDataForAction(context, action);
-    if (!validation.isValid) {
+    if (!validation.isValid && validation.hcpCount === 0) {
       return NextResponse.json({
         error: 'insufficient_data',
         hcpCount: validation.hcpCount,
