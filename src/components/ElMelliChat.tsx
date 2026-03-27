@@ -97,8 +97,12 @@ export default function ElMelliChat() {
         meetingId = match?.id;
       } else if (activeMeetings.length === 1) {
         meetingId = activeMeetings[0].id;
-      } else {
+      } else if (focusedMeetingId) {
         meetingId = focusedMeetingId; // mantener el hipódromo del mensaje anterior
+      } else if (params.needsRefresh && activeMeetings.length > 0) {
+        // Sin foco previo y sin hint: preferir La Rinconada, si no el primero
+        const rinconada = activeMeetings.find((m: any) => /rinconada/i.test(m.trackName));
+        meetingId = (rinconada ?? activeMeetings[0]).id;
       }
 
       // Si el mensaje tiene referencia a carrera nueva → actualizar foco
