@@ -154,13 +154,17 @@ export function extractContextParams(message: string): ContextParams {
   const numericMatch = !validaMatch ? c.match(/(?:carrera|c)\s*(\d{1,2})/) : null;
   const ordAfter  = !validaMatch ? c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`)) : null;
   const ordBefore = !validaMatch ? c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`)) : null;
+  // También capturar "3ra", "1ra", "2da", "4ta", "5ta" solos (sin la palabra "carrera")
+  const shortOrdMatch = !validaMatch ? c.match(/\b(\d{1,2})\s*(?:ra|da|ta|ro|do|to|era|ero|°|º)\b/) : null;
   const ordWord   = ordAfter?.[1] ?? ordBefore?.[1];
   const raceNumber = numericMatch
     ? parseInt(numericMatch[1])
-    : ordWord ? ORDINALS[ordWord] : undefined;
+    : ordWord ? ORDINALS[ordWord]
+    : shortOrdMatch ? parseInt(shortOrdMatch[1])
+    : undefined;
 
   // Detectar hipódromo mencionado
-  const isRinconada = /rinconada|la rinca|rinca/.test(c);
+  const isRinconada = /rincoa?n?a?da?|la rinca|rinca/.test(c);
   const isValencia  = /valencia/.test(c);
   const trackHint: ContextParams['trackHint'] = isRinconada ? 'rinconada' : isValencia ? 'valencia' : undefined;
 
