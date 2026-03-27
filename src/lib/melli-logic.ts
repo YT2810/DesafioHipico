@@ -56,10 +56,20 @@ export function validateDataForAction(context: string, action: string): DataVali
     return { isValid: true, hcpCount: 0, minRequired: 0 };
   }
 
-  const consensoMatch = context.match(/► CONSENSO (\d+) hcp/);
-  const hcpCount = consensoMatch ? parseInt(consensoMatch[1]) : 0;
+  // Buscar todas las líneas CONSENSO en el contexto y tomar el máximo
+  // (cuando se carga una sola carrera hay una sola línea; cuando es el programa completo hay varias)
+  const allConsensoMatches = [...context.matchAll(/► CONSENSO (\d+) hcp/g)];
+  const hcpCount = allConsensoMatches.length > 0
+    ? Math.max(...allConsensoMatches.map(m => parseInt(m[1])))
+    : 0;
+
   const isValencia = /valencia/i.test(context);
-  const minRequired = isValencia ? 3 : 5;
+  // Mínimo: 3 para Valencia, 2 para La Rinconada (carrera individual)
+  // Para paquetes (pack_5y6, pack_full) el mínimo es mayor
+  const isPack = action === 'pack_5y6' || action === 'pack_full';
+  const minRequired = isPack
+    ? (isValencia ? 3 : 3)
+    : (isValencia ? 2 : 2);
 
   if (hcpCount < minRequired) {
     const message = hcpCount === 0
@@ -113,6 +123,7 @@ export function calcularConsenso(forecasts: Array<{
  */
 export interface ContextParams {
   raceNumber?: number;
+  validaRef?: number;   // "Nth válida" — necesita resolverse contra el programa real
   trackHint?: 'rinconada' | 'valencia';
   needsRefresh: boolean;
 }
@@ -120,7 +131,6 @@ export interface ContextParams {
 export function extractContextParams(message: string): ContextParams {
   const c = message.toLowerCase();
 
-  // Detectar número de carrera mencionado (numérico o cardinal/ordinal en español)
   const ORDINALS: Record<string, number> = {
     primera: 1, segundo: 2, segunda: 2, tercera: 3, tercero: 3,
     cuarta: 4, cuarto: 4, quinta: 5, quinto: 5, sexta: 6, sexto: 6,
@@ -129,10 +139,21 @@ export function extractContextParams(message: string): ContextParams {
     undécima: 11, undecima: 11, duodécima: 12, duodecima: 12,
   };
   const ORDINAL_WORDS = 'primera|segunda|tercera|cuarta|quinta|sexta|s[eé]ptima|octava|novena|d[eé]cima|und[eé]cima|duod[eé]cima';
-  const numericMatch = c.match(/(?:carrera|c)\s*(\d{1,2})/);
-  // "carrera primera" o "primera carrera"
-  const ordAfter  = c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`));
-  const ordBefore = c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`));
+
+  // ── Detectar referencia a "Nth válida" PRIMERO (tiene prioridad sobre carrera ordinaria) ──
+  // Ejemplos: "6ta válida", "sexta válida", "1ra válida", "primera válida"
+  const VALIDA_ORDINAL = new RegExp(`(${ORDINAL_WORDS}|\\d{1,2})[a-z°]*\\s+v[aá]lida`);
+  const validaMatch = c.match(VALIDA_ORDINAL);
+  let validaRef: number | undefined;
+  if (validaMatch) {
+    const raw = validaMatch[1];
+    validaRef = /\d/.test(raw) ? parseInt(raw) : ORDINALS[raw];
+  }
+
+  // ── Detectar carrera ordinaria (solo si NO es referencia a válida) ──
+  const numericMatch = !validaMatch ? c.match(/(?:carrera|c)\s*(\d{1,2})/) : null;
+  const ordAfter  = !validaMatch ? c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`)) : null;
+  const ordBefore = !validaMatch ? c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`)) : null;
   const ordWord   = ordAfter?.[1] ?? ordBefore?.[1];
   const raceNumber = numericMatch
     ? parseInt(numericMatch[1])
@@ -143,11 +164,10 @@ export function extractContextParams(message: string): ContextParams {
   const isValencia  = /valencia/.test(c);
   const trackHint: ContextParams['trackHint'] = isRinconada ? 'rinconada' : isValencia ? 'valencia' : undefined;
 
-  // Necesita refresh si menciona carrera específica, hipódromo, o pide traqueos/inscritos
-  const needsRefresh = !!(raceNumber || trackHint ||
+  const needsRefresh = !!(raceNumber || validaRef || trackHint ||
     /traqueos?|inscrito|programa|quién viene|quien viene/.test(c));
 
-  return { raceNumber, trackHint, needsRefresh };
+  return { raceNumber, validaRef, trackHint, needsRefresh };
 }
 
 /**

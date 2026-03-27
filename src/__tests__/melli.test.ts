@@ -110,27 +110,30 @@ describe('ACTION_COSTS — tabla de precios', () => {
 
 describe('validateDataForAction — bloqueo de cobro por data insuficiente', () => {
   const ctxRinconada5hcp = `=== PROGRAMA: La Rinconada · Reunión 5 ===\n  ► CONSENSO 5 hcp: CABALLO_A(3P/5T), CABALLO_B(2P/3T)`;
-  const ctxRinconada4hcp = `=== PROGRAMA: La Rinconada · Reunión 5 ===\n  ► CONSENSO 4 hcp: CABALLO_A(2P/4T)`;
+  const ctxRinconada2hcp = `=== PROGRAMA: La Rinconada · Reunión 5 ===\n  ► CONSENSO 2 hcp: CABALLO_A(1P/2T)`;
+  const ctxRinconada1hcp = `=== PROGRAMA: La Rinconada · Reunión 5 ===\n  ► CONSENSO 1 hcp: CABALLO_A(1P/1T)`;
   const ctxRinconada0hcp = `=== PROGRAMA: La Rinconada · Reunión 5 ===\n  ► Sin pronósticos publicados aún`;
   const ctxValencia3hcp  = `=== PROGRAMA: Valencia · Reunión 2 ===\n  ► CONSENSO 3 hcp: CABALLO_X(2P/3T)`;
   const ctxValencia2hcp  = `=== PROGRAMA: Valencia · Reunión 2 ===\n  ► CONSENSO 2 hcp: CABALLO_X(1P/2T)`;
+  const ctxValencia1hcp  = `=== PROGRAMA: Valencia · Reunión 2 ===\n  ► CONSENSO 1 hcp: CABALLO_X(1P/1T)`;
 
   // Chat libre nunca bloquea
   test('acción free siempre válida (sin data)', () => {
-    const r = validateDataForAction('', 'free');
-    expect(r.isValid).toBe(true);
+    expect(validateDataForAction('', 'free').isValid).toBe(true);
   });
 
-  // La Rinconada — mínimo 5
+  // La Rinconada — mínimo 2
   test('Rinconada con 5 hcp → válido', () => {
     expect(validateDataForAction(ctxRinconada5hcp, 'marks_1race').isValid).toBe(true);
   });
-  test('Rinconada con 4 hcp → bloqueado', () => {
-    const r = validateDataForAction(ctxRinconada4hcp, 'marks_1race');
+  test('Rinconada con 2 hcp → válido (mínimo alcanzado)', () => {
+    expect(validateDataForAction(ctxRinconada2hcp, 'marks_1race').isValid).toBe(true);
+  });
+  test('Rinconada con 1 hcp → bloqueado', () => {
+    const r = validateDataForAction(ctxRinconada1hcp, 'marks_1race');
     expect(r.isValid).toBe(false);
-    expect(r.hcpCount).toBe(4);
-    expect(r.minRequired).toBe(5);
-    expect(r.message).toContain('4 pronósticos');
+    expect(r.hcpCount).toBe(1);
+    expect(r.minRequired).toBe(2);
   });
   test('Rinconada con 0 hcp → bloqueado con mensaje de "no hay pronósticos"', () => {
     const r = validateDataForAction(ctxRinconada0hcp, 'marks_1race');
@@ -139,18 +142,21 @@ describe('validateDataForAction — bloqueo de cobro por data insuficiente', () 
     expect(r.message).toContain('no hay pronósticos');
   });
 
-  // Valencia — mínimo 3
+  // Valencia — mínimo 2
   test('Valencia con 3 hcp → válido', () => {
     expect(validateDataForAction(ctxValencia3hcp, 'marks_1race').isValid).toBe(true);
   });
-  test('Valencia con 2 hcp → bloqueado', () => {
-    const r = validateDataForAction(ctxValencia2hcp, 'marks_1race');
+  test('Valencia con 2 hcp → válido (mínimo alcanzado)', () => {
+    expect(validateDataForAction(ctxValencia2hcp, 'marks_1race').isValid).toBe(true);
+  });
+  test('Valencia con 1 hcp → bloqueado', () => {
+    const r = validateDataForAction(ctxValencia1hcp, 'marks_1race');
     expect(r.isValid).toBe(false);
-    expect(r.hcpCount).toBe(2);
-    expect(r.minRequired).toBe(3);
+    expect(r.hcpCount).toBe(1);
+    expect(r.minRequired).toBe(2);
   });
 
-  // Todos los tipos de acción de pago bloquean igual
+  // Todos los tipos de acción de pago bloquean con 0 hcp
   test('analysis_1race también bloquea si no hay data', () => {
     expect(validateDataForAction(ctxRinconada0hcp, 'analysis_1race').isValid).toBe(false);
   });
@@ -159,6 +165,14 @@ describe('validateDataForAction — bloqueo de cobro por data insuficiente', () 
   });
   test('pack_full también bloquea si no hay data', () => {
     expect(validateDataForAction(ctxRinconada0hcp, 'pack_full').isValid).toBe(false);
+  });
+
+  // Contexto con múltiples carreras — toma el máximo CONSENSO
+  test('contexto con múltiples carreras → toma el máximo hcp', () => {
+    const ctxMulti = `► CONSENSO 1 hcp: ...\n  ► CONSENSO 4 hcp: ...\n  ► CONSENSO 2 hcp: ...`;
+    const r = validateDataForAction(ctxMulti, 'marks_1race');
+    expect(r.hcpCount).toBe(4);
+    expect(r.isValid).toBe(true);
   });
 });
 
@@ -279,6 +293,35 @@ describe('extractContextParams — recarga de contexto dinámico', () => {
   });
   test('"dame el programa" → needsRefresh true', () => {
     expect(extractContextParams('dame el programa').needsRefresh).toBe(true);
+  });
+
+  // validaRef — "Nth válida" NO debe confundirse con carrera ordinaria
+  test('"6ta válida" → validaRef 6, raceNumber undefined', () => {
+    const r = extractContextParams('dame un dato en la 6ta válida');
+    expect(r.validaRef).toBe(6);
+    expect(r.raceNumber).toBeUndefined();
+    expect(r.needsRefresh).toBe(true);
+  });
+  test('"primera válida" → validaRef 1, raceNumber undefined', () => {
+    const r = extractContextParams('qué hay en la primera válida');
+    expect(r.validaRef).toBe(1);
+    expect(r.raceNumber).toBeUndefined();
+  });
+  test('"sexta válida" → validaRef 6', () => {
+    expect(extractContextParams('sexta válida').validaRef).toBe(6);
+  });
+  test('"1ra valida" (sin tilde) → validaRef 1', () => {
+    expect(extractContextParams('1ra valida').validaRef).toBe(1);
+  });
+  test('"carrera 6" (sin "válida") → raceNumber 6, validaRef undefined', () => {
+    const r = extractContextParams('marcas carrera 6');
+    expect(r.raceNumber).toBe(6);
+    expect(r.validaRef).toBeUndefined();
+  });
+  test('"carrera 4" → raceNumber 4, no confunde con válida', () => {
+    const r = extractContextParams('análisis carrera 4');
+    expect(r.raceNumber).toBe(4);
+    expect(r.validaRef).toBeUndefined();
   });
 });
 

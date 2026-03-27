@@ -100,6 +100,7 @@ export default function ElMelliChat() {
         const qp = new URLSearchParams();
         if (meetingId)          qp.set('meetingId', meetingId);
         if (params.raceNumber)  qp.set('raceNumber', String(params.raceNumber));
+        if (params.validaRef)   qp.set('validaRef',  String(params.validaRef));
         const res2 = await fetch(`/api/melli/context?${qp.toString()}`);
         if (res2.ok) {
           const d2 = await res2.json();

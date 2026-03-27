@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const meetingId  = searchParams.get('meetingId');
-  const raceNumber = searchParams.get('raceNumber') ? parseInt(searchParams.get('raceNumber')!) : null;
+  const validaRef  = searchParams.get('validaRef')  ? parseInt(searchParams.get('validaRef')!)  : null;
+  let   raceNumber = searchParams.get('raceNumber') ? parseInt(searchParams.get('raceNumber')!) : null;
 
   try {
     await connectMongo();
@@ -73,6 +74,16 @@ export async function GET(req: NextRequest) {
       const track = (targetMeeting as any).trackId?.name ?? 'Hipódromo';
       const races  = await Race.find({ meetingId: targetMeeting._id }).sort({ raceNumber: 1 }).lean();
 
+      // Resolver "Nth válida" → número de carrera real
+      // validasStart = primera carrera que forma parte del 5y6 (últimas 6 del programa)
+      const maxRace = races.length > 0 ? Math.max(...races.map(r => r.raceNumber)) : 0;
+      const validasStart = Math.max(1, maxRace - 5);
+      if (validaRef && !raceNumber) {
+        // validaRef=1 → primera válida = validasStart, validaRef=6 → última válida = maxRace
+        const resolvedRace = validasStart + (validaRef - 1);
+        if (resolvedRace <= maxRace) raceNumber = resolvedRace;
+      }
+
       // Filtrar por carrera específica si se pidió
       const targetRaces = raceNumber
         ? races.filter(r => r.raceNumber === raceNumber)
@@ -82,10 +93,6 @@ export async function GET(req: NextRequest) {
         lines.push(`\nSIN_DATOS_CARRERAS: No hay carreras cargadas para ${track} Reunión ${(targetMeeting as any).meetingNumber}`);
       } else {
         lines.push(`\n=== PROGRAMA: ${track} · Reunión ${(targetMeeting as any).meetingNumber} ===`);
-
-        // Calcular corte válidas (últimas 6 = 5y6)
-        const maxRace = Math.max(...races.map(r => r.raceNumber));
-        const validasStart = Math.max(1, maxRace - 5);
 
         for (const race of targetRaces) {
           const esValida = race.raceNumber >= validasStart;
