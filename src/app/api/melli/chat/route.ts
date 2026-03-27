@@ -100,10 +100,18 @@ export async function POST(req: NextRequest) {
   const userMessage: string = messages[messages.length - 1]?.content ?? '';
   const msgCount: number = messages.filter((m: any) => m.role === 'user').length;
 
-  // DEBUG — ver qué contexto llega al LLM (quitar en producción)
+  // DEBUG — ver qué contexto llega al LLM
   console.log('[melli/chat] userMessage:', userMessage);
   console.log('[melli/chat] context length:', context?.length ?? 0);
   console.log('[melli/chat] context preview:', context?.slice(0, 500) ?? '(vacío)');
+
+  // Si la API de contexto falló, no llamar al LLM — evitar alucinaciones
+  if (context === 'ERROR_CONTEXTO') {
+    return NextResponse.json({
+      content: 'Hubo un problema cargando la data de la reunión, socio. Cierra el chat y vuelve a abrirlo para recargar. 🔄',
+      goldBalance: 0,
+    });
+  }
 
   // ── Detectar acción y calcular costo ────────────────────────────────────────
   const { action, raceNumber } = detectAction(userMessage);

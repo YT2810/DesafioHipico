@@ -182,8 +182,9 @@ export async function GET(req: NextRequest) {
       hasRaceData: !!targetMeeting,
     });
 
-  } catch (err) {
-    console.error('[melli/context]', err);
+  } catch (err: any) {
+    console.error('[melli/context] ERROR:', err?.message ?? err);
+    console.error('[melli/context] STACK:', err?.stack?.slice(0, 800));
     return NextResponse.json({ context: 'ERROR_CONTEXTO', meetings: [], hasRaceData: false });
   }
 }
