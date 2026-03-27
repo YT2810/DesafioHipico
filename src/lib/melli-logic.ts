@@ -8,6 +8,8 @@ export const ACTION_COSTS: Record<string, number> = {
   analysis_1race: 5,
   pack_5y6:      25,
   pack_full:     50,
+  top_picks_all: 25,
+  workouts:       3,
   free:           0,
 };
 
@@ -57,9 +59,15 @@ export function detectAction(content: string): DetectedAction {
     return { action: 'workouts', raceNumber: m ? parseInt(m[1]) : undefined };
   }
 
-  // "dame un dato" / "quien gana" / "que tienes" → generic data request (marks)
-  if (/dame.*dato|qui[eé]n gana|que tienes|qué tienes|dame.*línea|dame.*linea|dame.*fijo/.test(c)) {
+  // "dame un dato" / "quien gana" / "dame la línea" → explicit data request
+  if (/dame.*dato|qui[eé]n gana|dame.*línea|dame.*linea|dame.*fijo/.test(c)) {
     const m = c.match(/carrera ?(\d+)/);
+    return { action: 'marks_1race', raceNumber: m ? parseInt(m[1]) : undefined };
+  }
+
+  // Bare "carrera N" or "la carrera N" without specific action → default to marks
+  if (/(?:la\s+)?carrera\s+(\d{1,2})\b/.test(c)) {
+    const m = c.match(/carrera\s+(\d{1,2})/);
     return { action: 'marks_1race', raceNumber: m ? parseInt(m[1]) : undefined };
   }
 
@@ -168,6 +176,9 @@ export function extractContextParams(message: string): ContextParams {
   };
   const ORDINAL_WORDS = 'primera|segunda|tercera|cuarta|quinta|sexta|s[eé]ptima|octava|novena|d[eé]cima|und[eé]cima|duod[eé]cima';
 
+  // ── Detectar "última carrera" / "la ultima" → flag especial ──
+  const isUltima = /[uú]ltim[ao]/.test(c);
+
   // ── Detectar referencia a "Nth válida" PRIMERO (tiene prioridad sobre carrera ordinaria) ──
   // Ejemplos: "6ta válida", "sexta válida", "1ra válida", "primera válida"
   const VALIDA_ORDINAL = new RegExp(`(${ORDINAL_WORDS}|\\d{1,2})[a-z°]*\\s+v[aá]lida`);
@@ -178,18 +189,35 @@ export function extractContextParams(message: string): ContextParams {
     validaRef = /\d/.test(raw) ? parseInt(raw) : ORDINALS[raw];
   }
 
+  // ── Bare ordinals: "la segunda", "y la tercera" (sin "carrera"/"válida") → treat as validaRef ──
+  // Only match if NOT already matched as válida and NOT followed by "carrera"
+  if (!validaRef && !isUltima) {
+    const bareOrdMatch = c.match(new RegExp(`(?:^|\\b(?:y|en|de)\\s+)(?:la\\s+|el\\s+)(${ORDINAL_WORDS})(?!\\s+carrera)\\b`));
+    if (bareOrdMatch) {
+      const raw = bareOrdMatch[1];
+      const n = ORDINALS[raw];
+      // If ordinal is small (1-6), likely a válida reference in conversation context
+      if (n && n <= 6) validaRef = n;
+    }
+  }
+
   // ── Detectar carrera ordinaria (solo si NO es referencia a válida) ──
-  const numericMatch = !validaMatch ? c.match(/(?:carrera|c)\s*(\d{1,2})/) : null;
-  const ordAfter  = !validaMatch ? c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`)) : null;
-  const ordBefore = !validaMatch ? c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`)) : null;
+  const numericMatch = !validaMatch && !validaRef ? c.match(/(?:carrera|c)\s*(\d{1,2})/) : null;
+  const ordAfter  = !validaMatch && !validaRef ? c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`)) : null;
+  const ordBefore = !validaMatch && !validaRef ? c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`)) : null;
   // También capturar "3ra", "1ra", "2da", "4ta", "5ta" solos (sin la palabra "carrera")
-  const shortOrdMatch = !validaMatch ? c.match(/\b(\d{1,2})\s*(?:ra|da|ta|ro|do|to|era|ero|°|º)\b/) : null;
+  const shortOrdMatch = !validaMatch && !validaRef ? c.match(/\b(\d{1,2})\s*(?:ra|da|ta|ro|do|to|era|ero|°|º)\b/) : null;
   const ordWord   = ordAfter?.[1] ?? ordBefore?.[1];
-  const raceNumber = numericMatch
+  let raceNumber = numericMatch
     ? parseInt(numericMatch[1])
     : ordWord ? ORDINALS[ordWord]
     : shortOrdMatch ? parseInt(shortOrdMatch[1])
     : undefined;
+
+  // ── "última carrera" / "la ultima" → raceNumber = 99 sentinel (chat route resolves to maxRace) ──
+  if (isUltima && !raceNumber && !validaRef) {
+    raceNumber = 99; // sentinel — resolved by generateDirectResponse to actual last race
+  }
 
   // Detectar hipódromo mencionado
   const isRinconada = /rincoa?n?a?da?|la rinca|rinca/.test(c);

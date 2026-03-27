@@ -138,9 +138,19 @@ export async function POST(req: NextRequest) {
     if (regexAction.raceNumber) resolvedRaceNum = regexAction.raceNumber;
   }
 
-  const isDataRequest = jargonIsData || regexIsData;
+  let isDataRequest = jargonIsData || regexIsData;
 
-  console.log('[melli] intent:', resolvedIntent, '| jargon:', classified.intent, '(' + classified.confidence + ')', '| regex:', regexAction.action, '| isData:', isDataRequest);
+  // Guard: consensus_pick / workouts_all sin carrera específica → NO dump all, dejar que LLM embudo pregunte
+  const needsRaceNumber = ['consensus_pick', 'workouts_all', 'best_workout'].includes(resolvedIntent);
+  const hasSpecificRace = !!(resolvedRaceNum || reqValidaRef);
+  if (needsRaceNumber && !hasSpecificRace) {
+    // Solo permitir top_picks_all y pack_5y6 sin carrera específica (piden TODO el paquete)
+    if (!['top_picks_all', 'pack_5y6'].includes(resolvedIntent)) {
+      isDataRequest = false; // fall to LLM funnel
+    }
+  }
+
+  console.log('[melli] intent:', resolvedIntent, '| jargon:', classified.intent, '(' + classified.confidence + ')', '| regex:', regexAction.action, '| isData:', isDataRequest, '| race:', resolvedRaceNum);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 3: DATA → Respuesta directa de DB (CERO alucinación, CERO OpenAI)

@@ -54,6 +54,10 @@ export async function generateDirectResponse(params: DirectResponseParams): Prom
 
   // Resolver validaRef → raceNumber real
   let targetRaceNum = raceNumber;
+  if (targetRaceNum === 99) {
+    // Sentinel "última carrera" → resolve to actual last race
+    targetRaceNum = maxRace;
+  }
   if (validaRef && !raceNumber) {
     targetRaceNum = validasStart + validaRef - 1;
     if (targetRaceNum > maxRace) targetRaceNum = maxRace;
