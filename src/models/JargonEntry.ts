@@ -10,6 +10,12 @@ export type MelliIntent =
   | 'eliminated'          // Caballos eliminados/retirados
   | 'race_program'        // Programa/inscritos de una carrera
   | 'full_program'        // Programa completo del día
+  | 'betting'             // Términos de apuestas (5y6, cuadro, taquilla, etc.)
+  | 'race_analysis'       // Análisis de carrera (remate, split, parciales, etc.)
+  | 'jockey_trainer'      // Términos de jinetes/entrenadores
+  | 'track_conditions'    // Condiciones de pista (pesada, rápida, etc.)
+  | 'general_hipismo'     // Jerga hípica general
+  | 'slang'               // Expresiones coloquiales del hipódromo
   | 'greeting'            // Saludo
   | 'off_topic'           // Fuera de tema hípico
   | 'unknown';            // No clasificado (fallback a LLM)
@@ -31,7 +37,7 @@ export interface IJargonEntry extends Document {
 const JargonEntrySchema = new Schema<IJargonEntry>(
   {
     phrase:      { type: String, required: true, unique: true, trim: true, lowercase: true },
-    intent:      { type: String, required: true, enum: ['consensus_pick','top_picks_all','pack_5y6','best_workout','workouts_all','horse_detail','eliminated','race_program','full_program','greeting','off_topic','unknown'] },
+    intent:      { type: String, required: true, enum: ['consensus_pick','top_picks_all','pack_5y6','best_workout','workouts_all','horse_detail','eliminated','race_program','full_program','betting','race_analysis','jockey_trainer','track_conditions','general_hipismo','slang','greeting','off_topic','unknown'] },
     keywords:    [{ type: String, trim: true, lowercase: true }],
     description: { type: String, required: true },
     example:     { type: String },

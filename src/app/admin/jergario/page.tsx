@@ -5,7 +5,9 @@ import Link from 'next/link';
 
 const INTENTS = [
   'consensus_pick', 'top_picks_all', 'pack_5y6', 'best_workout', 'workouts_all',
-  'horse_detail', 'eliminated', 'race_program', 'full_program', 'greeting', 'off_topic', 'unknown',
+  'horse_detail', 'eliminated', 'race_program', 'full_program',
+  'betting', 'race_analysis', 'jockey_trainer', 'track_conditions', 'general_hipismo', 'slang',
+  'greeting', 'off_topic', 'unknown',
 ] as const;
 
 type JargonEntry = {
