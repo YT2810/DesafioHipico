@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import connectMongo from '@/lib/mongodb';
 import JargonEntry from '@/models/JargonEntry';
-import { YoutubeTranscript } from 'youtube-transcript';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
@@ -14,39 +13,31 @@ const openai = new OpenAI({
   },
 });
 
-function extractVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
-}
+const EXTRACTION_PROMPT = `Eres un experto en hipismo venezolano. Se te da un texto (transcripción o análisis hípico).
 
-const EXTRACTION_PROMPT = `Eres un experto en hipismo venezolano. Se te da la transcripción de un video de pronósticos hípicos.
+IMPORTANTE: El texto puede tener MUCHOS TYPOS en nombres de caballos, jinetes y entrenadores por errores de transcripción de voz. IGNORA completamente los nombres propios. NO extraigas nombres de personas ni de caballos.
 
-Extrae TODAS las frases, términos y jerga hípica que encuentres. Para cada una devuelve un JSON con:
-- phrase: el término o frase (en minúsculas)
-- intent: una de estas categorías: consensus_pick, top_picks_all, pack_5y6, best_workout, workouts_all, horse_detail, eliminated, race_program, full_program, unknown
+Extrae SOLO frases, términos y JERGA HÍPICA genérica. Para cada una devuelve un JSON con:
+- phrase: el término o frase genérica (en minúsculas, SIN nombres propios)
+- intent: una de: consensus_pick, top_picks_all, pack_5y6, best_workout, workouts_all, horse_detail, eliminated, race_program, full_program, unknown
 - keywords: array de palabras clave para matching
-- description: explicación breve en español de qué significa
+- description: explicación breve en español de qué significa el término
 - synonyms: variantes de la misma frase
 
 Responde SOLO con un JSON array. Sin explicaciones fuera del JSON.
-Si no hay jerga hípica relevante, devuelve [].
+Si no hay jerga hípica nueva, devuelve [].
 
-Enfócate en:
-- Formas de pedir pronósticos (clavito, fijo, línea, flecha, dato, etc.)
-- Formas de referirse a caballos (ejemplar, gualdrapa, etc.)
-- Formas de referirse a entrenamientos (traqueo, briseo, obra, etc.)
-- Formas de referirse a apuestas (5y6, cuadro, taquilla, etc.)
-- Términos técnicos (remate, split, speed rating, etc.)
-- Expresiones coloquiales del hipismo criollo`;
+Enfócate SOLO en:
+- Formas de pedir pronósticos (clavito, fijo, línea, flecha, dato, casi fijo, súper especial, etc.)
+- Términos genéricos para caballos (ejemplar, gualdrapa, penco, puntero, etc.)
+- Términos de entrenamientos (traqueo, briseo, obra, split, remate, etc.)
+- Términos de apuestas (5y6, cuadro, taquilla, línea base, etc.)
+- Expresiones coloquiales del hipismo criollo venezolano
+- Verbos y frases comunes ("viene bien", "corrió fuerte", "cerró bien", "se fue por fuera", etc.)
 
-// POST — procesar URLs de YouTube
+NO extraigas: nombres de caballos, nombres de jinetes, nombres de entrenadores, números de carrera.`;
+
+// POST — extraer jerga de texto pegado
 export async function POST(req: NextRequest) {
   const session = await auth();
   const roles: string[] = (session?.user as any)?.roles ?? [];
@@ -54,62 +45,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const { urls } = await req.json();
-  if (!urls || !Array.isArray(urls) || urls.length === 0) {
-    return NextResponse.json({ error: 'Envía un array de URLs' }, { status: 400 });
+  const { text, sourceName } = await req.json();
+  if (!text || typeof text !== 'string' || text.trim().length < 20) {
+    return NextResponse.json({ error: 'Pega un texto de al menos 20 caracteres' }, { status: 400 });
   }
 
   await connectMongo();
 
-  const results: { url: string; videoId: string | null; status: string; extracted: number; transcript_length?: number }[] = [];
-
-  for (const url of urls.slice(0, 20)) { // máx 20 URLs por request
-    const videoId = extractVideoId(url.trim());
-    if (!videoId) {
-      results.push({ url, videoId: null, status: 'invalid_url', extracted: 0 });
-      continue;
+  try {
+    // Truncar a 8000 chars por llamado, si es más largo procesamos en chunks
+    const chunks: string[] = [];
+    const clean = text.trim();
+    for (let i = 0; i < clean.length; i += 8000) {
+      chunks.push(clean.slice(i, i + 8000));
     }
 
-    try {
-      // 1. Extraer transcripción
-      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' });
-      const fullText = transcriptItems.map(t => t.text).join(' ');
+    let totalCreated = 0;
+    const allExtracted: string[] = [];
 
-      if (fullText.length < 50) {
-        results.push({ url, videoId, status: 'transcript_too_short', extracted: 0, transcript_length: fullText.length });
-        continue;
-      }
-
-      // 2. Enviar a OpenAI para extraer jerga (un solo llamado, texto truncado a 8000 chars)
-      const truncated = fullText.slice(0, 8000);
+    for (const chunk of chunks.slice(0, 3)) { // máx 3 chunks (~24k chars)
       const completion = await openai.chat.completions.create({
         model: 'openai/gpt-4o-mini',
         messages: [
           { role: 'system', content: EXTRACTION_PROMPT },
-          { role: 'user', content: truncated },
+          { role: 'user', content: chunk },
         ],
         max_tokens: 2000,
         temperature: 0.2,
       });
 
       const raw = completion.choices[0]?.message?.content ?? '[]';
-      // Extraer JSON del response (puede venir envuelto en ```json...```)
       const jsonMatch = raw.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        results.push({ url, videoId, status: 'no_json_extracted', extracted: 0, transcript_length: fullText.length });
-        continue;
-      }
+      if (!jsonMatch) continue;
 
       const extracted: any[] = JSON.parse(jsonMatch[0]);
-      let created = 0;
 
       for (const item of extracted) {
         if (!item.phrase || !item.intent || !item.description) continue;
         const phrase = item.phrase.toLowerCase().trim();
+        if (phrase.length < 2) continue;
 
-        // No duplicar
         const exists = await JargonEntry.findOne({ phrase });
-        if (exists) continue;
+        if (exists) {
+          allExtracted.push(`⏭ ${phrase} (ya existe)`);
+          continue;
+        }
 
         await JargonEntry.create({
           phrase,
@@ -121,18 +101,20 @@ export async function POST(req: NextRequest) {
           source: 'youtube',
           public: true,
         });
-        created++;
+        totalCreated++;
+        allExtracted.push(`✅ ${phrase}`);
       }
-
-      results.push({ url, videoId, status: 'ok', extracted: created, transcript_length: fullText.length });
-    } catch (err: any) {
-      const msg = err?.message ?? 'unknown_error';
-      // Si es error de transcript no disponible
-      const status = msg.includes('Transcript') ? 'no_transcript_available' : 'error';
-      results.push({ url, videoId, status: `${status}: ${msg.slice(0, 100)}`, extracted: 0 });
     }
-  }
 
-  const totalExtracted = results.reduce((sum, r) => sum + r.extracted, 0);
-  return NextResponse.json({ results, totalExtracted });
+    return NextResponse.json({
+      totalCreated,
+      textLength: clean.length,
+      chunksProcessed: Math.min(chunks.length, 3),
+      sourceName: sourceName ?? 'sin fuente',
+      details: allExtracted,
+    });
+  } catch (err: any) {
+    console.error('[jergario/extract]', err);
+    return NextResponse.json({ error: err.message?.slice(0, 200) ?? 'Error desconocido' }, { status: 500 });
+  }
 }

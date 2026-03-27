@@ -27,10 +27,11 @@ export default function AdminJergarioPage() {
   const [filter, setFilter] = useState('');
   const [intentFilter, setIntentFilter] = useState('');
 
-  // YouTube
-  const [youtubeUrls, setYoutubeUrls] = useState('');
-  const [ytProcessing, setYtProcessing] = useState(false);
-  const [ytResults, setYtResults] = useState<any[] | null>(null);
+  // Extracción de texto
+  const [pastedText, setPastedText] = useState('');
+  const [sourceName, setSourceName] = useState('');
+  const [extracting, setExtracting] = useState(false);
+  const [extractResult, setExtractResult] = useState<any | null>(null);
 
   // Manual add
   const [showAdd, setShowAdd] = useState(false);
@@ -54,24 +55,26 @@ export default function AdminJergarioPage() {
 
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
-  const handleYoutubeSubmit = async () => {
-    const urls = youtubeUrls.split('\n').map(u => u.trim()).filter(Boolean);
-    if (!urls.length) return;
-    setYtProcessing(true);
-    setYtResults(null);
+  const handleExtractText = async () => {
+    if (!pastedText.trim() || pastedText.trim().length < 20) return;
+    setExtracting(true);
+    setExtractResult(null);
     try {
       const res = await fetch('/api/admin/jergario/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls }),
+        body: JSON.stringify({ text: pastedText, sourceName: sourceName || undefined }),
       });
       if (res.ok) {
         const data = await res.json();
-        setYtResults(data.results);
-        loadEntries(); // refresh table
+        setExtractResult(data);
+        loadEntries();
+      } else {
+        const err = await res.json();
+        setExtractResult({ error: err.error });
       }
     } catch {}
-    setYtProcessing(false);
+    setExtracting(false);
   };
 
   const handleManualAdd = async () => {
@@ -162,42 +165,58 @@ export default function AdminJergarioPage() {
           <StatCard label="Manual" value={(stats.bySource.manual ?? 0) + (stats.bySource.user_log ?? 0)} />
         </div>
 
-        {/* YouTube Section */}
+        {/* Extraer jerga de texto */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
-            <span className="text-red-500">▶</span> Extraer jerga de YouTube
+            <span className="text-amber-500">📝</span> Extraer jerga de texto
           </h2>
           <p className="text-sm text-gray-400 mb-3">
-            Pega una URL por línea. El sistema extrae la transcripción y detecta jerga hípica automáticamente.
+            Pega una transcripción de YouTube, análisis de pronosticador o cualquier texto hípico. 
+            La IA detecta la jerga automáticamente e ignora nombres de caballos con typos.
           </p>
+          <div className="flex gap-3 mb-3">
+            <input
+              value={sourceName}
+              onChange={e => setSourceName(e.target.value)}
+              placeholder="Fuente (ej: Bob Lovera, Certeza Hípica, Guardi...)"
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+            />
+          </div>
           <textarea
-            value={youtubeUrls}
-            onChange={e => setYoutubeUrls(e.target.value)}
-            placeholder={'https://youtube.com/watch?v=...\nhttps://youtu.be/...\nhttps://youtube.com/watch?v=...'}
-            className="w-full h-32 bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm font-mono text-gray-200 placeholder-gray-600 resize-y focus:outline-none focus:border-amber-500"
+            value={pastedText}
+            onChange={e => setPastedText(e.target.value)}
+            placeholder="Pega aquí la transcripción o texto del pronosticador..."
+            className="w-full h-40 bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 placeholder-gray-600 resize-y focus:outline-none focus:border-amber-500"
           />
           <div className="flex items-center gap-3 mt-3">
             <button
-              onClick={handleYoutubeSubmit}
-              disabled={ytProcessing || !youtubeUrls.trim()}
-              className="px-5 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-medium transition-colors"
+              onClick={handleExtractText}
+              disabled={extracting || pastedText.trim().length < 20}
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-medium transition-colors"
             >
-              {ytProcessing ? 'Procesando...' : 'Procesar URLs'}
+              {extracting ? 'Analizando...' : 'Extraer jerga'}
             </button>
-            <span className="text-xs text-gray-500">Máx 20 URLs · ~$0.05 por video</span>
+            <span className="text-xs text-gray-500">{pastedText.length} chars · ~$0.02 por análisis</span>
           </div>
 
-          {ytResults && (
-            <div className="mt-4 space-y-1">
-              <h3 className="text-sm font-bold text-gray-300">Resultados:</h3>
-              {ytResults.map((r, i) => (
-                <div key={i} className={`text-xs px-3 py-1.5 rounded ${r.status === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-red-900/30 text-red-300'}`}>
-                  <span className="font-mono">{r.videoId ?? '???'}</span>
-                  {' — '}
-                  {r.status === 'ok' ? `✅ ${r.extracted} nuevas entradas extraídas` : `❌ ${r.status}`}
-                  {r.transcript_length ? ` (${r.transcript_length} chars)` : ''}
+          {extractResult && (
+            <div className="mt-4">
+              {extractResult.error ? (
+                <div className="text-xs px-3 py-2 rounded bg-red-900/30 text-red-300">❌ {extractResult.error}</div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-green-300">
+                    ✅ {extractResult.totalCreated} nuevas entradas · {extractResult.textLength} chars · Fuente: {extractResult.sourceName}
+                  </div>
+                  <div className="max-h-40 overflow-y-auto space-y-0.5">
+                    {extractResult.details?.map((d: string, i: number) => (
+                      <div key={i} className={`text-xs px-2 py-1 rounded ${d.startsWith('✅') ? 'bg-green-900/30 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
+                        {d}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
