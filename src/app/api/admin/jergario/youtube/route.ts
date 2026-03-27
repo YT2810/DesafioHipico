@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
           { role: 'system', content: EXTRACTION_PROMPT },
           { role: 'user', content: chunk },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
         temperature: 0.2,
       });
 
@@ -80,7 +80,26 @@ export async function POST(req: NextRequest) {
       const jsonMatch = raw.match(/\[[\s\S]*\]/);
       if (!jsonMatch) continue;
 
-      const extracted: any[] = JSON.parse(jsonMatch[0]);
+      let jsonStr = jsonMatch[0];
+      let extracted: any[];
+      try {
+        extracted = JSON.parse(jsonStr);
+      } catch {
+        // GPT truncó el JSON — intentar reparar cortando en el último objeto completo
+        const lastCloseBrace = jsonStr.lastIndexOf('}');
+        if (lastCloseBrace > 0) {
+          jsonStr = jsonStr.slice(0, lastCloseBrace + 1) + ']';
+          try {
+            extracted = JSON.parse(jsonStr);
+          } catch {
+            allExtracted.push('⚠ JSON parcial no reparable, se omitió un chunk');
+            continue;
+          }
+        } else {
+          allExtracted.push('⚠ JSON inválido, se omitió un chunk');
+          continue;
+        }
+      }
 
       for (const item of extracted) {
         if (!item.phrase || !item.intent || !item.description) continue;
