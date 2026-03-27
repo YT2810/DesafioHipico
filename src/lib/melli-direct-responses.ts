@@ -102,14 +102,18 @@ async function getConsensus(raceId: string) {
   const secondVotes: Record<string, { count: number; dorsal?: number }> = {};
 
   for (const f of forecasts) {
-    if (f.picks?.length > 0) {
-      const p1 = f.picks[0];
+    // DB uses 'marks' sorted by preferenceOrder, fallback to 'picks' for legacy
+    const entries = (f.marks?.length ? f.marks : f.picks) ?? [];
+    const sorted = [...entries].sort((a: any, b: any) => (a.preferenceOrder ?? 0) - (b.preferenceOrder ?? 0));
+
+    if (sorted.length > 0) {
+      const p1 = sorted[0];
       const key1 = p1.horseName ?? `#${p1.dorsalNumber}`;
       if (!votes[key1]) votes[key1] = { count: 0, dorsal: p1.dorsalNumber };
       votes[key1].count++;
 
-      if (f.picks.length > 1) {
-        const p2 = f.picks[1];
+      if (sorted.length > 1) {
+        const p2 = sorted[1];
         const key2 = p2.horseName ?? `#${p2.dorsalNumber}`;
         if (!secondVotes[key2]) secondVotes[key2] = { count: 0, dorsal: p2.dorsalNumber };
         secondVotes[key2].count++;
@@ -138,6 +142,7 @@ async function getBestWorkout(entries: any[]) {
     const workout = await WorkoutEntry.findOne({
       horseName: { $regex: new RegExp(horse.split(' ')[0], 'i') },
       workoutDate: { $gte: new Date(now.getTime() - 14 * 24 * 3600 * 1000) },
+      distance: { $gt: 0 },
     }).sort({ workoutDate: -1 }).lean() as any;
 
     if (workout) {
