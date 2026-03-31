@@ -24,6 +24,7 @@ import OpenAI from 'openai';
 import { ACTION_COSTS, detectAction } from '@/lib/melli-logic';
 import { classifyIntent } from '@/lib/melli-intent-classifier';
 import { generateDirectResponse } from '@/lib/melli-direct-responses';
+import GoldTransaction from '@/models/GoldTransaction';
 import '@/models/Track';
 
 const openai = new OpenAI({
@@ -179,6 +180,18 @@ export async function POST(req: NextRequest) {
 
         await User.findByIdAndUpdate(userId, { $inc: { 'balance.golds': -cost } });
         goldDeducted = cost;
+
+        // Registrar en GoldTransaction (audit trail)
+        try {
+          await GoldTransaction.create({
+            userId,
+            type: 'race_unlock',
+            amount: -cost,
+            balanceAfter: goldBalance - cost,
+            description: `El Melli: ${directResponse.action}${directResponse.raceNumber ? ` C${directResponse.raceNumber}` : ''}`,
+            metadata: { action: directResponse.action, raceNumber: directResponse.raceNumber },
+          });
+        } catch {}
       }
 
       // Log

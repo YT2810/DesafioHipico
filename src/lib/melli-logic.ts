@@ -4,13 +4,9 @@
  */
 
 export const ACTION_COSTS: Record<string, number> = {
-  marks_1race:    3,
-  analysis_1race: 5,
-  pack_5y6:      25,
-  pack_full:     50,
-  top_picks_all: 25,
-  workouts:       3,
-  free:           0,
+  marks_1race:    3,   // Marcas de 1 carrera
+  marks_all_day: 15,   // Marcas de todo el día
+  free:           0,   // Todo lo demás gratis por ahora
 };
 
 export interface DetectedAction {

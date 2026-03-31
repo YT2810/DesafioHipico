@@ -163,9 +163,19 @@ async function getBestWorkout(entries: any[]) {
 
 async function buildRaceMarks(races: any[], raceNum: number, trackName: string, meeting: any): Promise<DirectResponse | null> {
   const race = races.find(r => r.raceNumber === raceNum);
-  if (!race) return { content: `No encontré la carrera ${raceNum} en ${trackName}, socio.`, raceNumber: raceNum, action: 'marks_1race' };
+  if (!race) return { content: `No encontré la carrera ${raceNum} en ${trackName}, socio.`, raceNumber: raceNum, action: 'free' };
 
   const consensus = await getConsensus(race._id.toString());
+
+  // SIN pronósticos → NO cobrar, informar gratis
+  if (!consensus?.first) {
+    return {
+      content: `🏇 **C${raceNum} ${trackName}**\nAún no hay pronósticos publicados para esta carrera, socio. Cuando algún handicapper publique su data, te la muestro. No se te cobró nada.`,
+      raceNumber: raceNum,
+      action: 'free',
+    };
+  }
+
   const entries = await Entry.find({ raceId: race._id }).populate('horseId').lean() as any[];
   const bestWork = await getBestWorkout(entries);
 
@@ -176,14 +186,9 @@ async function buildRaceMarks(races: any[], raceNum: number, trackName: string, 
 
   let lines: string[] = [];
   lines.push(`🏇 **C${raceNum}${validaTag} ${trackName}** | ${race.distance ?? ''}m`);
-
-  if (consensus?.first) {
-    lines.push(`📊 Consenso de ${consensus.hcpCount} hcp: **${consensus.first.name}** (#${consensus.first.dorsal})`);
-    if (consensus.second) {
-      lines.push(`📊 2da marca: **${consensus.second.name}** (#${consensus.second.dorsal})`);
-    }
-  } else {
-    lines.push(`Sin pronósticos publicados aún para esta carrera.`);
+  lines.push(`📊 Consenso de ${consensus.hcpCount} hcp: **${consensus.first.name}** (#${consensus.first.dorsal})`);
+  if (consensus.second) {
+    lines.push(`📊 2da marca: **${consensus.second.name}** (#${consensus.second.dorsal})`);
   }
 
   if (bestWork) {
@@ -197,6 +202,7 @@ async function buildRaceMarks(races: any[], raceNum: number, trackName: string, 
 async function buildAllMarks(races: any[], fromRace: number, trackName: string, meeting: any): Promise<DirectResponse> {
   const validasStart = Math.max(1, races.length - 5);
   let lines: string[] = [`🏇 **Marcas ${trackName}** — Reunión ${meeting.meetingNumber}\n`];
+  let hasAnyForecast = false;
 
   for (const race of races) {
     if (race.raceNumber < fromRace) continue;
@@ -207,6 +213,7 @@ async function buildAllMarks(races: any[], fromRace: number, trackName: string, 
     const tag = validaNum ? ` [V${validaNum}]` : '';
 
     if (consensus?.first) {
+      hasAnyForecast = true;
       const secondPart = consensus.second ? ` · ${consensus.second.name} (#${consensus.second.dorsal})` : '';
       lines.push(`C${race.raceNumber}${tag}: **${consensus.first.name}** (#${consensus.first.dorsal})${secondPart}`);
     } else {
@@ -214,12 +221,21 @@ async function buildAllMarks(races: any[], fromRace: number, trackName: string, 
     }
   }
 
+  // Si NINGUNA carrera tiene pronósticos → gratis, no cobrar
+  if (!hasAnyForecast) {
+    return {
+      content: `🏇 **${trackName}** — Reunión ${meeting.meetingNumber}\nAún no hay pronósticos publicados para esta jornada, socio. Cuando los handicappers publiquen su data, te la muestro. No se te cobró nada.`,
+      action: 'free',
+    };
+  }
+
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), action: 'top_picks_all' };
+  return { content: lines.join('\n'), action: 'marks_all_day' };
 }
 
 async function buildPack5y6(races: any[], validasStart: number, maxRace: number, trackName: string, meeting: any): Promise<DirectResponse> {
   let lines: string[] = [`🏇 **5y6 ${trackName}** — Reunión ${meeting.meetingNumber}\n`];
+  let hasAnyForecast = false;
 
   let validaNum = 1;
   for (let rn = validasStart; rn <= maxRace; rn++) {
@@ -228,6 +244,7 @@ async function buildPack5y6(races: any[], validasStart: number, maxRace: number,
     const consensus = await getConsensus(race._id.toString());
 
     if (consensus?.first) {
+      hasAnyForecast = true;
       const secondPart = consensus.second ? ` · ${consensus.second.name} (#${consensus.second.dorsal})` : '';
       lines.push(`V${validaNum} (C${rn}): **${consensus.first.name}** (#${consensus.first.dorsal})${secondPart}`);
     } else {
@@ -236,8 +253,15 @@ async function buildPack5y6(races: any[], validasStart: number, maxRace: number,
     validaNum++;
   }
 
+  if (!hasAnyForecast) {
+    return {
+      content: `🏇 **5y6 ${trackName}** — Reunión ${meeting.meetingNumber}\nAún no hay pronósticos publicados para las válidas, socio. No se te cobró nada.`,
+      action: 'free',
+    };
+  }
+
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), action: 'pack_5y6' };
+  return { content: lines.join('\n'), action: 'marks_all_day' };
 }
 
 async function buildBestWorkout(races: any[], raceNum: number, trackName: string, meeting: any): Promise<DirectResponse | null> {
@@ -256,7 +280,7 @@ async function buildBestWorkout(races: any[], raceNum: number, trackName: string
     return {
       content: `No tengo trabajos recientes registrados para la C${raceNum}${validaTag} de ${trackName}, socio.${DISCLAIMER}`,
       raceNumber: raceNum,
-      action: 'analysis_1race',
+      action: 'free',
     };
   }
 
@@ -266,7 +290,7 @@ async function buildBestWorkout(races: any[], raceNum: number, trackName: string
     DISCLAIMER,
   ];
 
-  return { content: lines.join('\n'), raceNumber: raceNum, action: 'analysis_1race' };
+  return { content: lines.join('\n'), raceNumber: raceNum, action: 'free' };
 }
 
 async function buildRaceProgram(races: any[], raceNum: number, trackName: string): Promise<DirectResponse | null> {
@@ -360,7 +384,7 @@ async function buildAllWorkouts(races: any[], trackName: string, meeting: any): 
   }
 
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), action: 'marks_1race' };
+  return { content: lines.join('\n'), action: 'free' };
 }
 
 async function buildRaceWorkouts(races: any[], raceNum: number, trackName: string, meeting: any): Promise<DirectResponse | null> {
@@ -403,5 +427,5 @@ async function buildRaceWorkouts(races: any[], raceNum: number, trackName: strin
   }
 
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), raceNumber: raceNum, action: 'marks_1race' };
+  return { content: lines.join('\n'), raceNumber: raceNum, action: 'free' };
 }
