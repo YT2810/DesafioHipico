@@ -98,11 +98,13 @@ describe('detectAction — clasificación de mensajes', () => {
 describe('ACTION_COSTS — tabla de precios', () => {
   test('free = 0 golds', () => expect(ACTION_COSTS.free).toBe(0));
   test('marks_1race = 3 golds', () => expect(ACTION_COSTS.marks_1race).toBe(3));
-  test('analysis_1race = 5 golds', () => expect(ACTION_COSTS.analysis_1race).toBe(5));
-  test('pack_5y6 = 25 golds', () => expect(ACTION_COSTS.pack_5y6).toBe(25));
-  test('pack_full = 50 golds', () => expect(ACTION_COSTS.pack_full).toBe(50));
-  test('pack_full > pack_5y6 (reunión completa cuesta más)', () => {
-    expect(ACTION_COSTS.pack_full).toBeGreaterThan(ACTION_COSTS.pack_5y6);
+  test('marks_all_day = 15 golds', () => expect(ACTION_COSTS.marks_all_day).toBe(15));
+  test('pack_5y6 = 10 golds', () => expect(ACTION_COSTS.pack_5y6).toBe(10));
+  test('workouts = 2 golds', () => expect(ACTION_COSTS.workouts).toBe(2));
+  test('workouts_1horse = 1 gold', () => expect(ACTION_COSTS.workouts_1horse).toBe(1));
+  test('program = 1 gold', () => expect(ACTION_COSTS.program).toBe(1));
+  test('marks_all_day > pack_5y6 (reunión completa cuesta más)', () => {
+    expect(ACTION_COSTS.marks_all_day).toBeGreaterThan(ACTION_COSTS.pack_5y6);
   });
 });
 
@@ -157,14 +159,14 @@ describe('validateDataForAction — bloqueo de cobro por data insuficiente', () 
   });
 
   // Todos los tipos de acción de pago bloquean con 0 hcp
-  test('analysis_1race también bloquea si no hay data', () => {
-    expect(validateDataForAction(ctxRinconada0hcp, 'analysis_1race').isValid).toBe(false);
+  test('marks_all_day también bloquea si no hay data', () => {
+    expect(validateDataForAction(ctxRinconada0hcp, 'marks_all_day').isValid).toBe(false);
   });
   test('pack_5y6 también bloquea si no hay data', () => {
     expect(validateDataForAction(ctxRinconada0hcp, 'pack_5y6').isValid).toBe(false);
   });
-  test('pack_full también bloquea si no hay data', () => {
-    expect(validateDataForAction(ctxRinconada0hcp, 'pack_full').isValid).toBe(false);
+  test('workouts también bloquea si no hay data', () => {
+    expect(validateDataForAction(ctxRinconada0hcp, 'workouts').isValid).toBe(false);
   });
 
   // Contexto con múltiples carreras — toma el máximo CONSENSO
@@ -323,6 +325,85 @@ describe('extractContextParams — recarga de contexto dinámico', () => {
     expect(r.raceNumber).toBe(4);
     expect(r.validaRef).toBeUndefined();
   });
+
+  // ── Formatos de VÁLIDA ──
+  test('"1V" → validaRef 1', () => {
+    expect(extractContextParams('dame la 1v').validaRef).toBe(1);
+  });
+  test('"2V" → validaRef 2', () => {
+    expect(extractContextParams('2v').validaRef).toBe(2);
+  });
+  test('"1ra V" → validaRef 1', () => {
+    expect(extractContextParams('1ra v').validaRef).toBe(1);
+  });
+  test('"3ra válida" → validaRef 3', () => {
+    expect(extractContextParams('3ra válida').validaRef).toBe(3);
+  });
+  test('"primera V" → validaRef 1', () => {
+    expect(extractContextParams('primera v').validaRef).toBe(1);
+  });
+  test('"1 valida" (sin tilde) → validaRef 1', () => {
+    expect(extractContextParams('1 valida').validaRef).toBe(1);
+  });
+  test('"valencia" NO es válida → trackHint, no validaRef', () => {
+    const r = extractContextParams('dame los trabajos de valencia');
+    expect(r.validaRef).toBeUndefined();
+    expect(r.trackHint).toBe('valencia');
+  });
+  test('"1 valencia" → NO es validaRef, es trackHint', () => {
+    const r = extractContextParams('carrera 1 valencia');
+    expect(r.validaRef).toBeUndefined();
+    expect(r.raceNumber).toBe(1);
+    expect(r.trackHint).toBe('valencia');
+  });
+
+  // ── Formatos de CARRERA ──
+  test('"C1" → raceNumber 1', () => {
+    expect(extractContextParams('C1').raceNumber).toBe(1);
+  });
+  test('"c8" → raceNumber 8', () => {
+    expect(extractContextParams('c8').raceNumber).toBe(8);
+  });
+  test('"8C" → raceNumber 8', () => {
+    expect(extractContextParams('8c').raceNumber).toBe(8);
+  });
+  test('"8va carrera" → raceNumber 8', () => {
+    expect(extractContextParams('8va carrera').raceNumber).toBe(8);
+  });
+  test('"8va" sola → raceNumber 8 (no válida)', () => {
+    const r = extractContextParams('8va');
+    expect(r.raceNumber).toBe(8);
+    expect(r.validaRef).toBeUndefined();
+  });
+  test('"3ra" sola → raceNumber 3', () => {
+    expect(extractContextParams('3ra').raceNumber).toBe(3);
+  });
+  test('"la primera" → raceNumber 1 (NO primera válida)', () => {
+    const r = extractContextParams('la primera del domingo');
+    expect(r.raceNumber).toBe(1);
+    expect(r.validaRef).toBeUndefined();
+  });
+  test('"la octava" → raceNumber 8', () => {
+    expect(extractContextParams('la octava').raceNumber).toBe(8);
+  });
+  test('"la 8va" → raceNumber 8', () => {
+    expect(extractContextParams('la 8va').raceNumber).toBe(8);
+  });
+  test('"primera carrera" → raceNumber 1', () => {
+    expect(extractContextParams('primera carrera').raceNumber).toBe(1);
+  });
+  test('"carrera primera" → raceNumber 1', () => {
+    expect(extractContextParams('carrera primera').raceNumber).toBe(1);
+  });
+  test('"1ra carrera" → raceNumber 1', () => {
+    expect(extractContextParams('1ra carrera').raceNumber).toBe(1);
+  });
+  test('"C14" → raceNumber 14 (programa largo)', () => {
+    expect(extractContextParams('C14').raceNumber).toBe(14);
+  });
+  test('"última carrera" → raceNumber 99 sentinel', () => {
+    expect(extractContextParams('la última carrera').raceNumber).toBe(99);
+  });
 });
 
 // ── shouldAutoRefund ──────────────────────────────────────────────────────────
@@ -371,17 +452,17 @@ describe('checkGoldBalance — verificación de saldo', () => {
   test('usuario con 2 golds NO puede pedir marks_1race (cuesta 3)', () => {
     expect(checkGoldBalance(2, 'marks_1race').canAfford).toBe(false);
   });
-  test('usuario con 25 golds puede pedir pack_5y6', () => {
-    expect(checkGoldBalance(25, 'pack_5y6').canAfford).toBe(true);
+  test('usuario con 10 golds puede pedir pack_5y6', () => {
+    expect(checkGoldBalance(10, 'pack_5y6').canAfford).toBe(true);
   });
-  test('usuario con 24 golds NO puede pedir pack_5y6', () => {
-    expect(checkGoldBalance(24, 'pack_5y6').canAfford).toBe(false);
+  test('usuario con 9 golds NO puede pedir pack_5y6', () => {
+    expect(checkGoldBalance(9, 'pack_5y6').canAfford).toBe(false);
   });
   test('usuario con 0 golds puede chat libre (free = 0)', () => {
     expect(checkGoldBalance(0, 'free').canAfford).toBe(true);
   });
   test('devuelve el costo requerido correcto', () => {
-    expect(checkGoldBalance(10, 'analysis_1race').required).toBe(5);
+    expect(checkGoldBalance(10, 'workouts').required).toBe(2);
   });
   test('ejecución parcial: con 9 golds → alcanza para 3 carreras marks_1race (3×3)', () => {
     const carrerasPosibles = Math.floor(9 / ACTION_COSTS.marks_1race);

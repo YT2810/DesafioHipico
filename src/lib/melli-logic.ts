@@ -26,8 +26,13 @@ export function detectAction(content: string): DetectedAction {
     return { action: 'pack_full' };
   }
 
-  // "5y6" o "cinco y seis" explícito → pack_5y6 (pero no "válida" sola)
-  if (/5 ?y ?6|paquete 5y6|cinco y seis/.test(c)
+  // "todas las carreras" / "dame todas" (sin especificar marcas) → pack_full
+  if (/todas\s+las\s+carreras/.test(c) && !/carrera \d/.test(c)) {
+    return { action: 'pack_full' };
+  }
+
+  // "5y6", "cinco y seis", "las válidas" explícito → pack_5y6
+  if (/5 ?y ?6|paquete 5y6|cinco y seis|las v[aá]lidas/.test(c)
       && !/carrera \d/.test(c)
       && !/cómo|como|qué es|que es|explica|funciona|información|info/.test(c)) {
     return { action: 'pack_5y6' };
@@ -180,67 +185,66 @@ export interface ContextParams {
 
 export function extractContextParams(message: string): ContextParams {
   const c = message.toLowerCase();
-
-  const ORDINALS: Record<string, number> = {
-    primera: 1, segundo: 2, segunda: 2, tercera: 3, tercero: 3,
+  const O: Record<string, number> = {
+    primera: 1, primero: 1, segundo: 2, segunda: 2, tercera: 3, tercero: 3,
     cuarta: 4, cuarto: 4, quinta: 5, quinto: 5, sexta: 6, sexto: 6,
     séptima: 7, septima: 7, séptimo: 7, septimo: 7,
     octava: 8, octavo: 8, novena: 9, noveno: 9, décima: 10, decima: 10,
     undécima: 11, undecima: 11, duodécima: 12, duodecima: 12,
   };
-  const ORDINAL_WORDS = 'primera|segunda|tercera|cuarta|quinta|sexta|s[eé]ptima|octava|novena|d[eé]cima|und[eé]cima|duod[eé]cima';
-
-  // ── Detectar "última carrera" / "la ultima" → flag especial ──
+  const W = 'primera|primero|segunda|segundo|tercera|tercero|cuarta|cuarto|quinta|quinto|sexta|sexto|s[eé]ptima|s[eé]ptimo|octava|octavo|novena|noveno|d[eé]cima|d[eé]cimo|und[eé]cima|und[eé]cimo|duod[eé]cima|duod[eé]cimo';
+  const S = '(?:ra|da|ta|va|ava|ro|do|to|vo|avo|era|ero|na|no|ma|mo|°|º)';
   const isUltima = /[uú]ltim[ao]/.test(c);
 
-  // ── Detectar referencia a "Nth válida" PRIMERO (tiene prioridad sobre carrera ordinaria) ──
-  // Ejemplos: "6ta válida", "sexta válida", "1ra válida", "primera válida"
-  const VALIDA_ORDINAL = new RegExp(`(${ORDINAL_WORDS}|\\d{1,2})[a-z°]*\\s+v[aá]lida`);
-  const validaMatch = c.match(VALIDA_ORDINAL);
+  // ── VÁLIDA: "válida/valida" keyword o abreviatura "V" (NO "valencia") ──
   let validaRef: number | undefined;
-  if (validaMatch) {
-    const raw = validaMatch[1];
-    validaRef = /\d/.test(raw) ? parseInt(raw) : ORDINALS[raw];
+  // "primera válida", "sexta valida"
+  const vA = c.match(new RegExp(`(${W})\\s+v[aá]lida`));
+  if (vA) validaRef = O[vA[1]];
+  // "1ra válida", "6ta valida", "1 válida"
+  if (!validaRef) {
+    const vB = c.match(new RegExp(`(\\d{1,2})\\s*${S}?\\s*v[aá]lida`));
+    if (vB) validaRef = parseInt(vB[1]);
+  }
+  // "primera V" (abreviatura, no "valencia")
+  if (!validaRef) {
+    const vC = c.match(new RegExp(`(${W})\\s+v(?!alencia|[aá]lida)\\b`));
+    if (vC) validaRef = O[vC[1]];
+  }
+  // "1V", "2V", "1ra V", "3rav" (número + V, no "valencia")
+  if (!validaRef) {
+    const vD = c.match(new RegExp(`(\\d{1,2})\\s*${S}?\\s*v(?!alencia|[aá]lida)\\b`));
+    if (vD) validaRef = parseInt(vD[1]);
   }
 
-  // ── Detectar carrera ordinaria ──
+  // ── CARRERA: número absoluto ──
   let raceNumber: number | undefined;
-
-  // "la primera", "la segunda" (sin "válida") → raceNumber directo
-  // "la primera" = C1, "la tercera" = C3. Solo "primera válida" usa validaRef.
   if (!validaRef && !isUltima) {
-    const bareOrdMatch = c.match(new RegExp(`(?:^|\\b(?:y|en|de)\\s+)(?:la\\s+|el\\s+)(${ORDINAL_WORDS})(?!\\s+v[aá]lida)\\b`));
-    if (bareOrdMatch) {
-      const raw = bareOrdMatch[1];
-      const n = ORDINALS[raw];
-      if (n) raceNumber = n; // "la primera" = C1, not "primera válida"
-    }
+    const r1 = c.match(/\bc\s*(\d{1,2})\b/);                                    // C1, c 2
+    const r2 = c.match(/\b(\d{1,2})\s*c\b(?!arrera)/);                           // 1C, 8c
+    const r3 = c.match(/\bcarrera\s+(\d{1,2})\b/);                               // carrera 1
+    const r4 = c.match(new RegExp(`\\bcarrera\\s+(${W})`));                       // carrera primera
+    const r5 = c.match(new RegExp(`(${W})\\s+carrera`));                          // primera carrera
+    const r6 = c.match(new RegExp(`(\\d{1,2})\\s*${S}\\s+carrera`));              // 1ra carrera
+    const r7 = c.match(new RegExp(`(?:la|el)\\s+(${W})(?!\\s+v)\\b`));           // la primera
+    const r8 = c.match(new RegExp(`(?:la|el)\\s+(\\d{1,2})\\s*${S}(?!\\s*v)\\b`)); // la 8va
+    const r9 = c.match(new RegExp(`\\b(\\d{1,2})\\s*${S}(?!\\s*v)\\b`));         // 8va, 3ra
+    if (r1) raceNumber = parseInt(r1[1]);
+    else if (r2) raceNumber = parseInt(r2[1]);
+    else if (r3) raceNumber = parseInt(r3[1]);
+    else if (r4) raceNumber = O[r4[1]];
+    else if (r5) raceNumber = O[r5[1]];
+    else if (r6) raceNumber = parseInt(r6[1]);
+    else if (r7) raceNumber = O[r7[1]];
+    else if (r8) raceNumber = parseInt(r8[1]);
+    else if (r9) raceNumber = parseInt(r9[1]);
   }
 
-  // Explicit "carrera N", "CN", "1ra", "2da", etc. — solo si aún no hay raceNumber
-  if (!raceNumber && !validaMatch && !validaRef) {
-    const numericMatch = c.match(/(?:carrera|c)\s*(\d{1,2})/);
-    const ordAfter  = c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`));
-    const ordBefore = c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`));
-    const shortOrdMatch = c.match(/\b(\d{1,2})\s*(?:ra|da|ta|ro|do|to|era|ero|°|º)\b/);
-    const ordWord = ordAfter?.[1] ?? ordBefore?.[1];
-    raceNumber = numericMatch
-      ? parseInt(numericMatch[1])
-      : ordWord ? ORDINALS[ordWord]
-      : shortOrdMatch ? parseInt(shortOrdMatch[1])
-      : undefined;
-  }
+  if (isUltima && !raceNumber && !validaRef) raceNumber = 99;
 
-  // ── "última carrera" / "la ultima" → raceNumber = 99 sentinel (chat route resolves to maxRace) ──
-  if (isUltima && !raceNumber && !validaRef) {
-    raceNumber = 99; // sentinel — resolved by generateDirectResponse to actual last race
-  }
-
-  // Detectar hipódromo mencionado
   const isRinconada = /rincoa?n?a?da?|la rinca|rinca/.test(c);
-  const isValencia  = /valencia/.test(c);
+  const isValencia  = /\bvalencia\b/.test(c);
   const trackHint: ContextParams['trackHint'] = isRinconada ? 'rinconada' : isValencia ? 'valencia' : undefined;
-
   const needsRefresh = !!(raceNumber || validaRef || trackHint ||
     /traqueos?|inscrito|programa|quién viene|quien viene/.test(c));
 
