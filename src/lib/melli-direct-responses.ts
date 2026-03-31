@@ -36,7 +36,7 @@ const DISCLAIMER = '\n\n📊 DesafíoHípico.com — Análisis estadístico, no 
 export async function generateDirectResponse(params: DirectResponseParams): Promise<DirectResponse | null> {
   await connectDB();
 
-  const { intent, meetingId, raceNumber, validaRef } = params;
+  const { intent, meetingId, raceNumber, validaRef, horseName } = params;
 
   if (!meetingId) return null; // Sin reunión no podemos hacer nada directo
 
@@ -74,6 +74,11 @@ export async function generateDirectResponse(params: DirectResponseParams): Prom
 
     case 'pack_5y6':
       return await buildPack5y6(races, validasStart, maxRace, trackName, meeting);
+
+    case 'horse_workout':
+      return horseName
+        ? await buildHorseWorkout(horseName, races, targetRaceNum, trackName, meeting)
+        : null;
 
     case 'best_workout':
     case 'workouts_all':
@@ -349,6 +354,73 @@ async function findWorkouts(horseName: string, limit = 2): Promise<Array<{ worko
     workout: w,
     days: Math.floor((now.getTime() - new Date(w.workoutDate).getTime()) / 86400000),
   }));
+}
+
+async function buildHorseWorkout(
+  horseName: string, races: any[], targetRaceNum: number | undefined, trackName: string, meeting: any,
+): Promise<DirectResponse | null> {
+  let resolvedName = horseName;
+  let dorsal: number | undefined;
+
+  // Si viene como "#5" → buscar por dorsal en los inscritos de la carrera
+  if (horseName.startsWith('#')) {
+    dorsal = parseInt(horseName.slice(1));
+    if (!targetRaceNum) {
+      return {
+        content: `Dime el número de carrera para buscar el dorsal #${dorsal}, socio.`,
+        action: 'free',
+      };
+    }
+    const race = races.find(r => r.raceNumber === targetRaceNum);
+    if (!race) return { content: `No encontré la carrera ${targetRaceNum}, socio.`, action: 'free' };
+
+    const entry = await Entry.findOne({ raceId: race._id, dorsalNumber: dorsal })
+      .populate('horseId', 'name').lean() as any;
+    if (!entry) {
+      return {
+        content: `No encontré el dorsal #${dorsal} en la C${targetRaceNum} de ${trackName}, socio.`,
+        raceNumber: targetRaceNum,
+        action: 'free',
+      };
+    }
+    resolvedName = entry.horseId?.name ?? entry.horseName ?? '';
+  }
+
+  if (!resolvedName) return null;
+
+  // Buscar workouts con matching flexible (primer token del nombre para manejar typos parciales)
+  const now = new Date();
+  const nameTokens = resolvedName.toUpperCase().split(/\s+/).filter(t => t.length > 2);
+  const searchRegex = nameTokens.length > 1
+    ? new RegExp(nameTokens.slice(0, 2).join('.*'), 'i') // "GRAN HACEDION" → /GRAN.*HACEDION/i
+    : new RegExp(nameTokens[0] ?? resolvedName, 'i');
+
+  const workouts = await WorkoutEntry.find({
+    horseName: searchRegex,
+    workoutDate: { $gte: new Date(now.getTime() - 30 * 24 * 3600 * 1000) },
+    distance: { $gt: 0 },
+  }).sort({ workoutDate: -1 }).limit(5).lean() as any[];
+
+  if (!workouts.length) {
+    return {
+      content: `No encontré trabajos recientes de **${resolvedName}** en los últimos 30 días, socio.${dorsal ? ` (Dorsal #${dorsal} C${targetRaceNum})` : ''}${DISCLAIMER}`,
+      raceNumber: targetRaceNum,
+      action: 'free',
+    };
+  }
+
+  // Verificar que los resultados coincidan razonablemente
+  const confirmedName = workouts[0].horseName ?? resolvedName;
+
+  const lines: string[] = [`🏇 **Trabajos de ${confirmedName}**${dorsal ? ` (Dorsal #${dorsal})` : ''}\n`];
+  for (const w of workouts) {
+    const days = Math.floor((now.getTime() - new Date(w.workoutDate).getTime()) / 86400000);
+    lines.push(`• ${formatWorkout(w, days)}`);
+    if (w.trainerName) lines.push(`  Entrenador: ${w.trainerName}`);
+  }
+
+  lines.push(DISCLAIMER);
+  return { content: lines.join('\n'), raceNumber: targetRaceNum, action: 'workouts_1horse' };
 }
 
 async function buildAllWorkouts(races: any[], trackName: string, meeting: any): Promise<DirectResponse> {

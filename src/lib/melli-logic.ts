@@ -4,17 +4,19 @@
  */
 
 export const ACTION_COSTS: Record<string, number> = {
-  marks_1race:    3,   // Consenso de 1 carrera (top 2 caballos)
-  marks_all_day: 15,   // Consenso de todas las carreras del día
-  pack_5y6:      10,   // Consenso de las 6 válidas (subconjunto)
-  workouts:       2,   // Trabajos/traqueos (1 carrera o todos)
-  program:        1,   // Programa (inscritos + jinetes)
-  free:           0,   // Conversación sin consulta a DB
+  marks_1race:      3,   // Consenso de 1 carrera (top 2 caballos)
+  marks_all_day:   15,   // Consenso de todas las carreras del día
+  pack_5y6:        10,   // Consenso de las 6 válidas (subconjunto)
+  workouts:         2,   // Trabajos/traqueos de TODOS los caballos de 1 carrera
+  workouts_1horse:  1,   // Trabajo de 1 caballo específico
+  program:          1,   // Programa (inscritos + jinetes)
+  free:             0,   // Conversación sin consulta a DB
 };
 
 export interface DetectedAction {
   action: string;
   raceNumber?: number;
+  horseName?: string;
 }
 
 export function detectAction(content: string): DetectedAction {
@@ -52,8 +54,21 @@ export function detectAction(content: string): DetectedAction {
     return { action: 'marks_1race' };
   }
 
-  // "trabajos" / "traqueos" → workouts
+  // "trabajos" / "traqueos" → workouts (detectar caballo específico si lo hay)
   if (/trabajos?|traqueos?|briseos?/.test(c)) {
+    // "trabajos de GRAN HACEDION" / "traqueos de el perfecto"
+    const horseMatch = c.match(/(?:trabajos?|traqueos?|briseos?)\s+(?:de(?:l)?\s+)([a-záéíóúñ][a-záéíóúñ\s]{2,})/i);
+    if (horseMatch) {
+      const name = horseMatch[1].trim().toUpperCase();
+      if (!/^(?:la|el|un|una|los|las|carrera|hipódromo|hipodromo|rinconada|valencia)$/i.test(name)) {
+        return { action: 'workouts_1horse', horseName: name };
+      }
+    }
+    // "traqueos del 5" / "trabajos del número 3" / "trabajos del #7"
+    const dorsalMatch = c.match(/(?:trabajos?|traqueos?|briseos?)\s+(?:de(?:l)?\s+)(?:(?:número|numero|#|n[°º]?)\s*)?(\d{1,2})\b/);
+    if (dorsalMatch) {
+      return { action: 'workouts_1horse', horseName: `#${dorsalMatch[1]}` };
+    }
     const m = c.match(/carrera ?(\d+)/);
     return { action: 'workouts', raceNumber: m ? parseInt(m[1]) : undefined };
   }
@@ -188,30 +203,33 @@ export function extractContextParams(message: string): ContextParams {
     validaRef = /\d/.test(raw) ? parseInt(raw) : ORDINALS[raw];
   }
 
-  // ── Bare ordinals: "la segunda", "y la tercera" (sin "carrera"/"válida") → treat as validaRef ──
-  // Only match if NOT already matched as válida and NOT followed by "carrera"
+  // ── Detectar carrera ordinaria ──
+  let raceNumber: number | undefined;
+
+  // "la primera", "la segunda" (sin "válida") → raceNumber directo
+  // "la primera" = C1, "la tercera" = C3. Solo "primera válida" usa validaRef.
   if (!validaRef && !isUltima) {
-    const bareOrdMatch = c.match(new RegExp(`(?:^|\\b(?:y|en|de)\\s+)(?:la\\s+|el\\s+)(${ORDINAL_WORDS})(?!\\s+carrera)\\b`));
+    const bareOrdMatch = c.match(new RegExp(`(?:^|\\b(?:y|en|de)\\s+)(?:la\\s+|el\\s+)(${ORDINAL_WORDS})(?!\\s+v[aá]lida)\\b`));
     if (bareOrdMatch) {
       const raw = bareOrdMatch[1];
       const n = ORDINALS[raw];
-      // If ordinal is small (1-6), likely a válida reference in conversation context
-      if (n && n <= 6) validaRef = n;
+      if (n) raceNumber = n; // "la primera" = C1, not "primera válida"
     }
   }
 
-  // ── Detectar carrera ordinaria (solo si NO es referencia a válida) ──
-  const numericMatch = !validaMatch && !validaRef ? c.match(/(?:carrera|c)\s*(\d{1,2})/) : null;
-  const ordAfter  = !validaMatch && !validaRef ? c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`)) : null;
-  const ordBefore = !validaMatch && !validaRef ? c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`)) : null;
-  // También capturar "3ra", "1ra", "2da", "4ta", "5ta" solos (sin la palabra "carrera")
-  const shortOrdMatch = !validaMatch && !validaRef ? c.match(/\b(\d{1,2})\s*(?:ra|da|ta|ro|do|to|era|ero|°|º)\b/) : null;
-  const ordWord   = ordAfter?.[1] ?? ordBefore?.[1];
-  let raceNumber = numericMatch
-    ? parseInt(numericMatch[1])
-    : ordWord ? ORDINALS[ordWord]
-    : shortOrdMatch ? parseInt(shortOrdMatch[1])
-    : undefined;
+  // Explicit "carrera N", "CN", "1ra", "2da", etc. — solo si aún no hay raceNumber
+  if (!raceNumber && !validaMatch && !validaRef) {
+    const numericMatch = c.match(/(?:carrera|c)\s*(\d{1,2})/);
+    const ordAfter  = c.match(new RegExp(`(?:carrera\\s+)(${ORDINAL_WORDS})`));
+    const ordBefore = c.match(new RegExp(`(${ORDINAL_WORDS})(?:\\s+carrera)`));
+    const shortOrdMatch = c.match(/\b(\d{1,2})\s*(?:ra|da|ta|ro|do|to|era|ero|°|º)\b/);
+    const ordWord = ordAfter?.[1] ?? ordBefore?.[1];
+    raceNumber = numericMatch
+      ? parseInt(numericMatch[1])
+      : ordWord ? ORDINALS[ordWord]
+      : shortOrdMatch ? parseInt(shortOrdMatch[1])
+      : undefined;
+  }
 
   // ── "última carrera" / "la ultima" → raceNumber = 99 sentinel (chat route resolves to maxRace) ──
   if (isUltima && !raceNumber && !validaRef) {

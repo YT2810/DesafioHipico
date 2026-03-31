@@ -49,20 +49,23 @@ Guiar al usuario a pedir algo ESPECÍFICO. Cuando pida datos concretos,
 el sistema responde con data real de la DB automáticamente. Tú solo manejas la conversación.
 
 QUÉ PUEDE PEDIR EL USUARIO:
-- "Marcas de la carrera 3" o "dame un dato en valencia" → 2 marcas por carrera (consenso de handicappers)
-- "Trabajos de la 5ta" o "traqueos" → trabajos recientes de inscritos
-- "5y6 completo" o "las válidas" → marcas de las 6 válidas
-- "Programa de la 3ra" → inscritos con jinete/entrenador
+- "Marcas de la carrera 3" o "dame un dato en valencia" → 2 marcas por carrera (consenso de handicappers) [3G]
+- "Trabajos de GRAN HACEDION" o "traqueos del 5" → trabajo completo de UN caballo por nombre o dorsal [1G]
+- "Trabajos de la 5ta" o "traqueos de la carrera 3" → trabajos de TODOS los inscritos de 1 carrera [2G]
+- "5y6 completo" o "las válidas" → marcas de las 6 válidas [10G]
+- "Marcas de todo el día" → marcas de todas las carreras [15G]
+- "Programa de la 3ra" → inscritos con jinete [1G]
 
 REGLAS ABSOLUTAS:
 1. NUNCA menciones nombres de caballos, jinetes ni entrenadores. NO tienes esa información aquí.
 2. NUNCA inventes resultados, pronósticos, dorsales ni análisis de ningún tipo.
-3. Si piden datos de una carrera, diles: "Dime el número de carrera y te busco la data, socio."
-4. Si hay 2+ reuniones activas, pregunta cuál hipódromo.
-5. Si se quejan, reconoce brevemente sin discutir y ofrece alternativa.
-6. Fuera del hipismo → humor breve y redirige a lo que sí tienes.
-7. NUNCA digas "apuesta". Di: "los números favorecen", "el consenso apunta".
-8. Si el usuario lleva varios mensajes sin pedir data concreta, activa modo vendedor suave.`;
+3. Si piden trabajos sin especificar caballo ni carrera: "Dime el nombre del caballo o el número de carrera, socio."
+4. Si piden datos de una carrera sin número: "Dime el número de carrera y te busco la data, socio."
+5. Si hay 2+ reuniones activas, pregunta cuál hipódromo.
+6. Si se quejan, reconoce brevemente sin discutir y ofrece alternativa.
+7. Fuera del hipismo → humor breve y redirige a lo que sí tienes.
+8. NUNCA digas "apuesta". Di: "los números favorecen", "el consenso apunta".
+9. Si el usuario lleva varios mensajes sin pedir data concreta, activa modo vendedor suave.`;
 
 // Patrones de queja para guardar y revisar
 const COMPLAINT_RE = /no sirve|no funciona|mala respuesta|estafa|mentira|basura|p[eé]simo|horrible|cobr[óo] y no|robaron|robo|fraude|enga[ñn]o|in[uú]til|no sirves/i;
@@ -70,7 +73,7 @@ const COMPLAINT_RE = /no sirve|no funciona|mala respuesta|estafa|mentira|basura|
 // Intents que disparan consulta directa a DB (sin LLM)
 const DATA_INTENTS = new Set([
   'consensus_pick', 'top_picks_all', 'pack_5y6',
-  'best_workout', 'workouts_all',
+  'best_workout', 'workouts_all', 'horse_workout',
   'horse_detail', 'eliminated',
   'race_program', 'full_program',
 ]);
@@ -82,6 +85,7 @@ const ACTION_TO_INTENT: Record<string, string> = {
   pack_5y6: 'pack_5y6',
   pack_full: 'top_picks_all',
   workouts: 'workouts_all',
+  workouts_1horse: 'horse_workout',
 };
 
 export async function POST(req: NextRequest) {
@@ -138,6 +142,30 @@ export async function POST(req: NextRequest) {
 
   let isDataRequest = jargonIsData || regexIsData;
 
+  // ── Sticky intent: si el mensaje actual solo tiene # carrera pero sin intent claro,
+  //    buscar en mensajes previos del usuario qué pedía (trabajos, marcas, etc.) ──
+  if (!isDataRequest && (resolvedRaceNum || reqValidaRef)) {
+    const prevUserMsgs = messages
+      .filter((m: any) => m.role === 'user')
+      .slice(-5, -1) // últimos 4 mensajes del usuario (excluir el actual)
+      .map((m: any) => (m.content ?? '').toLowerCase());
+
+    for (const prev of prevUserMsgs.reverse()) {
+      const prevAction = detectAction(prev);
+      if (prevAction.action !== 'free') {
+        resolvedIntent = ACTION_TO_INTENT[prevAction.action] ?? resolvedIntent;
+        isDataRequest = true;
+        break;
+      }
+      const prevClassified = await classifyIntent(prev);
+      if (DATA_INTENTS.has(prevClassified.intent) && prevClassified.confidence !== 'low') {
+        resolvedIntent = prevClassified.intent;
+        isDataRequest = true;
+        break;
+      }
+    }
+  }
+
   // Guard: consensus_pick / workouts_all sin carrera específica → NO dump all, dejar que LLM embudo pregunte
   const needsRaceNumber = ['consensus_pick', 'workouts_all', 'best_workout'].includes(resolvedIntent);
   const hasSpecificRace = !!(resolvedRaceNum || reqValidaRef);
@@ -159,6 +187,7 @@ export async function POST(req: NextRequest) {
       meetingId: reqMeetingId,
       raceNumber: resolvedRaceNum,
       validaRef: reqValidaRef,
+      horseName: regexAction.horseName,
     });
 
     if (directResponse) {

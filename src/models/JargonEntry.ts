@@ -6,6 +6,7 @@ export type MelliIntent =
   | 'pack_5y6'            // Pedir las 6 válidas del 5y6
   | 'best_workout'        // Mejor trabajo/traqueo de una carrera
   | 'workouts_all'        // Traqueos generales del día
+  | 'horse_workout'       // Trabajo de un caballo específico por nombre o dorsal
   | 'horse_detail'        // Info de un caballo específico
   | 'eliminated'          // Caballos eliminados/retirados
   | 'race_program'        // Programa/inscritos de una carrera
