@@ -261,7 +261,7 @@ async function buildPack5y6(races: any[], validasStart: number, maxRace: number,
   }
 
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), action: 'marks_all_day' };
+  return { content: lines.join('\n'), action: 'pack_5y6' };
 }
 
 async function buildBestWorkout(races: any[], raceNum: number, trackName: string, meeting: any): Promise<DirectResponse | null> {
@@ -290,7 +290,7 @@ async function buildBestWorkout(races: any[], raceNum: number, trackName: string
     DISCLAIMER,
   ];
 
-  return { content: lines.join('\n'), raceNumber: raceNum, action: 'free' };
+  return { content: lines.join('\n'), raceNumber: raceNum, action: 'workouts' };
 }
 
 async function buildRaceProgram(races: any[], raceNum: number, trackName: string): Promise<DirectResponse | null> {
@@ -307,7 +307,7 @@ async function buildRaceProgram(races: any[], raceNum: number, trackName: string
     lines.push(`#${e.dorsalNumber} ${horse} | J: ${jockey}`);
   }
 
-  return { content: lines.join('\n'), raceNumber: raceNum, action: 'free' };
+  return { content: lines.join('\n'), raceNumber: raceNum, action: 'program' };
 }
 
 async function buildFullProgram(races: any[], trackName: string): Promise<DirectResponse> {
@@ -321,7 +321,7 @@ async function buildFullProgram(races: any[], trackName: string): Promise<Direct
     lines.push(`C${race.raceNumber}${tag} | ${race.distance ?? '?'}m | ${entries} inscritos`);
   }
 
-  return { content: lines.join('\n'), action: 'free' };
+  return { content: lines.join('\n'), action: 'program' };
 }
 
 // ── Workout handlers ──────────────────────────────────────────────────────────
@@ -384,7 +384,7 @@ async function buildAllWorkouts(races: any[], trackName: string, meeting: any): 
   }
 
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), action: 'free' };
+  return { content: lines.join('\n'), action: 'workouts' };
 }
 
 async function buildRaceWorkouts(races: any[], raceNum: number, trackName: string, meeting: any): Promise<DirectResponse | null> {
@@ -427,5 +427,5 @@ async function buildRaceWorkouts(races: any[], raceNum: number, trackName: strin
   }
 
   lines.push(DISCLAIMER);
-  return { content: lines.join('\n'), raceNumber: raceNum, action: 'free' };
+  return { content: lines.join('\n'), raceNumber: raceNum, action: 'workouts' };
 }

@@ -4,9 +4,12 @@
  */
 
 export const ACTION_COSTS: Record<string, number> = {
-  marks_1race:    3,   // Marcas de 1 carrera
-  marks_all_day: 15,   // Marcas de todo el día
-  free:           0,   // Todo lo demás gratis por ahora
+  marks_1race:    3,   // Consenso de 1 carrera (top 2 caballos)
+  marks_all_day: 15,   // Consenso de todas las carreras del día
+  pack_5y6:      10,   // Consenso de las 6 válidas (subconjunto)
+  workouts:       2,   // Trabajos/traqueos (1 carrera o todos)
+  program:        1,   // Programa (inscritos + jinetes)
+  free:           0,   // Conversación sin consulta a DB
 };
 
 export interface DetectedAction {
