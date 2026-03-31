@@ -24,11 +24,10 @@ export default function ElMelliChat() {
   const [goldBalance, setGoldBalance] = useState<number | null>(null);
   const [activeMeetings, setActiveMeetings] = useState<any[]>([]);
   const [pulse, setPulse] = useState(true);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareMsg, setShareMsg] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const roles: string[] = (session?.user as any)?.roles ?? [];
-  const isAdmin = roles.includes('admin');
 
   const loadContext = async (meetingId?: string, raceNumber?: number) => {
     try {
@@ -41,6 +40,7 @@ export default function ElMelliChat() {
         const data = await res.json();
         setContext(data.context ?? '');
         if (data.meetings?.length) setActiveMeetings(data.meetings);
+        if (typeof data.goldBalance === 'number') setGoldBalance(data.goldBalance);
 
         // Solo mostrar bienvenida en la carga inicial (sin parámetros)
         if (!meetingId && !raceNumber) {
@@ -223,7 +223,7 @@ export default function ElMelliChat() {
       {/* ── Floating Button ── */}
       {!open && (
         <button
-          onClick={isAdmin ? handleOpen : () => setOpen(true)}
+          onClick={handleOpen}
           className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95 pr-4"
           style={{
             background: `linear-gradient(135deg, #1a1200 0%, #2a1e00 100%)`,
@@ -251,36 +251,8 @@ export default function ElMelliChat() {
         </button>
       )}
 
-      {/* ── Coming Soon Panel (non-admin) ── */}
-      {open && !isAdmin && (
-        <div
-          className="fixed bottom-4 right-4 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl border"
-          style={{
-            width: 'min(320px, calc(100vw - 2rem))',
-            background: '#0d0d0d',
-            borderColor: `${GOLD}40`,
-            boxShadow: `0 0 40px ${GOLD}20`,
-          }}
-        >
-          <div className="flex items-center gap-3 px-4 py-3" style={{ background: `linear-gradient(135deg, #1a1200, #2a1e00)`, borderBottom: `1px solid ${GOLD}30` }}>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-black shrink-0" style={{ backgroundColor: GOLD, color: '#000' }}>🏇</div>
-            <div className="flex-1">
-              <p className="text-sm font-black leading-none" style={{ color: GOLD }}>El Melli</p>
-              <p className="text-[10px] text-gray-500 mt-0.5">Analista Hípico IA</p>
-            </div>
-            <button onClick={() => setOpen(false)} className="text-gray-600 hover:text-gray-300 transition-colors text-lg px-1">✕</button>
-          </div>
-          <div className="px-5 py-6 text-center space-y-3">
-            <p className="text-2xl">⏳</p>
-            <p className="text-sm font-black" style={{ color: GOLD }}>¡El Melli llega pronto, socio!</p>
-            <p className="text-xs text-gray-400 leading-relaxed">El analista hípico IA de Desafío Hípico está en fase de entrenamiento. Pronto podrás consultarle traqueos, inscritos y pronósticos.</p>
-            <p className="text-[10px] font-bold tracking-widest mt-2" style={{ color: `${GOLD}60` }}>YA CORRIÓ · YA GANÓ · YA COBRÓ</p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Chat Panel (admin only) ── */}
-      {open && isAdmin && (
+      {/* ── Chat Panel ── */}
+      {open && (
         <div
           className="fixed bottom-4 right-4 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl border"
           style={{
@@ -411,12 +383,55 @@ export default function ElMelliChat() {
             </button>
           </div>
 
-          {/* Slogan footer */}
+          {/* Share to earn + Slogan footer */}
           <div
-            className="text-center py-1.5 text-[9px] font-bold tracking-widest shrink-0"
-            style={{ color: `${GOLD}60`, borderTop: `1px solid ${GOLD}10` }}
+            className="text-center py-1.5 shrink-0 space-y-1"
+            style={{ borderTop: `1px solid ${GOLD}10` }}
           >
-            YA CORRIÓ · YA GANÓ · YA COBRÓ
+            {shareMsg ? (
+              <p className="text-[10px] px-3" style={{ color: GOLD }}>{shareMsg}</p>
+            ) : (
+              <button
+                disabled={shareLoading}
+                onClick={async () => {
+                  setShareLoading(true);
+                  setShareMsg('');
+                  const shareData = {
+                    title: 'El Melli — Analista Hípico IA',
+                    text: 'Estoy usando la IA de @DesafioHipico para analizar la jornada hípica. ¡Regístrate y recibe tokens gratis!',
+                    url: 'https://www.desafiohipico.com?ref=share',
+                  };
+                  try {
+                    if (navigator.share) {
+                      await navigator.share(shareData);
+                    } else {
+                      await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+                    }
+                    const res = await fetch('/api/melli/share-bonus', { method: 'POST' });
+                    if (res.ok) {
+                      const d = await res.json();
+                      setGoldBalance(d.newBalance);
+                      setShareMsg(`+${d.granted} Golds acreditados. ¡Gracias, socio!`);
+                    } else {
+                      const err = await res.json().catch(() => ({}));
+                      setShareMsg(err.message ?? 'Ya reclamaste tu bonus hoy.');
+                    }
+                  } catch {
+                    setShareMsg('Comparte para reclamar tu bonus.');
+                  } finally {
+                    setShareLoading(false);
+                    setTimeout(() => setShareMsg(''), 5000);
+                  }
+                }}
+                className="text-[10px] px-3 py-0.5 rounded-full transition-all hover:opacity-80"
+                style={{ color: GOLD, border: `1px solid ${GOLD}30`, background: '#1a1200' }}
+              >
+                🎁 Compartir y ganar 5 Golds
+              </button>
+            )}
+            <p className="text-[9px] font-bold tracking-widest" style={{ color: `${GOLD}60` }}>
+              YA CORRIÓ · YA GANÓ · YA COBRÓ
+            </p>
           </div>
         </div>
       )}

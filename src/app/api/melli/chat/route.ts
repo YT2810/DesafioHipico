@@ -89,10 +89,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const roles: string[] = (session.user as any)?.roles ?? [];
-  if (!roles.includes('admin')) {
-    return NextResponse.json({ error: 'coming_soon' }, { status: 403 });
-  }
+  // Chat abierto a todos los usuarios autenticados (lanzamiento 24h)
 
   const body = await req.json();
   const { messages, meetingId: reqMeetingId, raceNumber: reqRaceNumber, validaRef: reqValidaRef } = body;

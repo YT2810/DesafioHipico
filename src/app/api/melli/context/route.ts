@@ -20,6 +20,7 @@ import HandicapperProfile from '@/models/HandicapperProfile';
 import WorkoutEntry from '@/models/WorkoutEntry';
 import Person from '@/models/Person';
 import Horse from '@/models/Horse';
+import User from '@/models/User';
 import '@/models/Track';
 
 export async function GET(req: NextRequest) {
@@ -170,6 +171,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Gold balance for the header badge
+    const userId = (session.user as any)?.id;
+    const userDoc = userId ? await User.findById(userId).select('balance').lean() as any : null;
+    const goldBalance = userDoc?.balance?.golds ?? 0;
+
     return NextResponse.json({
       context: lines.join('\n'),
       meetings: activeMeetings.map((m: any) => ({
@@ -180,6 +186,7 @@ export async function GET(req: NextRequest) {
         status: m.status,
       })),
       hasRaceData: !!targetMeeting,
+      goldBalance,
     });
 
   } catch (err: any) {
