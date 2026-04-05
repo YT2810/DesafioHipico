@@ -20,26 +20,38 @@ export async function GET() {
 
     const now = new Date();
 
-    // Prefer: active → today scheduled → next upcoming → last finished
     const todayStart = new Date(now);
     todayStart.setUTCHours(0, 0, 0, 0);
     const todayEnd = new Date(now);
     todayEnd.setUTCHours(23, 59, 59, 999);
 
-    let meeting = await Meeting.findOne({ status: 'active' })
+    // Auto-finish stale meetings: 'active' from past days → 'finished'
+    await Meeting.updateMany(
+      { status: 'active', date: { $lt: todayStart } },
+      { $set: { status: 'finished' } },
+    );
+
+    // Priority: 1) active today → 2) today's meeting → 3) next upcoming → 4) last finished
+    let meeting = await Meeting.findOne({
+      status: 'active',
+      date: { $gte: todayStart, $lte: todayEnd },
+    })
       .sort({ date: -1 })
       .populate('trackId', 'name location')
       .lean() as any;
 
     if (!meeting) {
-      meeting = await Meeting.findOne({ date: { $gte: todayStart, $lte: todayEnd } })
+      meeting = await Meeting.findOne({
+        date: { $gte: todayStart, $lte: todayEnd },
+        status: { $ne: 'cancelled' },
+      })
         .sort({ date: 1 })
         .populate('trackId', 'name location')
         .lean() as any;
     }
 
     if (!meeting) {
-      meeting = await Meeting.findOne({ date: { $gte: now } })
+      meeting = await Meeting.findOne({ date: { $gte: now }, status: { $ne: 'cancelled' } })
         .sort({ date: 1 })
         .populate('trackId', 'name location')
         .lean() as any;
