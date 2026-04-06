@@ -249,7 +249,7 @@ export default function HomePage() {
             </Link>
             <Link href="/retrospectos"
               className="flex-1 py-3 rounded-2xl text-sm font-semibold text-gray-300 bg-gray-900 border border-gray-700 hover:border-yellow-700/50 transition-colors text-center">
-              📚 Retrospectos
+              📋 Revista · Retrospectos
             </Link>
           </div>
           {!isLoggedIn && (
@@ -265,7 +265,7 @@ export default function HomePage() {
           <div className="w-full space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Próximas reuniones</p>
-              <span className="text-xs text-gray-700">Inscritos disponibles</span>
+              <span className="text-xs text-gray-700">Revista disponible</span>
             </div>
             {meetings.map(m => {
               const d = new Date(m.date);
@@ -284,12 +284,8 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Link href={`/revista/${m.id}`}
-                      className="px-2 py-1 rounded-lg text-[10px] font-bold border border-yellow-700/40 text-yellow-400 hover:bg-yellow-900/20 transition-colors">
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-yellow-700/40 text-yellow-400 hover:bg-yellow-900/20 transition-colors">
                       📰 Revista
-                    </Link>
-                    <Link href={`/programa/${m.id}`}
-                      className="px-2 py-1 rounded-lg text-[10px] font-bold border border-gray-700 text-gray-400 hover:border-gray-500 transition-colors">
-                      Inscritos
                     </Link>
                   </div>
                 </div>

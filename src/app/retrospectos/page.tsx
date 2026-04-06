@@ -10,26 +10,29 @@ const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','ago
 const DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
 export const metadata: Metadata = {
-  title: 'Programa y Retrospectos · Próximas Reuniones Hípicas Venezuela',
-  description: 'Consulta el programa de las próximas reuniones hípicas en La Rinconada y Valencia. Inscritos, historial, traqueos y datos para estudiar antes de apostar.',
+  title: 'Retrospectos Hípicos · Gaceta Hípica La Rinconada y Valencia',
+  description: 'Retrospectos hípicos Venezuela: inscritos, historial, traqueos y revista digital por reunión. La Rinconada y Valencia. Datos INH actualizados.',
   keywords: [
+    'retrospectos hípico',
+    'retrospecto hipico',
     'retrospectos la rinconada',
     'retrospectos la rinconada hoy',
-    'retrospectos hípicos la rinconada',
-    'retrospectos gaceta hípica',
+    'gaceta hípica retrospecto',
+    'gaceta hípica de hoy',
+    'gaceta hípica rinconada',
+    'gaceta hípica revista',
     'retrospectos carreras americanas',
+    'retrospectos valencia sábado',
+    'revista hípica la rinconada',
     'historial carreras la rinconada',
-    'historial hípico venezuela',
-    'revista hípica la rinconada por fecha',
     'datos hípicos la rinconada',
     'inh resultados por reunión',
-    'la rinconada datos',
     'gaceta hípica digital venezuela',
   ],
   alternates: { canonical: `${BASE}/retrospectos` },
   openGraph: {
-    title: 'Retrospectos La Rinconada · Desafío Hípico',
-    description: 'Historial completo de reuniones hípicas en Venezuela. Inscritos, resultados, traqueos y datos del INH por fecha.',
+    title: 'Retrospectos Hípicos · Gaceta Digital La Rinconada',
+    description: 'Retrospectos y revista digital hípica Venezuela. Inscritos, resultados, traqueos y datos del INH por reunión.',
     url: `${BASE}/retrospectos`,
     siteName: 'Desafío Hípico',
     locale: 'es_VE',
@@ -38,8 +41,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Retrospectos La Rinconada · Historial de Reuniones',
-    description: 'Historial de todas las reuniones hípicas venezolanas. Datos del INH.',
+    title: 'Retrospectos Hípicos · Gaceta La Rinconada y Valencia',
+    description: 'Revista y retrospectos hípicos de Venezuela. Datos del INH por reunión.',
     images: [`${BASE}/api/og`],
   },
 };
@@ -176,10 +179,10 @@ export default async function RetrospectosPage() {
               ← Desafío Hípico
             </Link>
             <h1 className="text-2xl font-black text-white mt-1 leading-tight">
-              Programa · Retrospectos
+              Retrospectos · Gaceta Hípica
             </h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              Inscritos · Historial · Traqueos · La Rinconada y Valencia
+              Revista digital · Inscritos · Historial · La Rinconada y Valencia
             </p>
           </div>
         </div>
@@ -232,7 +235,7 @@ export default async function RetrospectosPage() {
 
           {/* ── SEO footer ── */}
           <p className="text-[11px] text-gray-800 text-center leading-relaxed">
-            Retrospectos hípicos Venezuela · Historial La Rinconada · Gaceta hípica digital · Datos INH por reunión · HINAVA · Hipismo venezolano
+            Retrospectos hípico Venezuela · Gaceta hípica de hoy · Gaceta hípica La Rinconada · Retrospectos carreras americanas · Datos INH por reunión · Hipismo venezolano
           </p>
 
         </div>
