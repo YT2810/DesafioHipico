@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pronósticos Hípicos Venezuela — Expertos La Rinconada y Valencia Hoy',
+  title: 'Pronósticos La Rinconada · Expertos Hípicos Venezuela',
   description:
     'Pronósticos de expertos handicappers para las carreras de La Rinconada y Valencia. Consulta las selecciones de Braulio Inciarte, Guardi, Darío Piccinini, Antonio Medina y más. Actualizado cada reunión.',
   keywords: [
@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     'datos superfijos de la rinconada',
     'línea hípica para el 5 y 6',
     'superfijos la rinconada hoy',
+    'pronósticos la rinconada hoy domingo',
+    'cuánto pagó el 5y6 la rinconada',
+    'datos la rinconada hoy',
   ],
   openGraph: {
     title: 'Pronósticos de Expertos — La Rinconada y Valencia | Desafío Hípico',
@@ -48,14 +51,12 @@ export default function PronosticosLayout({ children }: { children: React.ReactN
   return (
     <>
       {children}
-      {/* SEO crawleable — visually hidden, semánticamente válido */}
-      <div className="sr-only">
-        <p>
-          Consulta los <strong>datos superfijos de La Rinconada</strong> publicados por expertos handicappers venezolanos.
-          <strong>Pronósticos hípicos Venezuela</strong>: selecciones y <strong>línea hípica para el 5 y 6</strong> de cada reunión en La Rinconada y Valencia.
-          Análisis de expertos como Guardi, Braulio Inciarte y Darío Piccinini. Actualizado cada jornada hípica.
-        </p>
-      </div>
+      {/* SEO footer — crawleable, semánticamente válido */}
+      <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pb-4">
+        Pronósticos La Rinconada hoy · Datos superfijos La Rinconada · Cuánto pagó el 5y6 La Rinconada ·
+        Pronósticos hípicos Venezuela · Línea hípica para el 5y6 · Expertos handicappers venezolanos ·
+        Pronósticos Valencia sábado · Selecciones hípicas INH
+      </p>
     </>
   );
 }

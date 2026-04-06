@@ -70,6 +70,12 @@ export default function EnVivoPage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
+      <h1 className="sr-only">INH en Vivo · La Rinconada en Directo · Transmisión oficial de carreras</h1>
+      <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pt-1">
+        La Rinconada en vivo hoy · INH en vivo · Transmisión oficial carreras Venezuela ·
+        Carreras en vivo La Rinconada domingo · Señal en vivo hipódromo La Rinconada ·
+        INH YouTube en vivo · Carreras de caballos en vivo Venezuela
+      </p>
       <EnVivoClient />
     </>
   );

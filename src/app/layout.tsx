@@ -22,7 +22,7 @@ const BASE_URL = 'https://www.desafiohipico.com';
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: 'Desafío Hípico · Inscritos, Pronósticos y Retirados La Rinconada y Valencia',
+    default: 'Desafío Hípico · Pronósticos e Inscritos La Rinconada',
     template: '%s | Desafío Hípico',
   },
   description:
@@ -63,6 +63,13 @@ export const metadata: Metadata = {
     '5 y 6 La Rinconada',
     'quiniela hípica Venezuela',
     'apostando carreras Venezuela',
+    // Alta intención específica
+    'cuánto pagó el 5y6 la rinconada',
+    'cuánto pagó el 5y6 hoy',
+    'datos la rinconada hoy',
+    'datos la rinconada',
+    'pronósticos la rinconada hoy domingo',
+    'datos valencia hípica',
   ],
   authors: [{ name: 'Desafío Hípico', url: BASE_URL }],
   creator: 'Desafío Hípico',

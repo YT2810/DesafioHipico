@@ -27,7 +27,7 @@ const BASE = 'https://www.desafiohipico.com';
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: 'Resultados Hípicos de Hoy Domingo | La Rinconada y Valencia — INH',
+    title: 'Resultados La Rinconada y Valencia · INH Hoy',
     description: 'Resultados oficiales de carreras hípicas en Venezuela: Hipódromo La Rinconada (Caracas) y Valencia. Posiciones, tiempos, dividendos y ganadores de cada carrera. Datos del INH actualizados cada jornada.',
     keywords: [
       'resultados hípicos de hoy domingo',
@@ -44,6 +44,10 @@ export async function generateMetadata(): Promise<Metadata> {
       'ganadores carreras la rinconada',
       'resultados hinava hoy',
       'resultados 5y6 hipódromo la rinconada hoy',
+      'cuánto pagó el 5y6 la rinconada',
+      'cuánto pagó el 5y6 hoy',
+      'datos la rinconada hoy',
+      'datos resultados la rinconada',
     ],
     openGraph: {
       title: 'Resultados Hípicos · La Rinconada y Valencia · INH',
@@ -69,6 +73,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function ResultadosPage() {
   return (
     <>
+      <h1 className="sr-only">Resultados La Rinconada y Valencia · Posiciones, Dividendos y Cuánto Pagó el 5y6</h1>
       {/* Structured data for SEO */}
       <script
         type="application/ld+json"
@@ -87,6 +92,11 @@ export default function ResultadosPage() {
         }}
       />
       <ResultadosClient />
+      <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pb-4">
+        Resultados La Rinconada hoy · Cuánto pagó el 5y6 La Rinconada · Dividendos La Rinconada ·
+        Resultados Valencia hoy · Cuánto pagó el 5y6 Valencia · Datos INH Venezuela ·
+        Ganadores carreras La Rinconada · Posiciones oficiales INH
+      </p>
     </>
   );
 }

@@ -139,9 +139,17 @@ export default async function TraqueosDatePage(
     ],
   };
 
+  const day = DAYS_ES[parsed.getUTCDay()];
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <h1 className="sr-only">{title} · Parciales y tiempos oficiales INH</h1>
+      <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pt-1">
+        {type} La Rinconada {day} {d} de {mon} de {y} · Parciales y tiempos de los ejemplares ·
+        Datos de la División de Toma Tiempos del INH · Traqueos oficiales La Rinconada ·
+        Trabajos caballos La Rinconada {mon} {y}
+      </p>
       <TraqueosDateClient date={date} />
     </>
   );

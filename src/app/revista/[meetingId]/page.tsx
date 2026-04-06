@@ -40,17 +40,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const isRinconada = (m.trackName ?? '').toLowerCase().includes('rinconada');
   const isValencia = (m.trackName ?? '').toLowerCase().includes('valencia');
 
-  const title = `Revista Hípica ${m.trackName} · Reunión ${m.meetingNumber} — ${dayName} ${dateStr}`;
+  const trackShort = isRinconada ? 'La Rinconada' : isValencia ? 'Valencia' : m.trackName;
+  const title = `${trackShort} Reunión ${m.meetingNumber} · Datos e Inscritos · ${dd} ${mon} ${yyyy}`;
   const description = `Inscritos, traqueos${data.hasWorkouts ? ' y trabajos de entrenamiento' : ''} de la Reunión ${m.meetingNumber} en ${m.trackName} del ${dayName} ${dateStr}. Historial de cada ejemplar, parciales y datos del INH.`;
 
   const keywords = [
-    `revista hipíca ${isRinconada ? 'la rinconada' : isValencia ? 'valencia' : m.trackName} ${mon} ${yyyy}`,
+    `datos ${isRinconada ? 'la rinconada' : 'valencia'} reunión ${m.meetingNumber}`,
     `inscritos ${isRinconada ? 'la rinconada' : 'valencia'} reunión ${m.meetingNumber}`,
-    `datos hipícos ${isRinconada ? 'la rinconada' : 'hipódromo venezuela'} ${dayName}`,
+    `datos ${isRinconada ? 'la rinconada' : 'hipódromo venezuela'} ${dayName} ${dd} de ${mon}`,
     `retrospectos la rinconada ${dd} de ${mon}`,
-    isRinconada ? 'gaceta hipíca rinconada digital' : `hipódromo valencia inscritos ${yyyy}`,
+    isRinconada ? `cuánto pagó el 5y6 la rinconada ${dd} de ${mon}` : `cuánto pagó el 5y6 valencia`,
+    isRinconada ? 'gaceta hípica rinconada digital' : `hipódromo valencia inscritos ${yyyy}`,
     'datos inh oficiales',
-    'traqueos y programa reunión',
+    'revista hípica la rinconada',
   ];
 
   const jsonLd = {
@@ -99,5 +101,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RevistaPage({ params }: Props) {
   const { meetingId } = await params;
-  return <RevistaClient meetingId={meetingId} />;
+  const data = await fetchMeta(meetingId);
+  const m = data?.meeting;
+
+  const dt = m ? new Date(m.date) : null;
+  const dd2 = dt?.getUTCDate();
+  const mon2 = dt ? MONTHS_ES[dt.getUTCMonth()] : '';
+  const yyyy2 = dt?.getUTCFullYear();
+  const dayName2 = dt ? DAYS_ES[dt.getUTCDay()] : '';
+  const isRinconada2 = (m?.trackName ?? '').toLowerCase().includes('rinconada');
+  const trackShort2 = isRinconada2 ? 'La Rinconada' : 'Valencia';
+
+  return (
+    <>
+      {m && (
+        <>
+          <h1 className="sr-only">
+            {trackShort2} · Reunión {m.meetingNumber} · {dayName2} {dd2} de {mon2} de {yyyy2} · Datos e Inscritos
+          </h1>
+          <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pt-1">
+            Datos {trackShort2} Reunión {m.meetingNumber} · Inscritos {trackShort2} {dayName2} {dd2} de {mon2} ·
+            {isRinconada2 ? ` Cuánto pagó el 5y6 La Rinconada · Retrospectos La Rinconada · Gaceta hípica` : ` Cuánto pagó el 5y6 Valencia · Retrospectos Valencia`} · Datos INH
+          </p>
+        </>
+      )}
+      <RevistaClient meetingId={meetingId} />
+    </>
+  );
 }

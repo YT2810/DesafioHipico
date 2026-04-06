@@ -36,7 +36,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     day: 'numeric', month: 'long', year: 'numeric',
   });
   const raceCount: number = data.races?.length ?? 0;
-  const title = `Inscritos Reunión ${m.meetingNumber} — ${m.trackName} ${dateShort}`;
+  const isRinconada = (m.trackName ?? '').toLowerCase().includes('rinconada');
+  const isValencia = (m.trackName ?? '').toLowerCase().includes('valencia');
+  const trackShort = isRinconada ? 'La Rinconada' : isValencia ? 'Valencia' : m.trackName;
+  const title = `Inscritos ${trackShort} Reunión ${m.meetingNumber} · ${dateShort}`;
   const description = `Programa oficial e inscritos para la Reunión ${m.meetingNumber} del ${m.trackName}${m.trackLocation ? ` (${m.trackLocation})` : ''}, ${dateStr}. ${raceCount} carrera${raceCount !== 1 ? 's' : ''} con dorsales, jinetes y entrenadores. INH · HINAVA.`;
 
   const ogImg = `${base}/api/og?title=${encodeURIComponent(`Inscritos ${m.trackName}`)}&subtitle=${encodeURIComponent(`Reunión ${m.meetingNumber} · ${dateShort}`)}`;
@@ -44,12 +47,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     keywords: [
-      `inscritos ${m.trackName}`,
-      `inscritos ${m.trackName} ${dateShort}`,
-      `programa ${m.trackName} ${dateShort}`,
+      `inscritos ${trackShort} reunión ${m.meetingNumber}`,
+      `datos ${trackShort} reunión ${m.meetingNumber}`,
+      `inscritos ${trackShort} ${dateShort}`,
+      `programa ${trackShort} ${dateShort}`,
       `inscritos reunión ${m.meetingNumber}`,
       'inscritos hipódromo Venezuela',
       'inscritos La Rinconada hoy',
+      'datos la rinconada hoy',
       'programa carreras Venezuela',
       'dorsales carreras Venezuela',
     ],
@@ -121,6 +126,10 @@ export default async function ProgramaPage({ params }: Props) {
     ],
   } : null;
 
+  const isR = (m?.trackName ?? '').toLowerCase().includes('rinconada');
+  const isV = (m?.trackName ?? '').toLowerCase().includes('valencia');
+  const tShort = isR ? 'La Rinconada' : isV ? 'Valencia' : (m?.trackName ?? '');
+
   return (
     <>
       {sportsEvents.length > 0 && (
@@ -134,6 +143,17 @@ export default async function ProgramaPage({ params }: Props) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
         />
+      )}
+      {m && (
+        <>
+          <h1 className="sr-only">
+            Inscritos {tShort} · Reunión {m.meetingNumber} · Datos y programa oficial
+          </h1>
+          <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pt-1">
+            Inscritos {tShort} Reunión {m.meetingNumber} · Datos {tShort} · Dorsales, jinetes y entrenadores ·
+            {isR ? ' Datos La Rinconada · Programa oficial INH' : ' Datos Valencia · Programa oficial HINAVA'}
+          </p>
+        </>
       )}
       <ProgramaClient meetingId={meetingId} />
     </>

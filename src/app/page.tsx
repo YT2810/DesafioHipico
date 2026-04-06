@@ -398,7 +398,10 @@ export default function HomePage() {
 
         {/* SEO footer text — visible but subtle, helps Google index key terms */}
         <p className="text-xs text-gray-800 text-center leading-relaxed">
-          Inscritos La Rinconada · Inscritos Valencia · Resultados hípicos Venezuela · Revista La Rinconada · Traqueos La Rinconada · Trabajos oficiales INH · Retrospectos La Rinconada · Datos hípicos INH · HINAVA
+          Pronósticos La Rinconada hoy · Datos La Rinconada · Inscritos La Rinconada · Inscritos Valencia ·
+          Cuánto pagó el 5y6 La Rinconada · Resultados hípicos Venezuela · Datos La Rinconada hoy domingo ·
+          Revista La Rinconada · Traqueos La Rinconada · Retrospectos La Rinconada · Datos hípicos INH · HINAVA ·
+          Pronósticos Valencia sábado · Datos Valencia hípica
         </p>
       </main>
 
