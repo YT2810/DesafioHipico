@@ -33,7 +33,6 @@ function StatCard({ value, label, accent }: { value: string; label: string; acce
 
 export default function HandicapperPublicClient({ id, initialData }: { id: string; initialData: ProfileData | null }) {
   const { data: session } = useSession();
-  const [sharing, setSharing] = useState(false);
   const [stats, setStats] = useState<HandicapperStats | null>(null);
   const data = initialData;
 
@@ -60,7 +59,6 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
   const sessionUserId = (session?.user as any)?.id as string | undefined;
   const sessionRoles: string[] = (session?.user as any)?.roles ?? [];
   const isOwner = !!(sessionUserId && profile.userId && sessionUserId === profile.userId);
-  const canShare = sessionRoles.includes('admin') || sessionRoles.includes('staff') || isOwner;
 
   const publicRaces = races.filter(r => !r.isVip && r.marks.length > 0);
   const vipCount = races.filter(r => r.isVip).length;
@@ -68,32 +66,6 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
   const dateStr = meeting
     ? new Date(meeting.date).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : null;
-
-  async function handleShareCard() {
-    if (sharing) return;
-    setSharing(true);
-    try {
-      const url = `/api/og/picks?id=${id}`;
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const filename = `pronosticos-${profile.pseudonym.replace(/\s+/g, '-').toLowerCase()}.png`;
-      const file = new File([blob], filename, { type: 'image/png' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Pronósticos de ${profile.pseudonym}${meeting ? ` — ${meeting.trackName} Reunión ${meeting.meetingNumber}` : ''}`,
-        });
-      } else {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
-    } catch { /* cancelled */ }
-    finally { setSharing(false); }
-  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -211,18 +183,6 @@ export default function HandicapperPublicClient({ id, initialData }: { id: strin
                 <p className="text-sm font-semibold text-white">{meeting.trackName} · Reunión {meeting.meetingNumber}</p>
                 {dateStr && <p className="text-xs text-gray-500 mt-0.5 capitalize">{dateStr}</p>}
               </div>
-              {canShare && (
-                <button
-                  onClick={handleShareCard}
-                  disabled={sharing}
-                  className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-yellow-500 hover:bg-yellow-400 text-black transition-colors disabled:opacity-50"
-                >
-                  {sharing
-                    ? <><span className="w-3 h-3 rounded-full border-2 border-black border-t-transparent animate-spin" />Generando...</>
-                    : <>📤 Compartir card</>
-                  }
-                </button>
-              )}
             </div>
             {vipCount > 0 && (
               <p className="text-xs text-purple-400/70 mt-2">
