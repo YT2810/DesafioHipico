@@ -152,7 +152,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     // Accept all observed HINAVA medication variants:
     //   B.L  B.L.  B,L  B,L.  .L  .L.  L  L.  B  B.
     //   (PDF sometimes drops 'B' → ".L", sometimes adds trailing dot → "B.L.")
-    if (/^\.?B?[.,]?L\.?$/.test(maybeMed) || /^\.?B[.,]L\.?$/i.test(maybeMed)) {
+    if (/^\.?B?[.,]?L\.?$/.test(maybeMed) || /^\.?B[.,]L\.?$/i.test(maybeMed) || /^B\.?$/i.test(maybeMed)) {
       const normalized = maybeMed.replace(/^\.|\.$|,/g, match => match === ',' ? '.' : ''); // normalise
       const hasB = /B/i.test(normalized);
       const hasL = /L/i.test(normalized);
