@@ -77,7 +77,7 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
   }).select('_id').lean() as any[];
   const earlierMeetingIds = earlierMeetings.map((m: any) => m._id);
   const racesBeforeThisMeeting = earlierMeetingIds.length > 0
-    ? await Race.countDocuments({ meetingId: { $in: earlierMeetingIds } })
+    ? await Race.countDocuments({ meetingId: { $in: earlierMeetingIds }, status: { $ne: 'cancelled' } })
     : 0;
 
   // Detect gaps: if meetingNumber > earlierMeetings+1, data is incomplete

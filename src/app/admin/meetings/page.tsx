@@ -4,10 +4,20 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 
+interface RaceRow {
+  id: string;
+  raceNumber: number;
+  annualRaceNumber: number | null;
+  distance: number | null;
+  status: string;
+  scheduledTime: string;
+}
+
 interface MeetingRow {
   _id: string;
   meetingNumber: number;
   date: string;
+  status: string;
   trackName: string;
   raceCount: number;
   summaryVideoUrl?: string | null;
@@ -24,6 +34,12 @@ export default function AdminMeetingsPage() {
   const [savingStream, setSavingStream] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({}); 
   const [streamFeedback, setStreamFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({}); 
+
+  const [expandedMeeting, setExpandedMeeting] = useState<string | null>(null);
+  const [racesByMeeting, setRacesByMeeting] = useState<Record<string, RaceRow[]>>({});
+  const [loadingRaces, setLoadingRaces] = useState<string | null>(null);
+  const [cancellingRace, setCancellingRace] = useState<string | null>(null);
+  const [settingMeetingStatus, setSettingMeetingStatus] = useState<string | null>(null);
 
   const roles: string[] = (session?.user as any)?.roles ?? [];
   const canAccess = roles.some(r => ['admin', 'staff'].includes(r));
@@ -47,6 +63,51 @@ export default function AdminMeetingsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [status]);
+
+  async function toggleExpand(meetingId: string) {
+    if (expandedMeeting === meetingId) { setExpandedMeeting(null); return; }
+    setExpandedMeeting(meetingId);
+    if (racesByMeeting[meetingId]) return;
+    setLoadingRaces(meetingId);
+    try {
+      const res = await fetch(`/api/meetings/${meetingId}/races`);
+      const d = await res.json();
+      setRacesByMeeting(prev => ({ ...prev, [meetingId]: d.races ?? [] }));
+    } catch { /* ignore */ } finally { setLoadingRaces(null); }
+  }
+
+  async function cancelRace(meetingId: string, raceId: string, currentStatus: string) {
+    const newStatus = currentStatus === 'cancelled' ? 'scheduled' : 'cancelled';
+    const label = newStatus === 'cancelled' ? 'cancelar' : 'restaurar';
+    if (!confirm(`¿${label} esta carrera?`)) return;
+    setCancellingRace(raceId);
+    try {
+      const res = await fetch(`/api/admin/races/${raceId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Error al actualizar');
+      setRacesByMeeting(prev => ({
+        ...prev,
+        [meetingId]: (prev[meetingId] ?? []).map(r => r.id === raceId ? { ...r, status: newStatus } : r),
+      }));
+    } catch { /* ignore */ } finally { setCancellingRace(null); }
+  }
+
+  async function setMeetingStatus(meetingId: string, newStatus: string) {
+    if (!confirm(`¿Marcar reunión como "${newStatus}"?`)) return;
+    setSettingMeetingStatus(meetingId);
+    try {
+      const res = await fetch(`/api/admin/meetings/${meetingId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Error al actualizar');
+      setMeetings(prev => prev.map(m => m._id === meetingId ? { ...m, status: newStatus } : m));
+    } catch { /* ignore */ } finally { setSettingMeetingStatus(null); }
+  }
 
   async function saveStream(meetingId: string) {
     setSavingStream(meetingId);
@@ -123,6 +184,15 @@ export default function AdminMeetingsPage() {
           const sfb = streamFeedback[m._id];
           const hasStream = !!m.streamUrl;
 
+          const statusColor: Record<string, string> = {
+            scheduled: 'text-gray-400 border-gray-700',
+            active: 'text-green-400 border-green-800',
+            finished: 'text-blue-400 border-blue-800',
+            cancelled: 'text-red-400 border-red-800',
+          };
+          const isExpanded = expandedMeeting === m._id;
+          const races = racesByMeeting[m._id] ?? [];
+
           return (
             <div key={m._id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
               {/* Meeting info */}
@@ -131,11 +201,95 @@ export default function AdminMeetingsPage() {
                   <p className="text-sm font-bold text-white">{m.trackName} — Reunión #{m.meetingNumber}</p>
                   <p className="text-[11px] text-gray-500 capitalize">{dateStr} · {m.raceCount} carreras</p>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-wrap justify-end">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusColor[m.status] ?? statusColor.scheduled}`}>{m.status}</span>
                   {hasStream && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/50 border border-red-800/50 text-red-400 shrink-0">📡 En vivo</span>}
                   {hasVideo && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-950/50 border border-blue-800/50 text-blue-400 shrink-0">▶ Video</span>}
                 </div>
               </div>
+
+              {/* Meeting status buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => toggleExpand(m._id)}
+                  className="text-[11px] px-3 py-1 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+                >
+                  {isExpanded ? '▲ Ocultar carreras' : '▼ Ver carreras'}
+                </button>
+                {m.status !== 'finished' && (
+                  <button
+                    onClick={() => setMeetingStatus(m._id, 'finished')}
+                    disabled={settingMeetingStatus === m._id}
+                    className="text-[11px] px-3 py-1 rounded-lg border border-blue-800 text-blue-400 hover:bg-blue-950/40 transition-colors disabled:opacity-50"
+                  >
+                    ✓ Cerrar reunión
+                  </button>
+                )}
+                {m.status === 'finished' && (
+                  <button
+                    onClick={() => setMeetingStatus(m._id, 'scheduled')}
+                    disabled={settingMeetingStatus === m._id}
+                    className="text-[11px] px-3 py-1 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    ↺ Reabrir
+                  </button>
+                )}
+              </div>
+
+              {/* Race list panel */}
+              {isExpanded && (
+                <div className="border border-gray-800 rounded-lg overflow-hidden">
+                  {loadingRaces === m._id ? (
+                    <div className="py-4 text-center text-xs text-gray-500">Cargando carreras...</div>
+                  ) : races.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-gray-600">Sin carreras registradas</div>
+                  ) : (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-800 bg-gray-950">
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">C°</th>
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">Anual</th>
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">Dist</th>
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">Status</th>
+                          <th className="px-3 py-2 text-right text-gray-500 font-medium">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {races.map(r => (
+                          <tr key={r.id} className={`border-b border-gray-800/50 last:border-0 ${r.status === 'cancelled' ? 'opacity-50' : ''}`}>
+                            <td className="px-3 py-2 text-white font-bold">{r.raceNumber}</td>
+                            <td className="px-3 py-2 text-gray-400">{r.annualRaceNumber ?? '—'}</td>
+                            <td className="px-3 py-2 text-gray-400">{r.distance ? `${r.distance}m` : '—'}</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                r.status === 'finished' ? 'bg-blue-950/50 text-blue-400' :
+                                r.status === 'cancelled' ? 'bg-red-950/50 text-red-400' :
+                                r.status === 'active' ? 'bg-green-950/50 text-green-400' :
+                                'bg-gray-800 text-gray-400'
+                              }`}>{r.status}</span>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {r.status !== 'finished' && (
+                                <button
+                                  onClick={() => cancelRace(m._id, r.id, r.status)}
+                                  disabled={cancellingRace === r.id}
+                                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
+                                    r.status === 'cancelled'
+                                      ? 'border-gray-600 text-gray-400 hover:bg-gray-800'
+                                      : 'border-red-800 text-red-400 hover:bg-red-950/40'
+                                  }`}
+                                >
+                                  {cancellingRace === r.id ? '...' : r.status === 'cancelled' ? 'Restaurar' : 'Cancelar'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
 
               {/* Stream URL input */}
               <div className="space-y-1">

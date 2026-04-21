@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
             } else {
               const earlierIds = earlierMeetings.map((m: any) => m._id);
               const racesBeforeThis = earlierIds.length > 0
-                ? await Race.countDocuments({ meetingId: { $in: earlierIds } })
+                ? await Race.countDocuments({ meetingId: { $in: earlierIds }, status: { $ne: 'cancelled' } })
                 : 0;
               for (const rb of processed.races) {
                 if (!rb.race.annualRaceNumber) {

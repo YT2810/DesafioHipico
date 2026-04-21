@@ -56,7 +56,7 @@ export async function GET(
     if (!meeting) return NextResponse.json({ error: 'Reunión no encontrada' }, { status: 404 });
 
     const track = await Track.findById(meeting.trackId).lean() as any;
-    const races = await Race.find({ meetingId }).sort({ raceNumber: 1 }).lean() as any[];
+    const races = await Race.find({ meetingId, status: { $ne: 'cancelled' } }).sort({ raceNumber: 1 }).lean() as any[];
     const meetingDate = new Date(meeting.date);
 
     // ── Collect all horseIds across all races in this meeting ──
@@ -80,7 +80,7 @@ export async function GET(
       horseId: { $in: horseIds },
       'result.finishPosition': { $exists: true },
     })
-      .populate({ path: 'raceId', model: Race })
+      .populate({ path: 'raceId', model: Race, match: { status: { $ne: 'cancelled' } } })
       .lean() as any[];
 
     // Fetch winner (pos=1) and 2nd place entries for all past races
