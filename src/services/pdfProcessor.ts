@@ -121,6 +121,19 @@ function parseMeeting(text: string, warnings: string[]): ExtractedMeeting {
   };
 }
 
+// ─── Time normalizer ─────────────────────────────────────────────────────────
+// Converts "10:15 a.m." / "01:25 p. m." → "10:15" / "13:25" (HH:mm 24h)
+function normalizeTime(raw: string): string {
+  const m = raw.match(/(\d{1,2}):(\d{2})\s*([aApP])\.?\s*[mM]\.?/);
+  if (!m) return raw;
+  let h = parseInt(m[1]);
+  const min = m[2];
+  const meridiem = m[3].toLowerCase();
+  if (meridiem === 'a' && h === 12) h = 0;
+  if (meridiem === 'p' && h !== 12) h += 12;
+  return `${String(h).padStart(2, '0')}:${min}`;
+}
+
 // ─── Race Header Parser ───────────────────────────────────────────────────────
 // pdf-parse format — labels and values on separate lines:
 //   "Distancia:\n1400 mts.1"  ← distance + raceNumber concatenated
@@ -154,11 +167,11 @@ function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
     annualRaceNumber = parseInt(annualMatch2[1]);
     warnings.push(`[DEBUG] Carrera ${raceNumber}: annualRaceNumber = ${annualRaceNumber} (formato ${annualBlockA ? 'A' : 'B'})`);
     const afterAnnual = block.slice(block.indexOf(annualMatch2[0]) + annualMatch2[0].length);
-    const hmAfter = afterAnnual.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
-    if (hmAfter) scheduledTime = clean(hmAfter[1]);
+    const hmAfter = afterAnnual.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/i);
+    if (hmAfter) scheduledTime = normalizeTime(clean(hmAfter[1]));
   } else {
-    const hm = block.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/);
-    if (hm) scheduledTime = clean(hm[1]);
+    const hm = block.match(/(\d{1,2}:\d{2}\s*[aApP]\.?\s*[mM]\.?)/i);
+    if (hm) scheduledTime = normalizeTime(clean(hm[1]));
   }
 
   if (!raceNumber) {

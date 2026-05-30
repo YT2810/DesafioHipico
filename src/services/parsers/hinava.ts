@@ -25,6 +25,17 @@ import type {
 
 function clean(s: string): string { return s.replace(/\s+/g, ' ').trim(); }
 
+function normalizeTime(raw: string): string {
+  const m = raw.match(/(\d{1,2}):(\d{2})\s*([aApP])\.?\s*[mM]\.?/);
+  if (!m) return raw;
+  let h = parseInt(m[1]);
+  const min = m[2];
+  const meridiem = m[3].toLowerCase();
+  if (meridiem === 'a' && h === 12) h = 0;
+  if (meridiem === 'p' && h !== 12) h += 12;
+  return `${String(h).padStart(2, '0')}:${min}`;
+}
+
 function makePersonLicenseId(name: string, type: 'jockey' | 'trainer'): string {
   return `${type === 'jockey' ? 'J' : 'T'}-${name.replace(/\s+/g, '').toUpperCase().slice(0, 12)}`;
 }
@@ -58,7 +69,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   if (!raceNumber) { warnings.push('HINAVA: no se detectó número de carrera.'); return null; }
 
   const distance = distMatch ? parseInt(distMatch[1].replace('.', '')) : 0;
-  const scheduledTime = horaMatch ? clean(horaMatch[1]) : '';
+  const scheduledTime = horaMatch ? normalizeTime(clean(horaMatch[1])) : '';
   const conditions = condMatch ? clean(condMatch[0]) : '';
   const bsRaw = premioMatch ? premioMatch[1].replace('.', '').replace(',', '.') : '0';
   const bs = parseFloat(bsRaw) || 0;

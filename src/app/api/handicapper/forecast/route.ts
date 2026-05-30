@@ -56,16 +56,23 @@ export async function POST(req: NextRequest) {
     const isAdmin = roles.some(r => ['admin', 'staff'].includes(r));
     if (!isAdmin) {
       const Race = (await import('@/models/Race')).default;
+      const Meeting = (await import('@/models/Meeting')).default;
       const race = await Race.findById(raceId).lean() as any;
       if (race) {
-        const raceTime = race.scheduledTime
-          ? new Date(race.scheduledTime)
-          : null;
         if (race.status === 'finished' || race.status === 'active') {
           return NextResponse.json({ error: 'No puedes editar un pronóstico de una carrera que ya comenzó o terminó.' }, { status: 403 });
         }
-        if (raceTime && new Date() >= raceTime) {
-          return NextResponse.json({ error: 'No puedes editar un pronóstico después de la hora de largada.' }, { status: 403 });
+        // Build a real Date from meeting date + scheduledTime "HH:mm"
+        if (race.scheduledTime && /^\d{2}:\d{2}$/.test(race.scheduledTime)) {
+          const meeting = await Meeting.findById(race.meetingId).select('date').lean() as any;
+          if (meeting?.date) {
+            const [hh, mm] = race.scheduledTime.split(':').map(Number);
+            const raceTime = new Date(meeting.date);
+            raceTime.setUTCHours(hh, mm, 0, 0);
+            if (new Date() >= raceTime) {
+              return NextResponse.json({ error: 'No puedes editar un pronóstico después de la hora de largada.' }, { status: 403 });
+            }
+          }
         }
       }
     }
