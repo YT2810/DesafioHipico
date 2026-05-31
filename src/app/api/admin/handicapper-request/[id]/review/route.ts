@@ -56,13 +56,15 @@ export async function POST(
           isGhost: true,
         });
 
+        const safeBio = (request.bio?.trim() ?? '').slice(0, 500);
+
         if (ghostProfile) {
           // Link the real user to this ghost profile and reset pre-claim stats
           const claimDate = new Date();
           ghostProfile.userId = new Types.ObjectId(request.userId.toString());
           ghostProfile.isGhost = false;
           ghostProfile.claimedAt = claimDate;
-          ghostProfile.bio = request.bio?.trim() || ghostProfile.bio;
+          ghostProfile.bio = safeBio || ghostProfile.bio;
           await ghostProfile.save();
 
           // Reset all forecasts created before claimDate so they don't pollute real stats
@@ -75,7 +77,7 @@ export async function POST(
           await HandicapperProfile.create({
             userId: request.userId,
             pseudonym: request.pseudonym.trim(),
-            bio: request.bio ?? '',
+            bio: safeBio,
             isActive: true,
             isGhost: false,
             claimedAt: new Date(),
@@ -91,7 +93,7 @@ export async function POST(
 
     request.reviewedBy = new Types.ObjectId(session.user.id);
     request.reviewedAt = new Date();
-    await request.save();
+    await request.save({ validateBeforeSave: false });
 
     // Notify the requester (fire-and-forget)
     if (action === 'approve') {
