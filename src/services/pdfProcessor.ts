@@ -65,7 +65,7 @@ function makePersonLicenseId(name: string, type: 'jockey' | 'trainer'): string {
 // pdfjs wraps long lines. Entry lines starting with "N  HORSE NAME..." may wrap.
 // We join continuation lines back onto their parent entry line.
 
-function preprocessText(raw: string): string {
+export function preprocessText(raw: string): string {
   const lines = raw.split('\n').map(l => l.trimEnd());
   const result: string[] = [];
   let i = 0;
@@ -100,7 +100,7 @@ function preprocessText(raw: string): string {
 //   "Reunión:\n9\nDía:\nDOMINGO"
 //   "22/02/2026\nFecha:"  (date appears before its label)
 
-function parseMeeting(text: string, warnings: string[]): ExtractedMeeting {
+export function parseMeeting(text: string, warnings: string[]): ExtractedMeeting {
   const trackMatch = text.match(/Hip[oó]dromo\s+(.+?)(?:\n|Direcci[oó]n)/i);
   const trackName = trackMatch ? clean(trackMatch[1]) : 'LA RINCONADA';
 
@@ -345,7 +345,7 @@ function parseEntries(block: string): { entries: ExtractedEntry[]; failedLines: 
 // ─── Block Splitter ───────────────────────────────────────────────────────────
 // Each race page starts with "Carrera Programada:" — split on that.
 
-function splitIntoRaceBlocks(text: string): string[] {
+export function splitIntoRaceBlocks(text: string): string[] {
   return text.split(/(?=Carrera Programada:)/i).filter(p => /Carrera Programada:/i.test(p));
 }
 

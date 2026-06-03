@@ -8,77 +8,9 @@ import type {
   ExtractedEntry,
   ExtractedRaceBlock,
 } from '../pdfProcessor';
-import { simpleHash, parseVEDate } from '../pdfProcessor';
+import { simpleHash, parseVEDate, preprocessText, parseMeeting, splitIntoRaceBlocks } from '../pdfProcessor';
 
-function buildPDFParserPrompt(rawText: string): string {
-  return `Eres un extractor de programas hípicos venezolanos (INH / La Rinconada / Valencia).
-Analiza el siguiente texto extraído de un PDF de ejemplares inscritos y devuélvelo como JSON estricto.
-
-REGLAS GENERALES:
-- Extrae TODAS las carreras del programa.
-- Si el texto está incompleto o cortado, extrae lo que puedas.
-- Si no hay número de carrera anual, pon null en annualRaceNumber.
-- La hora (scheduledTime) debe estar en formato HH:mm de 24 horas.
-
-PARA CADA CARRERA extrae:
-- raceNumber: número entero de la carrera del día
-- annualRaceNumber: número entero de la carrera del año, o null si no aparece
-- distance: número entero de metros (ej: 1300)
-- scheduledTime: string en formato "HH:mm"
-- conditions: string con las condiciones completas de la carrera
-- games: array de strings con los tipos de apuesta disponibles. Ej: ["GANADOR", "PLACE", "EXACTA", "TRIFECTA", "SUPERFECTA"]. Si no aparece, array vacío [].
-
-PARA CADA EJEMPLAR extrae:
-- dorsalNumber: número entero
-- horseName: string con el nombre del caballo SIN país entre paréntesis, SIN implementos, SIN precio de reclamo. Si el nombre termina con algo como "(USA)" o "(ARG)", ELIMINA eso del nombre y ponlo en nationality.
-- nationality: string con el código de país SOLO las letras, sin paréntesis. Ej: "USA", "ARG", "CHI", "PER". Si no tiene país, usa null.
-- medication: string con los códigos de medicación separados por guion. Si no hay, pon "".
-- weightRaw: string EXACTAMENTE como aparece en el PDF, incluyendo descuentos. Ej: "54", "55-1", "54.5-3". NO calcules nada.
-- jockeyName: string, nombre completo del jinete. Preserva el orden y las iniciales.
-- trainerName: string, nombre completo del entrenador.
-- postPosition: número entero de la posición de partida.
-- implements: string con los códigos de implementos exactamente como aparecen, incluyendo los puntos. Ej: "L.CC.V.BB.M.LA.". Si no hay, pon "".
-- claimPrice: número o null. Si es carrera de reclamo, extrae el precio como número entero. Ej: "8000,00" → 8000. Si no es carrera de reclamo, null.
-
-REGLAS CRÍTICAS:
-- NUNCA incluyas "(USA)", "(ARG)", "(CHI)", "(PER)" como parte de horseName. Separa el país en nationality.
-- NUNCA incluyas "PRECIO $: 8.000,00" en horseName. Eso va en claimPrice.
-- NUNCA incluyas implementos tipo "L.BZ.", "Gr.", "SF" en horseName. Eso va en implements.
-- weightRaw debe ser el texto original del PDF, sin calcular.
-- Si el nombre tiene acentos, preservalos.
-- Si el nombre tiene espacios múltiples, limpia a un solo espacio.
-
-FORMATO DE SALIDA:
-Devuelve SOLO un JSON válido, sin markdown, sin explicaciones. La raíz debe ser un objeto con una clave "races" que contenga un array de carreras.
-
-Empieza el análisis ahora. Texto del PDF:
-${rawText}`;
-}
-
-function makePersonLicenseId(name: string, type: 'jockey' | 'trainer'): string {
-  return `${type === 'jockey' ? 'J' : 'T'}-${name.replace(/\s+/g, '').toUpperCase().slice(0, 12)}`;
-}
-
-function parseWeight(weightRaw: string): { weight: number; weightRaw: string } {
-  const cleanRaw = weightRaw.replace(',', '.');
-  const allowanceMatch = cleanRaw.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
-  if (allowanceMatch) {
-    return {
-      weight: parseFloat(allowanceMatch[1]) - parseFloat(allowanceMatch[2]),
-      weightRaw: cleanRaw,
-    };
-  }
-  return {
-    weight: parseFloat(cleanRaw) || 0,
-    weightRaw: cleanRaw,
-  };
-}
-
-function clean(s: string): string {
-  return s.replace(/\s+/g, ' ').trim();
-}
-
-// ─── Types for Gemini raw response ────────────────────────────────────────────
+// ─── Types for Gemini single-race response ─────────────────────────────────
 
 interface GeminiHorse {
   dorsalNumber: number;
@@ -103,38 +35,64 @@ interface GeminiRace {
   horses: GeminiHorse[];
 }
 
-interface GeminiResponse {
-  races: GeminiRace[];
+// ─── Prompt for a SINGLE race block ───────────────────────────────────────
+
+function buildSingleRacePrompt(block: string): string {
+  return `Eres un extractor de programas hípicos venezolanos (INH / La Rinconada).
+Analiza el siguiente bloque de UNA SOLA CARRERA extraído de un PDF y devuélvelo como JSON.
+
+EXTRAE:
+- raceNumber: número entero de la carrera del día
+- annualRaceNumber: número entero de la carrera del año, o null si no aparece
+- distance: número entero de metros (ej: 1300)
+- scheduledTime: string en formato "HH:mm" (24h). Ej: "01:25 p. m." → "13:25"
+- conditions: string con las condiciones completas de la carrera
+- games: array de strings con los tipos de apuesta. Si no aparece, []
+- horses: array de ejemplares con los campos:
+  - dorsalNumber: número entero
+  - horseName: nombre SIN país entre paréntesis, SIN implementos, SIN precio de reclamo
+  - nationality: código de país solo letras sin paréntesis ("USA","ARG","CHI","PER","PAN","COL") o null
+  - medication: códigos de medicación (ej: "BUT-LAX") o ""
+  - weightRaw: string EXACTO del PDF incluyendo descuentos (ej: "54", "55-1", "54.5-3")
+  - jockeyName: nombre completo del jinete
+  - trainerName: nombre completo del entrenador
+  - postPosition: número entero de posición de partida
+  - implements: códigos de implementos con puntos (ej: "L.CC.V.BB.M.LA.") o ""
+  - claimPrice: número entero si es carrera de reclamo (ej: 8000), o null
+
+REGLAS CRÍTICAS:
+- NUNCA incluyas "(USA)","(ARG)","(CHI)","(PER)" en horseName. Pon el país en nationality.
+- NUNCA incluyas "PRECIO $: 8.000,00" en horseName. Pon el número en claimPrice.
+- NUNCA incluyas implementos en horseName.
+- weightRaw debe ser el texto original del PDF, sin calcular.
+
+FORMATO: Devuelve SOLO el JSON del objeto de la carrera, sin markdown, sin explicaciones.
+La raíz es un objeto con los campos de arriba (NO un array, NO una clave "races").
+
+Bloque de carrera:
+${block}`;
 }
 
-function extractJSONFromResponse(raw: string): string {
-  let text = raw.trim();
-  // Remove markdown fences
-  text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-  text = text.trim();
-  const firstBrace = text.indexOf('{');
-  if (firstBrace !== -1) text = text.slice(firstBrace);
-  const lastBrace = text.lastIndexOf('}');
-  if (lastBrace !== -1 && lastBrace < text.length - 1) text = text.slice(0, lastBrace + 1);
-  return text;
+// ─── Utilities ─────────────────────────────────────────────────────────────
+
+function makePersonLicenseId(name: string, type: 'jockey' | 'trainer'): string {
+  return `${type === 'jockey' ? 'J' : 'T'}-${name.replace(/\s+/g, '').toUpperCase().slice(0, 12)}`;
 }
 
-function removeTrailingCommas(json: string): string {
-  return json.replace(/,(\s*[}]])/g, '$1');
+function parseWeight(weightRaw: string): { weight: number; weightRaw: string } {
+  const cleanRaw = weightRaw.replace(',', '.');
+  const allowanceMatch = cleanRaw.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (allowanceMatch) {
+    return {
+      weight: parseFloat(allowanceMatch[1]) - parseFloat(allowanceMatch[2]),
+      weightRaw: cleanRaw,
+    };
+  }
+  return { weight: parseFloat(cleanRaw) || 0, weightRaw: cleanRaw };
 }
 
-function repairTruncatedJSON(json: string): string {
-  let repaired = removeTrailingCommas(json);
-  const openBraces = (repaired.match(/{/g) || []).length;
-  const closeBraces = (repaired.match(/}/g) || []).length;
-  for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
-  const openBrackets = (repaired.match(/\[/g) || []).length;
-  const closeBrackets = (repaired.match(/\]/g) || []).length;
-  for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
-  // Close any dangling string
-  const quotes = (repaired.match(/"/g) || []).length;
-  if (quotes % 2 !== 0) repaired += '"';
-  return repaired;
+function clean(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 function normalizeTime(raw: string): string {
@@ -148,122 +106,116 @@ function normalizeTime(raw: string): string {
   return `${String(h).padStart(2, '0')}:${min}`;
 }
 
-function convertToProcessedDocument(rawText: string, gemini: GeminiResponse): ProcessedDocument {
+function extractJSON(raw: string): string {
+  let text = raw.trim();
+  text = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1) return text.slice(firstBrace, lastBrace + 1);
+  return text;
+}
+
+// ─── Convert a single GeminiRace to ExtractedRaceBlock ────────────────────
+
+function convertRace(geminiRace: GeminiRace): ExtractedRaceBlock {
+  const entries: ExtractedEntry[] = [];
+  const failedLines: string[] = [];
+
+  for (const h of geminiRace.horses) {
+    try {
+      const { weight, weightRaw } = parseWeight(String(h.weightRaw));
+      const rawHorseName = clean(h.horseName);
+
+      // Fallback: extraer nationality del nombre si Gemini no la separó
+      const countryMatch = rawHorseName.match(/\s*\(([A-Z]{2,4})\)\s*$/);
+      let horseName = rawHorseName;
+      let nationality = h.nationality ? clean(h.nationality) : undefined;
+      if (countryMatch && !nationality) {
+        nationality = countryMatch[1];
+        horseName = rawHorseName.slice(0, countryMatch.index).trim();
+      }
+
+      const horse: ExtractedHorse = { name: horseName, pedigree: {} };
+      if (nationality) horse.nationality = nationality;
+
+      entries.push({
+        dorsalNumber: Number(h.dorsalNumber),
+        postPosition: Number(h.postPosition),
+        weight,
+        weightRaw,
+        medication: h.medication || undefined,
+        implements: h.implements || undefined,
+        horse,
+        jockey: {
+          name: clean(h.jockeyName),
+          type: 'jockey',
+          licenseId: makePersonLicenseId(h.jockeyName, 'jockey'),
+        },
+        trainer: {
+          name: clean(h.trainerName),
+          type: 'trainer',
+          licenseId: makePersonLicenseId(h.trainerName, 'trainer'),
+        },
+      });
+    } catch (err) {
+      failedLines.push(`dorsal ${h.dorsalNumber}: ${err}`);
+    }
+  }
+
+  const race: ExtractedRace = {
+    raceNumber: Number(geminiRace.raceNumber),
+    annualRaceNumber: geminiRace.annualRaceNumber ?? undefined,
+    distance: Number(geminiRace.distance),
+    scheduledTime: normalizeTime(geminiRace.scheduledTime),
+    conditions: clean(geminiRace.conditions),
+    prizePool: { bs: 0, usd: 0 },
+    games: geminiRace.games || [],
+  };
+
+  return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
+}
+
+// ─── Process a single race block with Gemini ──────────────────────────────
+
+async function processRaceBlock(block: string, index: number): Promise<ExtractedRaceBlock | null> {
+  const prompt = buildSingleRacePrompt(block);
+  try {
+    const responseText = await callLLM(prompt);
+    const jsonText = extractJSON(responseText);
+    const parsed = JSON.parse(jsonText) as GeminiRace;
+    if (typeof parsed.raceNumber !== 'number') throw new Error('raceNumber faltante');
+    return convertRace(parsed);
+  } catch (err) {
+    console.error(`[GeminiParser] Error en bloque ${index + 1}:`, err);
+    return null;
+  }
+}
+
+// ─── Main export ───────────────────────────────────────────────────────────
+
+export async function processDocumentWithGemini(rawText: string): Promise<ProcessedDocument> {
   const warnings: string[] = [];
   const hash = simpleHash(rawText);
 
-  const meeting: ExtractedMeeting = {
-    track: { name: 'LA RINCONADA', location: 'LA RINCONADA', country: 'VE' },
-    date: new Date().toISOString(),
-    meetingNumber: 0,
-  };
+  const processed = preprocessText(rawText);
+  const meeting = parseMeeting(processed, warnings);
+  const blocks = splitIntoRaceBlocks(processed);
 
-  const races: ExtractedRaceBlock[] = gemini.races.map((r) => {
-    const entries: ExtractedEntry[] = [];
-    const failedLines: string[] = [];
+  if (blocks.length === 0) {
+    warnings.push('No se detectaron bloques de carrera con el splitter. Verifica formato INH.');
+  }
 
-    for (const h of r.horses) {
-      try {
-        const { weight, weightRaw } = parseWeight(String(h.weightRaw));
-        const rawHorseName = clean(h.horseName);
+  // Process all race blocks in parallel — one small Gemini call per race
+  const results = await Promise.all(blocks.map((block, i) => processRaceBlock(block, i)));
 
-        // Fallback: extraer nationality del nombre si Gemini no la separó
-        const countryMatch = rawHorseName.match(/\s*\(([A-Z]{2,4})\)\s*$/);
-        let horseName = rawHorseName;
-        let nationality = h.nationality ? clean(h.nationality) : undefined;
-        if (countryMatch && !nationality) {
-          nationality = countryMatch[1];
-          horseName = rawHorseName.slice(0, countryMatch.index).trim();
-        }
+  const races: ExtractedRaceBlock[] = results
+    .filter((r): r is ExtractedRaceBlock => r !== null)
+    .sort((a, b) => a.race.raceNumber - b.race.raceNumber);
 
-        const horse: ExtractedHorse = {
-          name: horseName,
-          pedigree: {},
-        };
-        if (nationality) {
-          horse.nationality = nationality;
-        }
-
-        const entry: ExtractedEntry = {
-          dorsalNumber: Number(h.dorsalNumber),
-          postPosition: Number(h.postPosition),
-          weight,
-          weightRaw,
-          medication: h.medication || undefined,
-          implements: h.implements || undefined,
-          horse,
-          jockey: {
-            name: clean(h.jockeyName),
-            type: 'jockey',
-            licenseId: makePersonLicenseId(h.jockeyName, 'jockey'),
-          },
-          trainer: {
-            name: clean(h.trainerName),
-            type: 'trainer',
-            licenseId: makePersonLicenseId(h.trainerName, 'trainer'),
-          },
-        };
-        entries.push(entry);
-      } catch (err) {
-        failedLines.push(`dorsal ${h.dorsalNumber}: ${err}`);
-      }
-    }
-
-    const race: ExtractedRace = {
-      raceNumber: Number(r.raceNumber),
-      annualRaceNumber: r.annualRaceNumber ?? undefined,
-      distance: Number(r.distance),
-      scheduledTime: normalizeTime(r.scheduledTime),
-      conditions: clean(r.conditions),
-      prizePool: { bs: 0, usd: 0 },
-      games: r.games || [],
-    };
-
-    return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
-  });
+  const failed = results.filter((r) => r === null).length;
+  if (failed > 0) {
+    warnings.push(`${failed} de ${blocks.length} bloques de carrera fallaron con Gemini.`);
+  }
 
   return { meeting, races, rawText, hash, warnings };
-}
-
-export async function processDocumentWithGemini(rawText: string): Promise<ProcessedDocument> {
-  const prompt = buildPDFParserPrompt(rawText);
-  const responseText = await callLLM(prompt);
-  const jsonText = extractJSONFromResponse(responseText);
-
-  // Try 1: direct parse
-  try {
-    const parsed = JSON.parse(jsonText) as GeminiResponse;
-    if (!parsed.races || !Array.isArray(parsed.races)) {
-      throw new Error('Respuesta de Gemini no contiene array "races"');
-    }
-    return convertToProcessedDocument(rawText, parsed);
-  } catch (err) {
-    console.warn('[GeminiParser] JSON directo falló, intentando reparar...');
-  }
-
-  // Try 2: repair truncated JSON
-  try {
-    const repaired = repairTruncatedJSON(jsonText);
-    const parsed = JSON.parse(repaired) as GeminiResponse;
-    if (!parsed.races || !Array.isArray(parsed.races)) {
-      throw new Error('Respuesta de Gemini no contiene array "races"');
-    }
-    return convertToProcessedDocument(rawText, parsed);
-  } catch (err) {
-    console.warn('[GeminiParser] Reparación falló, intentando retry con Gemini...');
-  }
-
-  // Try 3: ask Gemini to fix the JSON
-  try {
-    const fixPrompt = `El siguiente JSON está roto o incompleto. Repáralo y devuélvelo como JSON válido SIN markdown, solo el JSON puro:
-${jsonText.slice(0, 8000)}`;
-    const fixedResponse = await callLLM(fixPrompt);
-    const fixedJson = extractJSONFromResponse(fixedResponse);
-    const repaired = repairTruncatedJSON(fixedJson);
-    const parsed = JSON.parse(repaired) as GeminiResponse;
-    return convertToProcessedDocument(rawText, parsed);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Error parseando respuesta de Gemini tras 3 intentos: ${msg}. Raw: ${responseText.slice(0, 500)}`);
-  }
 }
