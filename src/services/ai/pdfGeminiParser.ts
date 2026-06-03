@@ -108,14 +108,33 @@ interface GeminiResponse {
 }
 
 function extractJSONFromResponse(raw: string): string {
-  const cleaned = raw.trim();
-  if (cleaned.startsWith('```')) {
-    const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) return match[1].trim();
-  }
-  const firstBrace = cleaned.indexOf('{');
-  if (firstBrace !== -1) return cleaned.slice(firstBrace);
-  return cleaned;
+  let text = raw.trim();
+  // Remove markdown fences
+  text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+  text = text.trim();
+  const firstBrace = text.indexOf('{');
+  if (firstBrace !== -1) text = text.slice(firstBrace);
+  const lastBrace = text.lastIndexOf('}');
+  if (lastBrace !== -1 && lastBrace < text.length - 1) text = text.slice(0, lastBrace + 1);
+  return text;
+}
+
+function removeTrailingCommas(json: string): string {
+  return json.replace(/,(\s*[}]])/g, '$1');
+}
+
+function repairTruncatedJSON(json: string): string {
+  let repaired = removeTrailingCommas(json);
+  const openBraces = (repaired.match(/{/g) || []).length;
+  const closeBraces = (repaired.match(/}/g) || []).length;
+  for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+  const openBrackets = (repaired.match(/\[/g) || []).length;
+  const closeBrackets = (repaired.match(/\]/g) || []).length;
+  for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+  // Close any dangling string
+  const quotes = (repaired.match(/"/g) || []).length;
+  if (quotes % 2 !== 0) repaired += '"';
+  return repaired;
 }
 
 function normalizeTime(raw: string): string {
@@ -211,6 +230,7 @@ export async function processDocumentWithGemini(rawText: string): Promise<Proces
   const responseText = await callLLM(prompt);
   const jsonText = extractJSONFromResponse(responseText);
 
+  // Try 1: direct parse
   try {
     const parsed = JSON.parse(jsonText) as GeminiResponse;
     if (!parsed.races || !Array.isArray(parsed.races)) {
@@ -218,7 +238,32 @@ export async function processDocumentWithGemini(rawText: string): Promise<Proces
     }
     return convertToProcessedDocument(rawText, parsed);
   } catch (err) {
+    console.warn('[GeminiParser] JSON directo falló, intentando reparar...');
+  }
+
+  // Try 2: repair truncated JSON
+  try {
+    const repaired = repairTruncatedJSON(jsonText);
+    const parsed = JSON.parse(repaired) as GeminiResponse;
+    if (!parsed.races || !Array.isArray(parsed.races)) {
+      throw new Error('Respuesta de Gemini no contiene array "races"');
+    }
+    return convertToProcessedDocument(rawText, parsed);
+  } catch (err) {
+    console.warn('[GeminiParser] Reparación falló, intentando retry con Gemini...');
+  }
+
+  // Try 3: ask Gemini to fix the JSON
+  try {
+    const fixPrompt = `El siguiente JSON está roto o incompleto. Repáralo y devuélvelo como JSON válido SIN markdown, solo el JSON puro:
+${jsonText.slice(0, 8000)}`;
+    const fixedResponse = await callLLM(fixPrompt);
+    const fixedJson = extractJSONFromResponse(fixedResponse);
+    const repaired = repairTruncatedJSON(fixedJson);
+    const parsed = JSON.parse(repaired) as GeminiResponse;
+    return convertToProcessedDocument(rawText, parsed);
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Error parseando respuesta de Gemini: ${msg}. Raw: ${responseText.slice(0, 500)}`);
+    throw new Error(`Error parseando respuesta de Gemini tras 3 intentos: ${msg}. Raw: ${responseText.slice(0, 500)}`);
   }
 }
