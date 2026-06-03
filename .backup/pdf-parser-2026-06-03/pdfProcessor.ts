@@ -33,7 +33,7 @@ export interface ExtractedRace {
   games: string[];
 }
 export interface ExtractedPerson { name: string; type: 'jockey' | 'trainer'; licenseId: string; }
-export interface ExtractedHorse { name: string; pedigree: { sire?: string; dam?: string }; registrationId?: string; nationality?: string; }
+export interface ExtractedHorse { name: string; pedigree: { sire?: string; dam?: string }; registrationId?: string; }
 export interface ExtractedEntry {
   dorsalNumber: number; postPosition: number; weight: number; weightRaw: string;
   medication?: string; implements?: string;
@@ -358,16 +358,10 @@ function detectSource(rawText: string): 'inh' | 'hinava' {
 
 // ─── Main Processor ───────────────────────────────────────────────────────────
 
-export async function processDocument(rawText: string): Promise<ProcessedDocument> {
+export function processDocument(rawText: string): ProcessedDocument {
   if (detectSource(rawText) === 'hinava') {
     const { parseHinavaDocument } = require('./parsers/hinava');
     return parseHinavaDocument(rawText);
-  }
-
-  const USE_GEMINI_PARSER = process.env.USE_GEMINI_PARSER === 'true';
-  if (USE_GEMINI_PARSER) {
-    const { processDocumentWithGemini } = await import('./ai/pdfGeminiParser');
-    return processDocumentWithGemini(rawText);
   }
 
   const warnings: string[] = [];

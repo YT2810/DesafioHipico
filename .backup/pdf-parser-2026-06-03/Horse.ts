@@ -16,7 +16,6 @@ export interface IStudHistoryEntry {
 
 export interface IHorse extends Document {
   name: string;
-  nationality?: string;
   pedigree: IPedigree;
   birthDate?: Date;
   color?: string;
@@ -32,7 +31,6 @@ export interface IHorse extends Document {
 const HorseSchema = new Schema<IHorse>(
   {
     name: { type: String, required: true, trim: true },
-    nationality: { type: String, trim: true },
     pedigree: {
       sire: { type: String, trim: true },
       dam: { type: String, trim: true },

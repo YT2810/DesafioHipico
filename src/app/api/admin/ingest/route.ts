@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ rawText: rawText.slice(0, 5000), totalLength: rawText.length });
     }
 
-    const processed = processDocument(rawText);
+    const processed = await processDocument(rawText);
 
     // Apply manual annualRaceNumber overrides (raceNumber → annualRaceNumber)
     if (Object.keys(annualOverrides).length > 0) {

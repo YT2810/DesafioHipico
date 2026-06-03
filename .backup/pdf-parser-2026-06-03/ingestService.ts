@@ -166,19 +166,15 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
 }
 
 async function upsertHorse(entry: ExtractedEntry) {
-  const setPayload: Record<string, unknown> = {
-    name: entry.horse.name,
-    pedigree: entry.horse.pedigree,
-  };
-  if ((entry.horse as { nationality?: string }).nationality) {
-    setPayload.nationality = (entry.horse as { nationality?: string }).nationality;
-  }
-  if (entry.horse.registrationId) {
-    setPayload.registrationId = entry.horse.registrationId;
-  }
   return Horse.findOneAndUpdate(
     { name: entry.horse.name },
-    { $set: setPayload },
+    {
+      $set: {
+        name: entry.horse.name,
+        pedigree: entry.horse.pedigree,
+        ...(entry.horse.registrationId && { registrationId: entry.horse.registrationId }),
+      },
+    },
     { upsert: true, new: true }
   );
 }

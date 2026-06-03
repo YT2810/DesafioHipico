@@ -122,7 +122,7 @@ export interface RaceEntriesContext {
 
 // ─── Core LLM caller (OpenRouter or Google direct) ────────────────────────────
 
-export async function callLLM(prompt: string): Promise<string> {
+async function callLLM(prompt: string): Promise<string> {
   if (USE_OPENROUTER) {
     const res = await fetch(OPENROUTER_URL, {
       method: 'POST',

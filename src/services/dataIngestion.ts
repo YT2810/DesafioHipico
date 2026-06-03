@@ -98,14 +98,14 @@ function validateImageJson(doc: ImageResultDocument, warnings: string[]): void {
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
-export function ingest(payload: IngestionPayload): IngestionResult {
+export async function ingest(payload: IngestionPayload): Promise<IngestionResult> {
   const warnings: string[] = [];
 
   if (payload.mode === 'program') {
     if (!payload.rawText?.trim()) {
       return { mode: 'program', hash: '', warnings: ['rawText vacío.'] };
     }
-    const program = processDocument(payload.rawText);
+    const program = await processDocument(payload.rawText);
     return {
       mode: 'program',
       hash: program.hash,
