@@ -10,7 +10,7 @@
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY ?? '';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash';
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
 
 const USE_OPENROUTER = !!OPENROUTER_API_KEY;
