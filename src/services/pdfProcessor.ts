@@ -141,7 +141,7 @@ function normalizeTime(raw: string): string {
 //   "Carrera Anual Nro.:Hora:\n122\n01:25 p. m."  ← annual number THEN time on next line
 //   "Premio Bs.:\n3600\nBono $:\n37180"
 
-function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
+export function parseRaceHeader(block: string, warnings: string[]): ExtractedRace {
   let raceNumber = 0, annualRaceNumber = 0, distance = 0, scheduledTime = '';
 
   // Distance line: "1400 mts.1" or "1200 mts.2" — distance + raceNumber glued

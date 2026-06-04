@@ -1,16 +1,13 @@
 import { callLLM } from './geminiProcessor';
 import type {
   ProcessedDocument,
-  ExtractedMeeting,
-  ExtractedRace,
-  ExtractedPerson,
   ExtractedHorse,
   ExtractedEntry,
   ExtractedRaceBlock,
 } from '../pdfProcessor';
-import { simpleHash, parseVEDate, preprocessText, parseMeeting, splitIntoRaceBlocks } from '../pdfProcessor';
+import { simpleHash, preprocessText, parseMeeting, splitIntoRaceBlocks, parseRaceHeader } from '../pdfProcessor';
 
-// ─── Types for Gemini single-race response ─────────────────────────────────
+// ─── Types for Gemini horses-only response ─────────────────────────────────
 
 interface GeminiHorse {
   dorsalNumber: number;
@@ -25,51 +22,43 @@ interface GeminiHorse {
   claimPrice?: number | null;
 }
 
-interface GeminiRace {
-  raceNumber: number;
-  annualRaceNumber?: number | null;
-  distance: number;
-  scheduledTime: string;
-  conditions: string;
-  games?: string[];
+interface GeminiHorsesResponse {
+  conditions?: string;
   horses: GeminiHorse[];
 }
 
-// ─── Prompt for a SINGLE race block ───────────────────────────────────────
+// ─── Prompt: only ask Gemini for horses + conditions ──────────────────────
+// Header fields (raceNumber, annualRaceNumber, distance, scheduledTime, games)
+// are extracted by the existing regex parser — never by Gemini.
 
-function buildSingleRacePrompt(block: string): string {
+function buildHorsesPrompt(block: string): string {
   return `Eres un extractor de programas hípicos venezolanos (INH / La Rinconada).
-Analiza el siguiente bloque de UNA SOLA CARRERA extraído de un PDF y devuélvelo como JSON.
+Analiza el siguiente bloque de una carrera y extrae ÚNICAMENTE los ejemplares y las condiciones de la carrera.
 
 EXTRAE:
-- raceNumber: número entero de la carrera del día
-- annualRaceNumber: número entero de la carrera del año, o null si no aparece
-- distance: número entero de metros (ej: 1300)
-- scheduledTime: string en formato "HH:mm" (24h). Ej: "01:25 p. m." → "13:25"
-- conditions: string con las condiciones completas de la carrera
-- games: array de strings con los tipos de apuesta. Si no aparece, []
-- horses: array de ejemplares con los campos:
-  - dorsalNumber: número entero
-  - horseName: nombre SIN país entre paréntesis, SIN implementos, SIN precio de reclamo
-  - nationality: código de país solo letras sin paréntesis ("USA","ARG","CHI","PER","PAN","COL") o null
-  - medication: códigos de medicación (ej: "BUT-LAX") o ""
+- conditions: string con el texto completo de condiciones/clase de la carrera (busca después de "Condición:")
+- horses: array con todos los ejemplares inscritos:
+  - dorsalNumber: número entero (el número de partida)
+  - horseName: nombre del caballo SIN país entre paréntesis, SIN implementos, SIN precio de reclamo
+  - nationality: código país sin paréntesis ("USA","ARG","CHI","PER","PAN","COL","GB","BRZ") o null
+  - medication: códigos de medicación separados por guion (ej: "BUT-LAX", "LAX") o ""
   - weightRaw: string EXACTO del PDF incluyendo descuentos (ej: "54", "55-1", "54.5-3")
   - jockeyName: nombre completo del jinete
   - trainerName: nombre completo del entrenador
-  - postPosition: número entero de posición de partida
+  - postPosition: número entero de posición de partida (P.P.)
   - implements: códigos de implementos con puntos (ej: "L.CC.V.BB.M.LA.") o ""
-  - claimPrice: número entero si es carrera de reclamo (ej: 8000), o null
+  - claimPrice: número entero si es carrera de reclamo (ej: 8000 para "8.000,00"), o null
 
 REGLAS CRÍTICAS:
-- NUNCA incluyas "(USA)","(ARG)","(CHI)","(PER)" en horseName. Pon el país en nationality.
-- NUNCA incluyas "PRECIO $: 8.000,00" en horseName. Pon el número en claimPrice.
-- NUNCA incluyas implementos en horseName.
-- weightRaw debe ser el texto original del PDF, sin calcular.
+- NUNCA incluyas "(USA)", "(ARG)", "(CHI)", "(PER)", etc. en horseName. Pon el país en nationality.
+- NUNCA incluyas "PRECIO $: 8.000,00" o similar en horseName. El número va en claimPrice.
+- NUNCA incluyas implementos (L.CC., BZ., V., GR., etc.) en horseName.
+- weightRaw debe ser el texto original del PDF, sin calcular ni modificar.
 
-FORMATO: Devuelve SOLO el JSON del objeto de la carrera, sin markdown, sin explicaciones.
-La raíz es un objeto con los campos de arriba (NO un array, NO una clave "races").
+FORMATO: Devuelve SOLO JSON válido sin markdown ni explicaciones.
+Raíz: objeto con "conditions" (string) y "horses" (array).
 
-Bloque de carrera:
+Bloque:
 ${block}`;
 }
 
@@ -95,17 +84,6 @@ function clean(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
 }
 
-function normalizeTime(raw: string): string {
-  const m = raw.match(/(\d{1,2}):(\d{2})\s*([aApP])\.?\s*[mM]\.?/);
-  if (!m) return raw;
-  let h = parseInt(m[1]);
-  const min = m[2];
-  const meridiem = m[3].toLowerCase();
-  if (meridiem === 'a' && h === 12) h = 0;
-  if (meridiem === 'p' && h !== 12) h += 12;
-  return `${String(h).padStart(2, '0')}:${min}`;
-}
-
 function extractJSON(raw: string): string {
   let text = raw.trim();
   text = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
@@ -115,18 +93,16 @@ function extractJSON(raw: string): string {
   return text;
 }
 
-// ─── Convert a single GeminiRace to ExtractedRaceBlock ────────────────────
-
-function convertRace(geminiRace: GeminiRace): ExtractedRaceBlock {
+function buildEntries(horses: GeminiHorse[]): { entries: ExtractedEntry[]; failedLines: string[] } {
   const entries: ExtractedEntry[] = [];
   const failedLines: string[] = [];
 
-  for (const h of geminiRace.horses) {
+  for (const h of horses) {
     try {
       const { weight, weightRaw } = parseWeight(String(h.weightRaw));
       const rawHorseName = clean(h.horseName);
 
-      // Fallback: extraer nationality del nombre si Gemini no la separó
+      // Fallback: extract nationality from name if Gemini missed it
       const countryMatch = rawHorseName.match(/\s*\(([A-Z]{2,4})\)\s*$/);
       let horseName = rawHorseName;
       let nationality = h.nationality ? clean(h.nationality) : undefined;
@@ -162,31 +138,34 @@ function convertRace(geminiRace: GeminiRace): ExtractedRaceBlock {
     }
   }
 
-  const race: ExtractedRace = {
-    raceNumber: Number(geminiRace.raceNumber),
-    annualRaceNumber: geminiRace.annualRaceNumber ?? undefined,
-    distance: Number(geminiRace.distance),
-    scheduledTime: normalizeTime(geminiRace.scheduledTime),
-    conditions: clean(geminiRace.conditions),
-    prizePool: { bs: 0, usd: 0 },
-    games: geminiRace.games || [],
-  };
-
-  return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
+  return { entries, failedLines };
 }
 
-// ─── Process a single race block with Gemini ──────────────────────────────
+// ─── Process a single race block (hybrid: regex header + Gemini horses) ───
 
 async function processRaceBlock(block: string, index: number): Promise<ExtractedRaceBlock | null> {
-  const prompt = buildSingleRacePrompt(block);
+  // 1. Extract header fields with regex (deterministic, never wrong)
+  const headerWarnings: string[] = [];
+  const raceHeader = parseRaceHeader(block, headerWarnings);
+
+  // 2. Ask Gemini only for horses + conditions
+  const prompt = buildHorsesPrompt(block);
   try {
     const responseText = await callLLM(prompt);
     const jsonText = extractJSON(responseText);
-    const parsed = JSON.parse(jsonText) as GeminiRace;
-    if (typeof parsed.raceNumber !== 'number') throw new Error('raceNumber faltante');
-    return convertRace(parsed);
+    const parsed = JSON.parse(jsonText) as GeminiHorsesResponse;
+    if (!Array.isArray(parsed.horses)) throw new Error('horses array faltante en respuesta Gemini');
+
+    const { entries, failedLines } = buildEntries(parsed.horses);
+
+    // Use Gemini conditions if available, otherwise keep regex-parsed conditions
+    const race = parsed.conditions
+      ? { ...raceHeader, conditions: clean(parsed.conditions) }
+      : raceHeader;
+
+    return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
   } catch (err) {
-    console.error(`[GeminiParser] Error en bloque ${index + 1}:`, err);
+    console.error(`[GeminiParser] Error en bloque ${index + 1} (carrera ${raceHeader.raceNumber}):`, err);
     return null;
   }
 }
@@ -202,7 +181,7 @@ export async function processDocumentWithGemini(rawText: string): Promise<Proces
   const blocks = splitIntoRaceBlocks(processed);
 
   if (blocks.length === 0) {
-    warnings.push('No se detectaron bloques de carrera con el splitter. Verifica formato INH.');
+    warnings.push('No se detectaron bloques de carrera. Verifica formato INH.');
   }
 
   // Process all race blocks in parallel — one small Gemini call per race
@@ -214,7 +193,7 @@ export async function processDocumentWithGemini(rawText: string): Promise<Proces
 
   const failed = results.filter((r) => r === null).length;
   if (failed > 0) {
-    warnings.push(`${failed} de ${blocks.length} bloques de carrera fallaron con Gemini.`);
+    warnings.push(`${failed} de ${blocks.length} bloques fallaron con Gemini.`);
   }
 
   return { meeting, races, rawText, hash, warnings };
