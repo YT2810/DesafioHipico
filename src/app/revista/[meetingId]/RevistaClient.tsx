@@ -51,6 +51,7 @@ interface EntryItem {
   dorsalNumber: number;
   postPosition: number;
   horseName: string;
+  nationality: string | null;
   horseId: string;
   jockeyName: string;
   trainerName: string;
@@ -218,20 +219,20 @@ function HistoryRow({ h }: { h: RaceHistoryItem }) {
 // ── Trabajos inline ──
 function WorkoutRow({ w }: { w: WorkoutItem }) {
   return (
-    <div className="workout-row flex items-start gap-1 text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
-      <span className={`shrink-0 text-[8px] font-bold px-1 py-0.5 rounded border leading-none ${WORKOUT_COLORS[w.workoutType] ?? WORKOUT_COLORS.galopo}`}>
-        {WORKOUT_LABELS[w.workoutType] ?? w.workoutType}
-      </span>
-      <span className="shrink-0 text-gray-300 w-[3.2rem]">{shortDate(w.workoutDate)}</span>
-      {w.distance > 0 && <span className="shrink-0 text-gray-400 w-[2.8rem]">{w.distance}m</span>}
-      {w.daysRest !== null && (
-        <span className={`shrink-0 font-bold w-5 ${
-          (w.daysRest ?? 99) <= 3 ? 'text-green-400' : (w.daysRest ?? 99) <= 7 ? 'text-yellow-500' : 'text-gray-600'
-        }`}>{w.daysRest}d</span>
+    <div className="workout-row text-[10px] leading-tight py-[3px] border-t border-gray-800/50">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className={`shrink-0 text-[8px] font-bold px-1 py-0.5 rounded border leading-none ${WORKOUT_COLORS[w.workoutType] ?? WORKOUT_COLORS.galopo}`}>
+          {WORKOUT_LABELS[w.workoutType] ?? w.workoutType}
+        </span>
+        <span className="text-gray-400 font-mono text-[9px]">{shortDate(w.workoutDate)}</span>
+        {w.rm != null && <span className="font-bold text-yellow-300 text-[9px]">RM {w.rm}</span>}
+        {w.trainerName && <span className="text-gray-500 text-[9px]">Ent: {w.trainerName}</span>}
+        {w.jockeyName && <span className="text-amber-300/80 text-[9px]">{w.jockeyName}</span>}
+      </div>
+      {w.splits && (
+        <p className="font-mono text-yellow-400/90 mt-[2px] whitespace-pre-wrap">{w.splits}</p>
       )}
-      {w.splits && <span className="font-mono text-yellow-400/90">{w.splits}</span>}
-      {w.rm != null && <span className="shrink-0 font-bold text-yellow-300">RM {w.rm}</span>}
-      {w.comment && <span className="flex-1 text-gray-400 italic truncate">{w.comment}</span>}
+      {w.comment && <p className="text-gray-400 italic mt-[1px]">{w.comment}</p>}
     </div>
   );
 }
@@ -274,6 +275,11 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
               <span className={`text-[15px] font-extrabold leading-tight tracking-tight ${scratched ? 'line-through text-gray-600' : 'text-white'}`}>
                 {entry.horseName}
               </span>
+              {entry.nationality && (
+                <span className="text-[10px] font-bold text-sky-400 leading-none">
+                  ({entry.nationality})
+                </span>
+              )}
               {scratched && (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-950/60 border border-red-800/50 text-red-300 uppercase tracking-wide">Ret.</span>
               )}
@@ -290,6 +296,9 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
             </div>
             <p className="text-[11px] text-gray-400 mt-0.5 leading-tight">
               Ent: <span className="text-gray-200">{entry.trainerName || '—'}</span>
+              {entry.jockeyName && (
+                <span className="text-gray-500"> · <span className="text-amber-300/80">{entry.jockeyName}</span></span>
+              )}
               {entry.studName && <span className="text-gray-500"> · {entry.studName}</span>}
             </p>
             {entry.yearStats && entry.yearStats.starts > 0 && (
@@ -303,13 +312,10 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
             )}
           </div>
 
-          {/* Peso + Jinete — alineados derecha */}
+          {/* Peso — alineado derecha */}
           <div className="shrink-0 text-right">
             <p className="text-[15px] font-extrabold text-white leading-tight">
               {entry.weightDeclared || '—'}<span className="text-[10px] font-normal text-gray-600"> kg</span>
-            </p>
-            <p className="text-[13px] font-bold text-amber-200 leading-tight text-right">
-              {jockeyShort(entry.jockeyName)}
             </p>
           </div>
         </div>

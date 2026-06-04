@@ -227,12 +227,21 @@ export async function GET(
       workoutDate: { $gte: workoutWindowStart, $lte: meetingDate },
     }).sort({ workoutDate: -1 }).lean() as any[];
 
+    // Normalize horse name: strip trailing (PAIS) for matching
+    function normalizeHorseName(name: string): string {
+      return name.toUpperCase().trim().replace(/\s*\([A-Z]{2,4}\)\s*$/, '');
+    }
+
     // Index workouts by normalised horse name → all workouts per horse sorted desc
+    // Index BOTH with and without country suffix so either key finds the workouts
     const workoutsByName = new Map<string, any[]>();
     for (const w of allWorkouts) {
-      const key = w.horseName.toUpperCase().trim();
-      if (!workoutsByName.has(key)) workoutsByName.set(key, []);
-      workoutsByName.get(key)!.push(w);
+      const rawKey = w.horseName.toUpperCase().trim();
+      const normKey = normalizeHorseName(w.horseName);
+      for (const key of new Set([rawKey, normKey])) {
+        if (!workoutsByName.has(key)) workoutsByName.set(key, []);
+        workoutsByName.get(key)!.push(w);
+      }
     }
 
     // ── Build per-race response ──
@@ -257,7 +266,9 @@ export async function GET(
           : null;
 
         // Workouts since last race (or last 60 days if no race), max 4
-        const horseWorkouts = (workoutsByName.get(horseName.toUpperCase().trim()) ?? [])
+        // Try exact name first, then normalized (strips country suffix)
+        const normName = normalizeHorseName(horseName);
+        const horseWorkouts = (workoutsByName.get(horseName.toUpperCase().trim()) ?? workoutsByName.get(normName) ?? [])
           .filter((w: any) => !lastRaceDate || new Date(w.workoutDate) > lastRaceDate)
           .slice(0, 4)
           .map((w: any) => ({
@@ -278,6 +289,7 @@ export async function GET(
           dorsalNumber: e.dorsalNumber,
           postPosition: e.postPosition,
           horseName,
+          nationality: (horse?.nationality as string | undefined) ?? null,
           horseId: horseIdStr,
           jockeyName: (e.jockeyId as any)?.name ?? '',
           trainerName: (e.trainerId as any)?.name ?? '',

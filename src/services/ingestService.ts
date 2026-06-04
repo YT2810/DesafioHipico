@@ -166,18 +166,35 @@ export async function ingestDocument(doc: ProcessedDocument): Promise<IngestResu
 }
 
 async function upsertHorse(entry: ExtractedEntry) {
+  const horseName = entry.horse.name;
+  const nationality = (entry.horse as { nationality?: string }).nationality;
+
   const setPayload: Record<string, unknown> = {
-    name: entry.horse.name,
+    name: horseName,
     pedigree: entry.horse.pedigree,
   };
-  if ((entry.horse as { nationality?: string }).nationality) {
-    setPayload.nationality = (entry.horse as { nationality?: string }).nationality;
+  if (nationality) setPayload.nationality = nationality;
+  if (entry.horse.registrationId) setPayload.registrationId = entry.horse.registrationId;
+
+  // If horse arrives without country suffix, check if one already exists in DB
+  // with the same name + (PAIS) suffix — reuse that document to avoid duplicates
+  const hasCountrySuffix = /\([A-Z]{2,4}\)\s*$/.test(horseName);
+  if (!hasCountrySuffix) {
+    const existingWithCountry = await Horse.findOne({
+      name: { $regex: `^${horseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\([A-Z]`, $options: 'i' },
+    });
+    if (existingWithCountry) {
+      // Merge: update the existing (PAIS) horse with new data, return it
+      return Horse.findOneAndUpdate(
+        { _id: existingWithCountry._id },
+        { $set: { pedigree: entry.horse.pedigree, ...(nationality ? { nationality } : {}) } },
+        { new: true }
+      );
+    }
   }
-  if (entry.horse.registrationId) {
-    setPayload.registrationId = entry.horse.registrationId;
-  }
+
   return Horse.findOneAndUpdate(
-    { name: entry.horse.name },
+    { name: horseName },
     { $set: setPayload },
     { upsert: true, new: true }
   );
