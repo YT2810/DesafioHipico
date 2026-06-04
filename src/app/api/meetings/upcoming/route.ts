@@ -9,6 +9,8 @@ import Meeting from '@/models/Meeting';
 import '@/models/Track';
 import Race from '@/models/Race';
 
+export const revalidate = 60;
+
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();

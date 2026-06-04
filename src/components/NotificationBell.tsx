@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 
 const GOLD = '#D4AF37';
-const POLL_INTERVAL = 30_000; // 30 seconds
+const POLL_INTERVAL = 120_000; // 2 minutes
 
 interface Notif {
   _id: string;

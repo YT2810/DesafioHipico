@@ -16,7 +16,7 @@ import Meeting from '@/models/Meeting';
 import Forecast from '@/models/Forecast';
 import HandicapperProfile from '@/models/HandicapperProfile';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 const TARGET_ENTRIES = 12;
 const MIN_RACES_FOR_RANKING = 5;

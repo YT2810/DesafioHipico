@@ -276,7 +276,7 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
                 {entry.horseName}
               </span>
               {entry.nationality && (
-                <span className="text-[10px] font-bold text-sky-400 leading-none">
+                <span className="text-[13px] font-bold text-sky-400 leading-none">
                   ({entry.nationality})
                 </span>
               )}

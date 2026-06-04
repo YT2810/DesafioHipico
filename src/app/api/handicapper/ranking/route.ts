@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import HandicapperProfile from '@/models/HandicapperProfile';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 export interface RankingEntry {
   id: string;
