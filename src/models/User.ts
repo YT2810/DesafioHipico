@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
-export { GOLD_RATE, FREE_RACES_PER_MEETING, GOLD_COST_PER_RACE } from '@/lib/constants';
+export { GOLD_RATE, FREE_RACES_PER_MEETING, GOLD_COST_PER_RACE, MEETING_PASS_COST, getFreeRacesAllowance } from '@/lib/constants';
 
 /**
  * Tracks which races a user has unlocked (free or paid) per meeting.
@@ -11,6 +11,7 @@ export interface IMeetingConsumption {
   meetingId: string;
   freeUsed: number;
   unlockedRaceIds: string[];
+  passUnlocked: boolean;
 }
 
 export interface IUser extends Document {
@@ -43,6 +44,7 @@ const MeetingConsumptionSchema = new Schema<IMeetingConsumption>(
     meetingId: { type: String, required: true },
     freeUsed: { type: Number, default: 0 },
     unlockedRaceIds: [{ type: String }],
+    passUnlocked: { type: Boolean, default: false },
   },
   { _id: false }
 );

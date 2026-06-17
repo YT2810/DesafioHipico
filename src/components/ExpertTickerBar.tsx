@@ -3,18 +3,24 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import type { TickerEntry } from './HandicapperQuickDrawer';
 import HandicapperQuickDrawer from './HandicapperQuickDrawer';
+import { MEETING_PASS_COST } from '@/lib/constants';
 
 const GOLD = '#D4AF37';
 
 // ExpertTickerBar is now self-fetching.
 // raceId: when provided, shows fijos for that specific race.
 // meetingId: used as drawer context.
+// passUnlocked / onBuyPass: show Meeting Pass CTA pill in the ticker.
 interface Props {
   meetingId?: string;
   raceId?: string;
+  passUnlocked?: boolean;
+  onBuyPass?: () => void;
+  meetingPassLoading?: boolean;
+  goldBalance?: number;
 }
 
-export default function ExpertTickerBar({ meetingId, raceId }: Props) {
+export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuyPass, meetingPassLoading, goldBalance = 0 }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TickerEntry | null>(null);
   const [entries, setEntries] = useState<TickerEntry[]>([]);
@@ -114,9 +120,12 @@ export default function ExpertTickerBar({ meetingId, raceId }: Props) {
   }
   while (slotIdx < slots.length) merged.push(slots[slotIdx++]);
 
-  if (!merged.length) return null;
+  if (!merged.length && !onBuyPass) return null;
 
   const displayEntries = merged.length >= 4 ? [...merged, ...merged] : merged;
+
+  // Show Meeting Pass CTA pill when: user has no pass, onBuyPass provided, and has enough gold
+  const showPassCta = !!onBuyPass && !passUnlocked;
 
   return (
     <>
@@ -139,6 +148,18 @@ export default function ExpertTickerBar({ meetingId, raceId }: Props) {
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
         >
+          {/* Meeting Pass CTA pill — shown before ticker entries */}
+          {showPassCta && (
+            <button
+              onClick={onBuyPass}
+              disabled={meetingPassLoading || goldBalance < MEETING_PASS_COST}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-yellow-700/60 bg-yellow-950/30 hover:bg-yellow-950/50 disabled:opacity-40 transition-all active:scale-95"
+            >
+              <span className="text-[10px] font-black text-yellow-300 whitespace-nowrap">
+                {meetingPassLoading ? '...' : `💫 ${MEETING_PASS_COST}G · Pase Reunión`}
+              </span>
+            </button>
+          )}
           {displayEntries.map((entry, idx) => {
             const isSponsor = entry.slotType === 'sponsor' || entry.slotType === 'promo';
             const isActive = (entry as any).activeToday === true;

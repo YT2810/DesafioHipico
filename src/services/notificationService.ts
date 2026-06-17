@@ -76,11 +76,22 @@ export async function notifyAllUsers(payload: NotifPayload) {
 
 // ── Convenience helpers ────────────────────────────────────────────────────
 
-export async function notifyTopUpPending(userId: string, goldAmount: number, ref: string) {
+export async function notifyTopUpPending(
+  userId: string,
+  goldAmount: number,
+  ref: string,
+  extras?: { bank?: string; phone?: string; amountBs?: number; packageLabel?: string }
+) {
+  const parts = [`${goldAmount} Golds`];
+  if (extras?.packageLabel) parts.push(`Paquete: ${extras.packageLabel}`);
+  if (extras?.amountBs) parts.push(`Bs ${extras.amountBs.toLocaleString('es-VE')}`);
+  if (extras?.bank) parts.push(extras.bank);
+  if (extras?.phone) parts.push(`Tel: ${extras.phone}`);
+  parts.push(`Ref: ${ref}`);
   await notifyAdmins({
     type: 'topup_pending',
     title: '💰 Nueva recarga pendiente',
-    body: `${goldAmount} Golds · Ref: ${ref}`,
+    body: parts.join(' · '),
     link: '/admin/topup',
     data: { userId, ref, goldAmount: String(goldAmount) },
   });

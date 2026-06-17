@@ -11,7 +11,7 @@ import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import TopUpRequest from '@/models/TopUpRequest';
 import User from '@/models/User';
-import { GOLD_RATE } from '@/lib/constants';
+import { TOPUP_PACKAGES } from '@/lib/constants';
 import { Types } from 'mongoose';
 import { notifyTopUpPending } from '@/services/notificationService';
 
@@ -27,14 +27,15 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado.' }, { status: 404 });
 
     const body = await req.json();
-    const { referenceNumber, phone, legalId, bank, amountBs, amountUsd, paymentDate, receiptUrl } = body;
+    const { referenceNumber, phone, legalId, bank, amountBs, paymentDate, receiptUrl, packageId } = body;
 
-    if (!referenceNumber || !phone || !legalId || !bank || !amountBs || !amountUsd || !paymentDate) {
+    if (!referenceNumber || !phone || !legalId || !bank || !amountBs || !paymentDate || !packageId) {
       return NextResponse.json({ error: 'Todos los campos son requeridos.' }, { status: 400 });
     }
 
-    if (amountUsd < 10) {
-      return NextResponse.json({ error: 'El monto mínimo es $10 USD (40 Golds).' }, { status: 400 });
+    const pkg = TOPUP_PACKAGES.find(p => p.id === packageId);
+    if (!pkg) {
+      return NextResponse.json({ error: 'Paquete inválido.' }, { status: 400 });
     }
 
     // Check for duplicate reference number
@@ -43,17 +44,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Ese número de referencia ya fue registrado.' }, { status: 409 });
     }
 
-    const goldAmount = Math.floor((amountUsd / GOLD_RATE.usd) * GOLD_RATE.golds);
+    const goldAmount = pkg.golds;
 
     const request = await TopUpRequest.create({
       userId: new Types.ObjectId(session.user.id),
-      amountUsd,
       goldAmount,
       referenceNumber: referenceNumber.trim(),
       phone: phone.trim(),
       legalId: legalId.trim(),
       bank: bank.trim(),
-      amountBs,
+      amountBs: Number(amountBs),
       paymentDate: paymentDate.trim(),
       receiptUrl: receiptUrl?.trim() || undefined,
       status: 'pending',
@@ -67,8 +67,13 @@ export async function POST(req: NextRequest) {
       await User.findByIdAndUpdate(session.user.id, { $set: updates });
     }
 
-    // Notify admins/staff of new pending top-up (fire-and-forget)
-    notifyTopUpPending(session.user.id, goldAmount, referenceNumber.trim()).catch(() => {});
+    // Notify admins/staff with full payment details (fire-and-forget)
+    notifyTopUpPending(session.user.id, goldAmount, referenceNumber.trim(), {
+      bank: bank.trim(),
+      phone: phone.trim(),
+      amountBs: Number(amountBs),
+      packageLabel: pkg.label,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

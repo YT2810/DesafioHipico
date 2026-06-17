@@ -460,9 +460,17 @@ export default function PerfilPage() {
                 {/* Presentación */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1 font-medium">Presentación <span className="text-gray-600">(opcional)</span></label>
-                  <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2}
+                  <textarea value={bio} onChange={e => setBio(e.target.value.slice(0, 500))} rows={2}
+                    maxLength={500}
                     placeholder="Cuéntanos tu experiencia en el mundo hípico..."
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors resize-none" />
+                    className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none transition-colors resize-none ${
+                      bio.length >= 500 ? 'border-red-600' : bio.length >= 450 ? 'border-yellow-700 focus:border-yellow-600' : 'border-gray-700 focus:border-yellow-600'
+                    }`} />
+                  <div className="flex justify-end mt-0.5">
+                    <span className={`text-xs font-mono ${
+                      bio.length >= 500 ? 'text-red-400' : bio.length >= 450 ? 'text-yellow-400' : 'text-gray-600'
+                    }`}>{bio.length}/500</span>
+                  </div>
                 </div>
 
                 {/* Experiencia + metodología */}
@@ -475,9 +483,19 @@ export default function PerfilPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1 font-medium">Metodología <span className="text-gray-600">(opc.)</span></label>
-                    <input value={methodology} onChange={e => setMethodology(e.target.value)}
+                    <input value={methodology} onChange={e => setMethodology(e.target.value.slice(0, 500))}
+                      maxLength={500}
                       placeholder="Ej: Estadística, forma..."
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
+                      className={`w-full bg-gray-800 border rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none transition-colors ${
+                        methodology.length >= 500 ? 'border-red-600' : 'border-gray-700 focus:border-yellow-600'
+                      }`} />
+                    {methodology.length > 400 && (
+                      <div className="flex justify-end mt-0.5">
+                        <span className={`text-xs font-mono ${
+                          methodology.length >= 500 ? 'text-red-400' : 'text-yellow-400'
+                        }`}>{methodology.length}/500</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

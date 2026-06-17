@@ -2,18 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { VENEZUELAN_BANKS, GOLD_RATE, PAYMENT_DESTINATION } from '@/lib/constants';
+import { VENEZUELAN_BANKS, PAYMENT_DESTINATION, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/constants';
 
 const GOLD = '#D4AF37';
 
-// Base rate: 40 Golds = $10 USD (4 Golds/$1)
-// Discounts: volume bonuses make higher tiers more attractive
-const USD_PACKAGES = [
-  { usd: 10,  golds: 40,  label: 'Inicio',    badge: null,          saving: null },
-  { usd: 25,  golds: 110, label: 'Popular',   badge: 'MÁS POPULAR', saving: '+10 Golds gratis' },
-  { usd: 50,  golds: 240, label: 'Pro',       badge: null,          saving: '+40 Golds gratis' },
-  { usd: 100, golds: 520, label: 'Elite',     badge: 'MEJOR VALOR', saving: '+120 Golds gratis' },
-];
+type PayMethod = 'pagomovil' | 'paypal' | 'binance';
 
 interface TopUpModalProps { onClose: () => void; }
 
@@ -23,18 +16,20 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
   const today = new Date().toISOString().slice(0, 10);
   const [step, setStep] = useState<'package' | 'billing' | 'destination' | 'form' | 'success'>('package');
-  const [selectedUsd, setSelectedUsd] = useState(10);
+  const [selectedPkgId, setSelectedPkgId] = useState<TopUpPackageId>('jinete');
+  const [payMethod, setPayMethod] = useState<PayMethod>('pagomovil');
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState('');
   const [successData, setSuccessData] = useState<{ goldAmount: number; requestId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Exchange rate
+  // Exchange rate — only fetched when PayPal/Binance tab is active
   const [rateVes, setRateVes] = useState<number | null>(null);
   const [rateStale, setRateStale] = useState(false);
   const [rateUpdatedAt, setRateUpdatedAt] = useState<string | null>(null);
   useEffect(() => {
+    if (payMethod === 'pagomovil') return;
     fetch('/api/exchange-rate')
       .then(r => r.json())
       .then(d => {
@@ -45,7 +40,10 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [payMethod]);
+
+  const selectedPkg = TOPUP_PACKAGES.find(p => p.id === selectedPkgId) ?? TOPUP_PACKAGES[1];
+  const goldAmount = selectedPkg.golds;
 
   const [form, setForm] = useState({
     referenceNumber: '',
@@ -66,9 +64,9 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState('');
 
-  const goldAmount = USD_PACKAGES.find(p => p.usd === selectedUsd)?.golds ?? Math.floor((selectedUsd / GOLD_RATE.usd) * GOLD_RATE.golds);
   function set(field: string, value: string) { setForm(p => ({ ...p, [field]: value })); }
   function setBill(field: string, value: string) { setBilling(p => ({ ...p, [field]: value })); }
+  function resetToPackage() { setStep('package'); setError(''); }
 
   async function handleContinueFromPackage() {
     // If billing already complete in session, skip billing step
@@ -138,10 +136,12 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amountUsd: selectedUsd, goldAmount,
+          packageId: selectedPkgId,
           referenceNumber: form.referenceNumber,
-          phone: form.phone, legalId: form.legalId,
-          bank: form.bank, amountBs: parseFloat(form.amountBs) || 0,
+          phone: form.phone,
+          legalId: form.legalId,
+          bank: form.bank,
+          amountBs: parseFloat(form.amountBs) || selectedPkg.priceBs,
           paymentDate: form.paymentDate,
           receiptUrl: form.receiptUrl || undefined,
         }),
@@ -163,7 +163,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
           <div>
             <h2 className="text-base font-bold text-white">🪙 Recargar Golds</h2>
-            <p className="text-xs text-gray-500">{GOLD_RATE.golds} Golds = ${GOLD_RATE.usd} USD · Pago Móvil</p>
+            <p className="text-xs text-gray-500">Pago Móvil · PayPal · Binance Pay</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
         </div>
@@ -187,44 +187,59 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
           {/* ── Step 1: Package ── */}
           {step === 'package' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {USD_PACKAGES.map(pkg => (
-                  <button key={pkg.usd} onClick={() => setSelectedUsd(pkg.usd)}
-                    className={`relative flex flex-col items-center gap-1 p-4 rounded-2xl border-2 transition-all ${selectedUsd === pkg.usd ? 'border-yellow-600 bg-yellow-950/30' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
+
+              {/* Payment method tabs */}
+              <div className="flex gap-2">
+                <button onClick={() => setPayMethod('pagomovil')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                    payMethod === 'pagomovil'
+                      ? 'border-yellow-600 bg-yellow-950/30 text-yellow-400'
+                      : 'border-gray-700 bg-gray-800/50 text-gray-500'
+                  }`}>
+                  📱 Pago Móvil
+                </button>
+                <button disabled title="Próximamente"
+                  className="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-800 bg-gray-900/50 text-gray-700 cursor-not-allowed relative">
+                  PayPal
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">Próx.</span>
+                </button>
+                <button disabled title="Próximamente"
+                  className="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-800 bg-gray-900/50 text-gray-700 cursor-not-allowed relative">
+                  Binance
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">Próx.</span>
+                </button>
+              </div>
+
+              {/* Package cards */}
+              <div className="grid grid-cols-3 gap-2.5">
+                {TOPUP_PACKAGES.map(pkg => (
+                  <button key={pkg.id} onClick={() => setSelectedPkgId(pkg.id as TopUpPackageId)}
+                    className={`relative flex flex-col items-center gap-1 p-3.5 rounded-2xl border-2 transition-all ${
+                      selectedPkgId === pkg.id
+                        ? 'border-yellow-600 bg-yellow-950/30'
+                        : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                    }`}>
                     {pkg.badge && (
-                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-extrabold px-2 py-0.5 rounded-full text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9px] font-extrabold px-2 py-0.5 rounded-full text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>
                         {pkg.badge}
                       </span>
                     )}
-                    <span className="text-xl font-extrabold text-white">{pkg.golds}</span>
-                    <span className="text-xs font-medium" style={{ color: GOLD }}>Golds</span>
-                    <span className="text-xs text-gray-400 font-semibold">${pkg.usd} USD</span>
-                    {rateVes && (
-                      <span className="text-xs text-gray-600">
-                        Bs {(pkg.usd * rateVes).toLocaleString('es-VE', { maximumFractionDigits: 0 })}
-                      </span>
-                    )}
+                    <span className="text-2xl font-extrabold text-white">{pkg.golds}</span>
+                    <span className="text-[11px] font-semibold" style={{ color: GOLD }}>Golds</span>
+                    <span className="text-sm font-bold text-white mt-0.5">Bs {pkg.priceBs.toLocaleString('es-VE')}</span>
+                    <span className="text-[10px] text-gray-500">{pkg.bsPerGold} Bs/Gold</span>
                     {pkg.saving && (
-                      <span className="text-[10px] font-bold text-green-400 bg-green-950/50 border border-green-800/40 rounded-full px-1.5 py-0.5 mt-0.5">
+                      <span className="text-[9px] font-bold text-green-400 bg-green-950/50 border border-green-800/40 rounded-full px-1.5 py-0.5 mt-0.5 text-center leading-tight">
                         {pkg.saving}
                       </span>
                     )}
                   </button>
                 ))}
               </div>
-              {rateVes && (
-                <p className="text-xs text-gray-600 text-center">
-                  Tasa BCV: <span className="text-gray-400 font-semibold">Bs {rateVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> / USD
-                  {rateUpdatedAt && (
-                    <> · actualizada {new Date(rateUpdatedAt).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}</>
-                  )}
-                </p>
-              )}
-              {rateStale && (
-                <p className="text-xs text-orange-400 bg-orange-950/30 border border-orange-800/40 rounded-xl px-3 py-2">
-                  ⚠️ La tasa puede estar desactualizada. Consulta el monto exacto en Bs con el equipo.
-                </p>
-              )}
+
+              {/* Package description */}
+              <p className="text-xs text-center text-gray-500 italic">{selectedPkg.description}</p>
+
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400 space-y-1">
                 <p>📌 Realiza un <strong className="text-white">Pago Móvil</strong> al número de la plataforma.</p>
                 <p>📋 Luego completa el formulario con los datos del pago.</p>
@@ -332,12 +347,8 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                   <DestRow label="Cédula"   value={PAYMENT_DESTINATION.legalId} copyable />
                   <DestRow label="Teléfono" value={PAYMENT_DESTINATION.phone}   copyable />
                   <DestRow label="Nombre"   value={PAYMENT_DESTINATION.name} />
-                  <DestRow label="Monto USD"  value={`$${selectedUsd} USD`} highlight />
-                  {rateVes && (
-                    <DestRow label="Monto Bs"
-                      value={`Bs ${(selectedUsd * rateVes).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      highlight />
-                  )}
+                  <DestRow label="Paquete"  value={`${selectedPkg.label} — ${selectedPkg.golds} Golds`} />
+                  <DestRow label="Monto Bs" value={`Bs ${selectedPkg.priceBs.toLocaleString('es-VE')}`} highlight copyable />
                 </div>
               </div>
               <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3 text-xs text-blue-300 space-y-1">
@@ -345,7 +356,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                 <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles.</p>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setStep('package')} className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
+                <button type="button" onClick={resetToPackage} className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
                 <button onClick={() => setStep('form')} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>Ya pagué →</button>
               </div>
             </div>
@@ -356,7 +367,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="bg-yellow-950/30 border border-yellow-800/40 rounded-xl px-4 py-3 flex items-center justify-between">
                 <div><p className="text-xs text-gray-500">Solicitando</p><p className="text-lg font-extrabold" style={{ color: GOLD }}>{goldAmount} Golds</p></div>
-                <div className="text-right"><p className="text-xs text-gray-500">Pagaste</p><p className="text-sm font-bold text-white">${selectedUsd} USD</p></div>
+                <div className="text-right"><p className="text-xs text-gray-500">Monto</p><p className="text-sm font-bold text-white">Bs {selectedPkg.priceBs.toLocaleString('es-VE')}</p><p className="text-xs text-gray-600">{selectedPkg.label}</p></div>
               </div>
 
               <Field label="Número de referencia *" value={form.referenceNumber} onChange={e => set('referenceNumber', e.target.value)}
@@ -414,6 +425,8 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               <div className="flex gap-3 pb-2">
                 <button type="button" onClick={() => setStep('destination')}
                   className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
+                {/* rateVes/rateStale/rateUpdatedAt vars kept for PayPal/Binance future use - silence unused warning */}
+                {false && rateVes && rateStale && rateUpdatedAt && null}
                 <button type="submit" disabled={loading || uploadingImg}
                   className="flex-1 py-3 rounded-xl text-sm font-bold text-black disabled:opacity-50"
                   style={{ backgroundColor: GOLD }}>

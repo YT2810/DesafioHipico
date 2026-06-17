@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, FREE_RACES_PER_MEETING } from '@/lib/constants';
+import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, MEETING_PASS_COST, getFreeRacesAllowance } from '@/lib/constants';
 import NotificationBell from '@/components/NotificationBell';
 import ExpertTickerBar from '@/components/ExpertTickerBar';
 
@@ -302,7 +302,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap }: {
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap, passUnlocked, onBuyPass, meetingPassLoading, meetingPassError }: {
   race: RaceItem; 
   unlocked: boolean; 
   goldBalance: number; 
@@ -314,6 +314,10 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   meetingInfo?: { trackName: string; meetingNumber: number };
   statsMap?: Map<string, { e1: number | null; eGeneral: number }>;
   globalRankMap?: Map<string, number>;
+  passUnlocked?: boolean;
+  onBuyPass?: () => void;
+  meetingPassLoading?: boolean;
+  meetingPassError?: string;
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
@@ -348,10 +352,51 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
         )}
       </div>
       {!unlocked && (
-        <div className="px-4 py-6 flex flex-col items-center gap-3 text-center">
-          <div className="rounded-xl border border-yellow-700/40 bg-yellow-950/20 px-4 py-3 w-full">
-            <p className="text-xs font-bold text-yellow-300 mb-1">🎁 Contenido Premium liberado por inauguración</p>
-            <p className="text-xs text-gray-500">Regístrate gratis para ver todos los pronósticos</p>
+        <div className="relative overflow-hidden">
+          {/* Blurred preview of fake forecast content */}
+          <div className="blur-sm pointer-events-none select-none px-4 py-3 space-y-2 opacity-50">
+            {[{ name: 'La Cátedra', marks: ['FAVO GRANDE', 'VIENTO SUR', 'EL CORCEL'] }, { name: 'El Profeta', marks: ['TRUENO REAL', 'SOL NACIENTE'] }].map((exp, ei) => (
+              <div key={ei} className="bg-gray-800/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-6 h-6 rounded-full bg-yellow-900/40 flex items-center justify-center text-xs font-bold text-yellow-400">{exp.name[0]}</span>
+                  <span className="text-xs font-bold text-white">{exp.name}</span>
+                </div>
+                {exp.marks.map((m, mi) => (
+                  <div key={mi} className="flex items-center gap-2 bg-gray-700/40 rounded-lg px-2 py-1.5 mb-1">
+                    <span className="text-xs text-gray-500">{mi + 1}</span>
+                    <span className="text-xs font-semibold text-white">{m}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          {/* Paywall overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-950/70 backdrop-blur-[3px] px-4 py-6">
+            <div className="text-center">
+              <p className="text-sm font-extrabold text-white mb-0.5">La Cátedra te espera</p>
+              <p className="text-xs text-gray-400">Desbloquea esta carrera con 1 Gold o accede a toda la reunión</p>
+            </div>
+            <div className="flex flex-col gap-2 w-full max-w-xs">
+              <button
+                onClick={onUnlock}
+                disabled={goldBalance < 1}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40"
+                style={{ backgroundColor: GOLD }}>
+                🔓 1 Gold — Solo esta carrera
+              </button>
+              {!passUnlocked && (
+                <button
+                  onClick={onBuyPass}
+                  disabled={meetingPassLoading || goldBalance < (MEETING_PASS_COST)}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
+                  {meetingPassLoading ? 'Procesando...' : `💫 ${MEETING_PASS_COST}G — Meeting Pass (toda la reunión)`}
+                </button>
+              )}
+              {goldBalance < 1 && (
+                <p className="text-xs text-center text-gray-600">Sin Golds — recarga en tu perfil</p>
+              )}
+              {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
+            </div>
           </div>
         </div>
       )}
@@ -400,7 +445,10 @@ export default function PronosticosPage() {
   const [meeting, setMeeting] = useState<MeetingItem | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
   const [loadingMeeting, setLoadingMeeting] = useState(false);
-  const [freeRemaining, setFreeRemaining] = useState(FREE_RACES_PER_MEETING);
+  const [freeRemaining, setFreeRemaining] = useState(2);
+  const [passUnlocked, setPassUnlocked] = useState(false);
+  const [meetingPassLoading, setMeetingPassLoading] = useState(false);
+  const [meetingPassError, setMeetingPassError] = useState('');
   const [statsMap, setStatsMap] = useState<Map<string, { e1: number | null; eGeneral: number }>>(new Map());
   const [globalRankMap, setGlobalRankMap] = useState<Map<string, number>>(new Map());
 
@@ -430,26 +478,40 @@ export default function PronosticosPage() {
   }, [status]);
 
   // Load races + forecasts when meeting changes
+  // Uses 3 parallel fetches:
+  //   1. /api/meetings/[id]/races       — race metadata
+  //   2. /api/forecasts/public          — cacheable forecast content (ISR 120s)
+  //   3. /api/forecasts/access          — per-user access map (force-dynamic, lightweight)
   const loadMeeting = useCallback(async (meetingId: string) => {
     if (!meetingId) return;
     setLoadingMeeting(true);
     setSelectedRaceNumber(null);
     try {
-      const userId = (session?.user as any)?.id ?? '';
-      const [racesRes, forecastsRes] = await Promise.all([
+      const [racesRes, publicRes] = await Promise.all([
         fetch(`/api/meetings/${meetingId}/races`).then(r => r.json()),
-        fetch(`/api/forecasts?meetingId=${meetingId}&userId=${userId}`).then(r => r.json()),
+        fetch(`/api/forecasts/public?meetingId=${meetingId}`).then(r => r.json()),
       ]);
 
       const races: any[] = racesRes.races ?? [];
-      const forecastsByRace: Record<string, { access: any; forecasts: any[]; scratchedDorsals?: number[] }> = forecastsRes.races ?? {};
-      setFreeRemaining(forecastsRes.freeRemaining ?? FREE_RACES_PER_MEETING);
+      const publicByRace: Record<string, { forecasts: any[]; scratchedDorsals?: number[] }> = publicRes.races ?? {};
+      const raceIds: string[] = races.map((r: any) => r.id);
+
+      // Fetch per-user access map in parallel with race metadata (lightweight)
+      const accessRes = await fetch(
+        `/api/forecasts/access?meetingId=${meetingId}&totalRaces=${races.length}&raceIds=${raceIds.join(',')}`
+      ).then(r => r.json()).catch(() => ({ map: {}, freeRemaining: getFreeRacesAllowance(races.length), passUnlocked: false }));
+
+      const accessMap: Record<string, { unlocked: boolean; free: boolean }> = accessRes.map ?? {};
+      setFreeRemaining(accessRes.freeRemaining ?? getFreeRacesAllowance(races.length));
+      setPassUnlocked(accessRes.passUnlocked ?? false);
 
       const apiMeeting = apiMeetings.find(m => m.id === meetingId);
       const meetingDate = apiMeeting ? new Date(apiMeeting.date).toLocaleDateString('es-VE') : '';
 
       const raceItems: RaceItem[] = races.map(r => {
-        const raceData: any = forecastsByRace[r.id] ?? { access: { unlocked: true, free: true }, forecasts: [], scratchedDorsals: [] };
+        const pubData = publicByRace[r.id] ?? { forecasts: [], scratchedDorsals: [] };
+        const access = accessMap[r.id] ?? { unlocked: false, free: false };
+        const raceData: any = { ...pubData, access };
         const forecasts: ForecastItem[] = raceData.forecasts.map((f: any) => ({
           handicapper: {
             id: f.handicapperId?._id ?? f.handicapperId ?? '',
@@ -589,14 +651,43 @@ export default function PronosticosPage() {
     );
   }
 
-  function isRaceUnlocked(_raceId: string, _idx: number) {
-    return true; // Launch mode: all races open for registered users
+  function isRaceUnlocked(raceId: string, _idx: number) {
+    if (isPrivileged || passUnlocked) return true;
+    const race = meeting?.races.find(r => r.raceId === raceId);
+    return (race as any)?._access?.unlocked ?? false;
   }
 
-  function handleUnlock(_raceId: string) {
-    // Gold unlock is handled server-side via forecastAccessService
-    // Reload the meeting data to reflect new access
-    if (selectedMeetingId) loadMeeting(selectedMeetingId);
+  async function handleUnlock(raceId: string) {
+    if (!selectedMeetingId) return;
+    try {
+      await fetch('/api/forecasts/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId: selectedMeetingId, raceId }),
+      });
+    } catch { /* ignore, reload will show current state */ }
+    loadMeeting(selectedMeetingId);
+  }
+
+  async function handleBuyMeetingPass() {
+    if (!selectedMeetingId) return;
+    setMeetingPassLoading(true);
+    setMeetingPassError('');
+    try {
+      const res = await fetch('/api/forecasts/pass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId: selectedMeetingId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error al comprar el pase');
+      setPassUnlocked(true);
+      loadMeeting(selectedMeetingId);
+    } catch (err) {
+      setMeetingPassError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setMeetingPassLoading(false);
+    }
   }
   function toggleFollow(id: string) {
     setFollowedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -643,7 +734,14 @@ export default function PronosticosPage() {
 
       {/* Expert Ticker — sticky below header, self-fetching. raceId scopes fijos to active race. */}
       <div className="sticky top-14 z-10">
-        <ExpertTickerBar meetingId={selectedMeetingId || undefined} raceId={selectedRaceId} />
+        <ExpertTickerBar
+          meetingId={selectedMeetingId || undefined}
+          raceId={selectedRaceId}
+          passUnlocked={passUnlocked}
+          onBuyPass={!isPrivileged ? handleBuyMeetingPass : undefined}
+          meetingPassLoading={meetingPassLoading}
+          goldBalance={goldBalance}
+        />
       </div>
 
       <main className="mx-auto max-w-2xl px-4 py-4 space-y-4">
@@ -668,14 +766,43 @@ export default function PronosticosPage() {
             );
           })}
         </div>
-        {/* Launch promo banner */}
-        <div className="rounded-xl border border-yellow-700/50 bg-gradient-to-r from-yellow-900/40 to-yellow-800/20 px-4 py-2.5 flex items-center gap-3">
-          <span className="text-lg shrink-0">🎁</span>
-          <p className="text-xs text-yellow-200/90 flex-1">
-            <span className="font-bold text-yellow-300">¡PROMO DE LANZAMIENTO!</span>
-            {' '}Todo el análisis hípico liberado por tiempo limitado
-          </p>
-        </div>
+        {/* Access status banner */}
+        {!isPrivileged && (
+          passUnlocked ? (
+            <div className="rounded-xl border border-green-700/50 bg-gradient-to-r from-green-900/30 to-green-800/10 px-4 py-2.5 flex items-center gap-3">
+              <span className="text-lg shrink-0">🏗️</span>
+              <p className="text-xs text-green-200/90 flex-1">
+                <span className="font-bold text-green-300">Meeting Pass activo</span>
+                {' '}— Todas las carreras de esta reunión desbloqueadas
+              </p>
+            </div>
+          ) : freeRemaining > 0 ? (
+            <div className="rounded-xl border border-yellow-700/50 bg-gradient-to-r from-yellow-900/30 to-yellow-800/10 px-4 py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-lg shrink-0">🎁</span>
+                <p className="text-xs text-yellow-200/90">
+                  <span className="font-bold text-yellow-300">{freeRemaining} carrera{freeRemaining !== 1 ? 's' : ''} gratis</span>
+                  {' '}disponibles en esta reunión
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-700 bg-gray-900/60 px-4 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white">La Cátedra completa</p>
+                <p className="text-xs text-gray-500">{MEETING_PASS_COST} Golds — desbloquea toda la reunión</p>
+                {meetingPassError && <p className="text-xs text-red-400 mt-1">{meetingPassError}</p>}
+              </div>
+              <button
+                onClick={handleBuyMeetingPass}
+                disabled={meetingPassLoading || goldBalance < MEETING_PASS_COST}
+                className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-40 whitespace-nowrap"
+                style={{ backgroundColor: GOLD }}>
+                {meetingPassLoading ? '...' : `💫 ${MEETING_PASS_COST}G Pase`}
+              </button>
+            </div>
+          )
+        )}
         {/* Race buttons */}
         <div>
           <p className="text-xs text-gray-600 mb-2 font-medium uppercase tracking-wide">Selecciona una carrera</p>
@@ -716,7 +843,9 @@ export default function PronosticosPage() {
             onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow}
             isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)}
             meetingInfo={meeting ? { trackName: meeting.trackName, meetingNumber: meeting.meetingNumber } : undefined}
-            statsMap={statsMap} globalRankMap={globalRankMap} />
+            statsMap={statsMap} globalRankMap={globalRankMap}
+            passUnlocked={passUnlocked} onBuyPass={handleBuyMeetingPass}
+            meetingPassLoading={meetingPassLoading} meetingPassError={meetingPassError} />
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>

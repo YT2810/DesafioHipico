@@ -14,7 +14,7 @@ import '@/models/Track';
 import '@/models/Horse';
 import '@/models/Person';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120;
 
 export async function GET(req: Request) {
   try {

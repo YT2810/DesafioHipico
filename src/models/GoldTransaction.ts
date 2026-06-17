@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 export type GoldTxType =
   | 'purchase'
   | 'race_unlock'
+  | 'meeting_pass'
   | 'audio_purchase'
   | 'refund'
   | 'bonus'
@@ -35,7 +36,7 @@ const GoldTransactionSchema = new Schema<IGoldTransaction>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     type: {
       type: String,
-      enum: ['purchase', 'race_unlock', 'audio_purchase', 'refund', 'bonus', 'handicapper_payout', 'platform_fee'],
+      enum: ['purchase', 'race_unlock', 'meeting_pass', 'audio_purchase', 'refund', 'bonus', 'handicapper_payout', 'platform_fee'],
       required: true,
     },
     amount: { type: Number, required: true },

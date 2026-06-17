@@ -4,7 +4,7 @@ import WorkoutEntry from '@/models/WorkoutEntry';
 import Track from '@/models/Track';
 import Meeting from '@/models/Meeting';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120;
 
 export async function GET(
   _req: NextRequest,

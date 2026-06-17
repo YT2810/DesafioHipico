@@ -109,10 +109,11 @@ function getBanner(
     };
   }
 
-  // Default — promo lanzamiento
+  // Default — CTA pronósticos
   return {
-    text: '🎁 ¡PROMO DE LANZAMIENTO! Todo el análisis hípico liberado por tiempo limitado',
-    bg: 'from-yellow-900/70 to-yellow-800/40',
+    text: '� Consulta los pronósticos de hoy y sigue a los mejores handicappers',
+    href: '/pronosticos',
+    bg: 'from-yellow-900/60 to-yellow-800/30',
     textColor: 'text-yellow-300',
     borderColor: 'border-yellow-700/50',
   };

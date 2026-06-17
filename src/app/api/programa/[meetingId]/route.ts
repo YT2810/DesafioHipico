@@ -17,7 +17,7 @@ import '@/models/Person';
 import '@/models/HandicapperProfile';
 import { Types } from 'mongoose';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120;
 
 export async function GET(
   _req: NextRequest,
