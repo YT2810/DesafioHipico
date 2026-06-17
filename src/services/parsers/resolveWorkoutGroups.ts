@@ -63,7 +63,7 @@ function extractGroups(workouts: ParsedWorkout[]): GroupEntry[] {
 
 async function resolveGroupWithAI(group: GroupEntry): Promise<string[]> {
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
-  const OPENROUTER_MODEL   = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
+  const OPENROUTER_MODEL   = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash';
   if (!OPENROUTER_API_KEY) return Array(group.nHorses).fill(group.groupKey);
 
   const prompt = `Eres un experto en carreras de caballos venezolanas del hipódromo de Valencia.

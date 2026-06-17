@@ -4,6 +4,8 @@
 > **Propósito:** Este archivo es lo primero que debe leer cualquier LLM o desarrollador antes de tocar el proyecto.
 > Contiene toda la lógica de negocio, decisiones de arquitectura, estado actual y reglas críticas.
 > **Leer completo antes de escribir una sola línea de código.**
+>
+> **Última actualización:** Jun 2026
 
 ---
 
@@ -417,11 +419,11 @@ FORECAST_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', '
 
 ---
 
-## 12. Estado del proyecto (Mar 2026)
+## 12. Estado del proyecto (Jun 2026)
 
 ### ✅ Completo y en producción
 - Autenticación completa (Google + Magic Link + Telegram estructura)
-- Ingestión de PDFs INH (La Rinconada) + HINAVA (Valencia)
+- Ingestión de PDFs INH (La Rinconada) + HINAVA (Valencia) — parser híbrido regex+Gemini
 - Ingestor Gemini: pronósticos desde texto, tweets, transcripciones
 - Ingestor de resultados desde imágenes (OCR + tabla editable)
 - Dashboard de pronósticos freemium (`/pronosticos`)
@@ -431,30 +433,335 @@ FORECAST_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', '
 - Perfil público de handicapper con desglose por hipódromo
 - Página de resultados públicos (`/resultados`) con dividendos completos + video YouTube
 - Cintillo dinámico de expertos (sticky, actualiza por carrera)
-- Sistema de notificaciones in-app (10 triggers)
-- SEO: sitemap dinámico, OG images, robots.ts, JSON-LD
+- Sistema de notificaciones in-app (10 triggers, polling 120s)
+- SEO: sitemap dinámico, OG images, robots.ts, JSON-LD, H1s optimizados
 - Panel admin completo (topup, usuarios, roles, tasa BCV, video reuniones)
+- `/revista/[meetingId]` — programa hípico clásico con historial, workouts, nationality
+- `/traqueos` — página pública de trabajos de entrenamiento por hipódromo y fecha
+- `/en-vivo` — resultados en tiempo real del día de carreras
+- El Melli — chatbot de IA con economía Gold integrada
 - 26+ handicappers rankeados con datos reales
 
 ### 🔧 Pendiente de desarrollo
-- Manejo de retirados en stats (no penalizar al handicapper si su caballo se retira)
+- Manejo de retirados en stats (no penalizar si su caballo se retira)
+- Upgrade MongoDB Atlas M0 → M10+ (capacidad de conexiones)
+- Workout Gemini parser: reemplazar parser PDF/Excel por Gemini data entry
+- Batch YouTube: procesamiento automatizado de pronósticos por pronosticador
+- Automatizar ingesta: poller files.fm, parser workouts robusto
+- Factor de Victoria ponderado por calidad del pronosticador
+- Auditar economía Gold (emisión vs consumo)
+- Dashboard admin KPIs reales (visitas, Golds in/out, retención)
 - Notificaciones push (Telegram Bot o Web Push)
-- Tasa BCV automática (scraping bcv.org.ve)
-- Módulo Pollas (jugadas grupales)
-- Validación HMAC Telegram Mini App
+- Tasa BCV automática
 
 ---
 
-## 13. Cómo retomar el proyecto con otro LLM
+## 13. Modelos adicionales (desde Mar 2026)
+
+### WorkoutEntry (`src/models/WorkoutEntry.ts`)
+```typescript
+{
+  horseId?: ObjectId          // opcional — link a Horse si se resuelve
+  horseName: string           // nombre tal como aparece en el archivo fuente
+  trackId: ObjectId           // → Track
+  workoutDate: Date
+  distance: number            // punto de corte en metros (no distancia total)
+  workoutType: 'EP'|'ES'|'AP'|'galopo'
+  splits: string              // texto raw: "23.1/46.3//58.4 COMODA"
+  comment?: string            // observación adicional
+  jockeyName?: string
+  trainerName?: string
+  daysRest?: number           // días desde última carrera
+  rm?: number                 // récord del mes del hipódromo
+  raceNumber?: string         // carrera asignada en el programa
+  sourceFile?: string         // nombre del archivo de origen
+}
+```
+**Lógica de splits:** parciales acumulados cada 200m. Pares: primer parcial a 200m. Impares: primer parcial a 300m. `/` = corte parcial, `//` = tiempo final en el punto de corte. Calificación después de `//`: COMODA, MUY COMODA, DURA, etc.
+
+### Horse (`src/models/Horse.ts`)
+```typescript
+{
+  name: string                // nombre completo incluyendo país: "CORONATION DAY (USA)"
+  nationality?: string        // código país extraído: "USA", "ARG", "CHI"
+  pedigree: { sire, dam, sireSire, damSire }
+  birthDate?: Date
+  color?: string
+  gender?: 'male'|'female'|'gelding'
+  registrationId?: string
+  currentStudId?: ObjectId
+  studHistory: [{ studId, studName, from, to? }]
+}
+```
+**Regla de nationality:** Gemini extrae el sufijo `(PAIS)` del nombre durante la ingestión de PDFs. El nombre se guarda completo incluyendo el país (ej: `CORONATION DAY (USA)`), y `nationality` se guarda por separado.
+
+**Deduplicación horses:** `upsertHorse` en `ingestService.ts` — si llega un horse sin país pero existe uno con `(PAIS)` en BD con el mismo nombre base, reutiliza el `_id` existente. Migración ejecutada Jun 2026: 18 duplicados mergeados.
+
+### Track (`src/models/Track.ts`)
+```typescript
+{
+  name: string
+  location: string
+  country: string             // default 'VE'
+  code?: string               // 'C' = La Rinconada/Caracas, 'V' = Valencia
+}
+```
+El campo `code` se usa para construir `annualRaceNumber` en formato `C089`, `V034`.
+
+### JargonEntry (`src/models/JargonEntry.ts`)
+Modelo para el jergario semántico del chatbot Melli. Cada entrada mapea vocabulario hípico venezolano a intents accionables.
+
+### AgentLog (`src/models/AgentLog.ts`)
+Auditoría de conversaciones del Melli: mensajes, intents detectados, acciones tomadas, gold cobrado, quejas.
+
+### HandicapperAudio (`src/models/HandicapperAudio.ts`)
+Audios de pronósticos de handicappers procesados.
+
+---
+
+## 14. Páginas nuevas (desde Mar 2026)
+
+### `/revista/[meetingId]` — Programa hípico clásico
+- Vista tipo "revista de turf" para el programa oficial de una jornada
+- Por cada caballo muestra: dorsal, nombre + (PAIS) en azul, medication, implementos, entrenador, jinete (al lado del entrenador en ámbar)
+- Historial de últimas 4 carreras con columnas: Fecha, CarreraAnual (C122/V034), Pos, Dist, T.1°, T.Ej, Diff vs 1°
+- Diff vs 1° = `(ownTime - winnerTime) / 0.2` en cuerpos — calculado en API
+- Trabajos (workouts): ventana 60 días, máx 4 por caballo, filtrados desde última carrera
+- Workout matching: normaliza nombre quitando `(PAIS)` para buscar en `WorkoutEntry.horseName`
+- API: `GET /api/revista/[meetingId]`
+
+### `/traqueos` — Trabajos públicos
+- Página pública de trabajos de entrenamiento organizados por hipódromo
+- Sub-rutas: `/traqueos/valencia`, `/traqueos/[date]`
+- Fuente: `WorkoutEntry` collection
+
+### `/en-vivo` — En vivo
+- Resultados del día de carreras en tiempo real
+- Muestra carrera activa, resultados parciales, próximas carreras
+- Polling cada 60 segundos (`REFRESH_MS = 60000`)
+- Detecta y cierra automáticamente reuniones "stale" que quedaron en `active`
+- Prefiere la reunión del día sobre reuniones viejas que quedaron activas
+
+### `/retrospectos` — Historial de Revistas
+- Lista de revistas pasadas para navegar el historial
+
+### `/programa/[meetingId]` — Inscritos públicos (mejorado)
+- Preview borroso de pronósticos para usuarios no registrados (CTA de registro)
+- Botón de acceso directo a `/revista/[meetingId]`
+
+---
+
+## 15. Ingesta de datos — detalles técnicos
+
+### Parser PDF híbrido (`src/services/ai/pdfGeminiParser.ts`)
+- **Regex** para campos deterministas del header: raceNumber, annualRaceNumber, distance, scheduledTime, games, prizePool
+- **Gemini** para datos complejos: horses (nombre + nationality + medication + implements), conditions, trainer, jockey
+- Llamadas **paralelas** — una llamada Gemini por bloque de carrera (`splitIntoRaceBlocks`)
+- Evita el problema de truncamiento de tokens al limitarse a 1 carrera por llamada
+- Modelo: `google/gemini-2.5-flash` via OpenRouter (variable `OPENROUTER_MODEL`)
+
+### `pdfProcessor.ts` — funciones exportadas
+```typescript
+export preprocessText(text: string): string
+export parseMeeting(text: string): MeetingData
+export splitIntoRaceBlocks(text: string): string[]
+export parseRaceHeader(block: string): RaceHeaderData
+```
+
+### `ingestService.ts` — upsert idempotente
+- `upsertHorse`: detecta horses duplicados por país antes de crear nuevo
+- `annualRaceNumber`: nunca sobreescribe un valor existente si ya hay uno en BD
+- Todos los upserts son idempotentes — se puede re-subir el mismo PDF sin duplicar datos
+
+### Ingestor de resultados desde imagen (`/api/admin/results/extract`)
+- Sube 1-3 imágenes (orden de llegada, dividendos, foto finish)
+- Gemini Vision extrae: finishOrder, payouts, officialTime, timeSplits, raceNumber
+- Tabla editable antes de confirmar → `POST /api/admin/results/save`
+- **Modelo:** usa `OPENROUTER_MODEL` — actualmente en producción puede estar usando `google/gemini-2.0-flash-001` (DEPRECADO). Fix pendiente: cambiar a `google/gemini-2.5-flash`
+
+### Parser de trabajos (`/admin/workouts`)
+- Soporta PDF y `.xlsx` en el mismo upload
+- PDF: usa posiciones X del renderer de pdf-parse para asignar columnas
+- Excel: dinámico por contenido de headers
+- El texto raw (splits + comment) se muestra tal cual en la revista, sin reformatear
+
+---
+
+## 16. El Melli — Chatbot de IA
+
+### Arquitectura (3 pasos, LLM NUNCA ve datos de caballos)
+1. **Clasificar intención** (doble vía):
+   - Jergario semántico (`classifyIntent` → busca en `JargonEntry` collection)
+   - Regex estructural (`detectAction` → patrones como "carrera 3", "5y6", "trabajos")
+2. **DATA → DB directo** (`generateDirectResponse`): consulta MongoDB, templates con jerga, cobra Gold
+3. **CONVERSACIÓN → LLM ligero** (solo si paso 2 no aplica): prompt de personalidad, contexto mínimo, max_tokens 200, gratis
+
+### Economía Gold del Melli (`ACTION_COSTS` en `melli-logic.ts`)
+| Acción | Costo |
+|--------|-------|
+| marks_1race | 3G |
+| marks_all_day | 15G |
+| pack_5y6 | 10G |
+| workouts (todos de 1 carrera) | 2G |
+| workouts_1horse | 1G |
+| program | 1G |
+| Conversación libre | 0G |
+
+### Terminología hípica venezolana (crítica para prompts)
+- **Válidas** = últimas 6 carreras del día (entran en el juego 5 y 6)
+- **No válidas** = las carreras previas
+- **1V, 2V** = 1ª, 2ª carrera válida del día (NO significa Valencia)
+- **Fijo del día** = caballo más fuerte según el experto
+- **La Línea** = primera preferencia del handicapper
+- **Dividendos** = pagos por apuesta (equivalente a odds)
+- **Reunión** = jornada completa de carreras (normalmente domingos)
+- **Inscritos** = caballos participantes en una carrera
+
+### Archivos clave del Melli
+- `src/app/api/melli/chat/route.ts` — pipeline principal
+- `src/lib/melli-direct-responses.ts` — handlers de data (buildAllMarks, buildRaceMarks, buildPack5y6, buildHorseWorkout, buildRaceProgram…)
+- `src/lib/melli-logic.ts` — detectAction regex + ACTION_COSTS
+- `src/lib/melli-intent-classifier.ts` — classifyIntent via jergario DB
+- `src/models/JargonEntry.ts` — modelo + MelliIntent type
+- `src/components/ElMelliChat.tsx` — frontend chat widget
+
+---
+
+## 17. SEO — estado actual
+
+### Implementado
+- `robots.ts` — bloquea `/admin`, `/api`, `/perfil`
+- `sitemap.ts` — dinámico: genera URLs de todas las revistas, resultados, programas, handicappers activos
+- OG image genérico: `/api/og` (1200×630)
+- OG image por pronóstico compartible: `/api/og/forecast` (1080×1080, para WhatsApp/Telegram)
+- JSON-LD `SportsEvent` en páginas de resultados
+- Google Analytics: `G-DB6H4TPMJ1` en `layout.tsx`
+- Google Search Console: verificación en `google0bee1e7eda283beb.html`
+- H1s optimizados en 7 páginas clave (jun 2026): `/pronosticos`, `/revista`, `/programa`, `/resultados`, home, `/en-vivo`, `/traqueos`
+- Keywords long-tail integradas en títulos y meta descriptions
+- `NEXT_PUBLIC_BASE_URL=https://www.desafiohipico.com` requerida en Vercel env vars
+
+### Rutas con tráfico orgánico confirmado
+- "resultados La Rinconada" / "resultados hipódromo Valencia"
+- "pronósticos hípicos Venezuela"
+- "traqueos caballos Venezuela"
+
+---
+
+## 18. Performance y conexiones MongoDB
+
+### Contexto del problema
+MongoDB Atlas **M0 Free Tier** tiene límite de ~500 conexiones simultáneas. Vercel serverless crea una nueva instancia por cada request. En domingos de carreras con 20+ usuarios simultáneos, el sistema llegó a 493/500 conexiones.
+
+### Cambios aplicados Jun 2026 (commit `61f046d`)
+- `NotificationBell.tsx`: polling de 30s → 120s
+- 4 rutas públicas cambiadas de `force-dynamic` a `revalidate=60`: `/api/ticker/today`, `/api/ticker-slots`, `/api/meetings/upcoming`, `/api/handicapper/ranking`
+- `mongodb.ts`: añadido `maxPoolSize: 5, serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000`
+
+### Regresión detectada (domingo siguiente al commit)
+El `maxPoolSize: 5` en serverless **causó lentitud severa**. En Vercel cada instancia tiene su propio pool — limitar a 5 no reduce conexiones totales sino que genera **queue y latencia** cuando hay contención. El usuario hizo revert en Vercel Dashboard al commit del 30-may.
+
+### Estado actual en producción
+El código en GitHub (`main`) tiene los cambios de `61f046d` pero Vercel está sirviendo un deploy anterior. Antes de volver a deployar:
+- **Eliminar** `maxPoolSize: 5` de `mongodb.ts` (o subirlo a 10)
+- **Evaluar** si `revalidate=60` en `/api/ticker/today` causó también problemas (ticker mostrando datos viejos confundidos con lentitud)
+- La solución real es **upgrade a Atlas M10+** (1500 conexiones)
+
+### Rutas críticas por carga en domingos
+| Ruta | Tipo | Frecuencia |
+|------|------|-----------|
+| `/api/notifications` | auth, polling | cada 120s por usuario |
+| `/api/ticker/today` | público | cada carga de página |
+| `/api/ticker-slots` | público | cada carga de página |
+| `/api/forecasts` | auth | cada cambio de carrera |
+| `/api/en-vivo` | público | cada 60s en página en-vivo |
+
+---
+
+## 19. Economía de Golds — estado actual
+
+### Tasas
+```typescript
+GOLD_RATE = { golds: 40, usd: 10 }  // 40 Golds = $10 USD
+```
+Por lo tanto: **1 Gold = $0.25 USD**
+
+### Paquetes de recarga
+| Paquete | Golds | USD | Bs (tasa BCV) |
+|---------|-------|-----|---------------|
+| Básico  | 40    | $10 | BCV × 10      |
+| Popular | 100   | $25 | BCV × 25      |
+| Pro     | 200   | $50 | BCV × 50      |
+| VIP     | 400   | $100| BCV × 100     |
+
+### Flujo de consumo
+- 2 carreras gratis por reunión (`FREE_RACES_PER_MEETING = 2`)
+- Carrera 3+ → 1 Gold (`GOLD_COST_PER_RACE = 1`)
+- Una vez desbloqueada, la carrera queda accesible para siempre para ese usuario en esa reunión
+- Melli cobra Gold por consultas de data (ver sección 16)
+
+### Revenue share
+- Default: handicapper recibe 70%, plataforma 30%
+- Configurable por handicapper en `HandicapperProfile.revenueSharePct`
+- **Pendiente:** la distribución automática no está implementada — actualmente es informativo
+
+### Cuenta destino Pago Móvil
+```
+Banco: BDV (0102) | Cédula: V-16108291 | Teléfono: 04122220545
+```
+
+---
+
+## 20. Factor de Victoria — pendiente de implementar
+
+### Concepto
+El "Factor de Victoria" es una métrica ponderada que combina:
+- **E1** (% de acierto en 1ª marca) — ya calculado
+- **Calidad del competidor** (quiénes más acertaron esa misma carrera)
+- **Nivel de dificultad** de la carrera (campo grande, caballos parejos)
+
+### Estado actual
+Las métricas calculadas actualmente son:
+- `e1` = % hit1st / totalRaces (mínimo 5 carreras para aparecer)
+- `e1_2`, `e1_3`, `eGeneral` — acumulativos simples
+- `roi1st` — retorno simulado apostando $100 a la 1ª marca
+
+**No hay ponderación por calidad del pronosticador ni de la carrera.** El ranking es puramente por `eGeneral` con filtro de mínimo `orderedRaces >= 5`.
+
+### Implementación futura
+Ponderar E1 por: número de handicappers que acertaron la misma carrera (acierto fácil vs difícil), racha reciente (últimas 10 vs historico), hipódromo específico (`byTrack`).
+
+---
+
+## 21. Cómo retomar el proyecto con otro LLM
 
 1. **Comparte este archivo** (`CONTEXT.md`) como primer mensaje
-2. **Di el stack exacto:** Next.js 15 App Router, Auth.js v5 beta, Mongoose 8, Tailwind v4
-3. **Reglas críticas:**
+2. **Stack exacto:** Next.js 15 App Router, Auth.js v5 beta, Mongoose 8, Tailwind v4
+3. **Reglas críticas de código:**
    - `npx tsc --noEmit` antes de cada commit — debe dar 0 errores
    - `getToken()` en middleware, NUNCA `auth()`
    - `notificationService.ts` para notificaciones, nunca `Notification.create()` directo
-   - `params` en route handlers son Promise en Next.js 15 — siempre awaitear
-   - lucide-react NO está instalado — usar SVGs inline
+   - `params` en route handlers son **Promise** en Next.js 15 — siempre `await params`
+   - `lucide-react` NO está instalado — usar SVGs inline
    - El usuario admin es `yolfry@gmail.com`
-   - `user.balance.golds` (objeto), nunca `user.balance` (número)
+   - `user.balance.golds` (objeto anidado), nunca `user.balance` (número legacy)
    - `/api/resultados` filtra por `Race.status === 'finished'`, no por `Meeting.status`
+   - `OPENROUTER_MODEL` en env vars → default `google/gemini-2.5-flash` (OpenRouter)
+   - NO hardcodear el modelo Gemini — usar siempre la variable de entorno
+
+4. **Regla crítica de deploy:**
+   - El código en `main` en GitHub puede estar adelantado respecto al deploy activo en Vercel
+   - Verificar siempre el commit que está activo en Vercel Dashboard antes de asumir que un fix está en producción
+
+5. **Variables de entorno requeridas en Vercel:**
+   ```
+   MONGODB_URI
+   AUTH_SECRET
+   AUTH_URL=https://www.desafiohipico.com
+   AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET
+   RESEND_API_KEY / RESEND_FROM
+   OPENROUTER_API_KEY
+   OPENROUTER_MODEL=google/gemini-2.5-flash
+   NEXT_PUBLIC_WHATSAPP_NUMBER
+   NEXT_PUBLIC_BASE_URL=https://www.desafiohipico.com
+   ```

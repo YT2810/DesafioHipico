@@ -19,7 +19,7 @@ export async function GET() {
         'X-Title': 'Desafio Hipico',
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001',
+        model: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash',
         messages: [{
           role: 'user',
           content: 'Separa estos 3 nombres de caballos venezolanos escritos juntos sin separador: "LA AZURRA PAPRIKA FRIDA". Responde SOLO con un JSON array de 3 strings.',
@@ -35,7 +35,7 @@ export async function GET() {
     return NextResponse.json({
       ok: res.ok,
       status: res.status,
-      model: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001',
+      model: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash',
       keyPrefix: key.slice(0, 20) + '...',
       reply,
       error: data?.error ?? null,

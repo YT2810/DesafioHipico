@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-001';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const RESULTS_PROMPT = `Eres un extractor de resultados de carreras de caballos venezolanas. Analiza las imágenes adjuntas (pueden ser 1, 2 o 3 imágenes: orden de llegada, dividendos oficiales, foto finish) y extrae TODA la información estructurada.
