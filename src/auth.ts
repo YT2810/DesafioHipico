@@ -153,7 +153,7 @@ export const authConfig: NextAuthConfig = {
           token.fullName  = dbUser.fullName;
           token.identityDocument = dbUser.identityDocument;
           token.phoneNumber      = dbUser.phoneNumber;
-          token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument && dbUser.phoneNumber);
+          token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument);
         }
       }
 
@@ -164,7 +164,7 @@ export const authConfig: NextAuthConfig = {
           token.fullName         = session.billing.fullName;
           token.identityDocument = session.billing.identityDocument;
           token.phoneNumber      = session.billing.phoneNumber;
-          token.billingComplete  = !!(session.billing.fullName && session.billing.identityDocument && session.billing.phoneNumber);
+          token.billingComplete  = !!(session.billing.fullName && session.billing.identityDocument);
         }
       }
 

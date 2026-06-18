@@ -43,9 +43,9 @@ export async function requestRaceAccess(
   const user = await User.findById(userId);
   if (!user) throw new Error('Usuario no encontrado.');
 
-  // staff / handicapper / admin → free access always
+  // staff / admin → free access always (handicapper pays like customer)
   const roles = user.roles ?? [];
-  if (roles.some((r: string) => ['staff', 'handicapper', 'admin'].includes(r))) {
+  if (roles.some((r: string) => ['staff', 'admin'].includes(r))) {
     return { granted: true, free: true, freeRemaining: Infinity };
   }
 
@@ -196,7 +196,7 @@ export async function getMeetingAccessMap(
   if (!user) throw new Error('Usuario no encontrado.');
 
   const roles = user.roles ?? [];
-  const isPrivileged = roles.some((r: string) => ['staff', 'handicapper', 'admin'].includes(r));
+  const isPrivileged = roles.some((r: string) => ['staff', 'admin'].includes(r));
 
   if (isPrivileged) {
     const map: Record<string, { unlocked: boolean; free: boolean }> = {};

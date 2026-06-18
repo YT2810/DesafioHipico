@@ -23,7 +23,7 @@ export async function GET() {
       fullName:         user?.fullName ?? '',
       identityDocument: user?.identityDocument ?? '',
       phoneNumber:      user?.phoneNumber ?? '',
-      complete:         !!(user?.fullName && user?.identityDocument && user?.phoneNumber),
+      complete:         !!(user?.fullName && user?.identityDocument),
     });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error interno' }, { status: 500 });
@@ -38,7 +38,6 @@ export async function POST(req: NextRequest) {
     const { fullName, identityDocument, phoneNumber } = await req.json();
     if (!fullName?.trim())         return NextResponse.json({ error: 'El nombre completo es requerido.' }, { status: 400 });
     if (!identityDocument?.trim()) return NextResponse.json({ error: 'El documento de identidad es requerido.' }, { status: 400 });
-    if (!phoneNumber?.trim())      return NextResponse.json({ error: 'El número de teléfono es requerido.' }, { status: 400 });
 
     await dbConnect();
     await User.findByIdAndUpdate(new Types.ObjectId(session.user.id), {

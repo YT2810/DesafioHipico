@@ -104,8 +104,8 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   async function handleSaveBilling(e: React.FormEvent) {
     e.preventDefault();
     setBillingError('');
-    if (!billing.fullName.trim() || !billing.identityDocument.trim() || !billing.phoneNumber.trim()) {
-      setBillingError('Todos los campos son requeridos.');
+    if (!billing.fullName.trim() || !billing.identityDocument.trim()) {
+      setBillingError('El nombre y la cédula son requeridos.');
       return;
     }
     setBillingLoading(true);
@@ -308,25 +308,21 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
               {/* Teléfono Pago Móvil — manejo automático prefijo Venezuela */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Teléfono de Pago Móvil *</label>
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Teléfono de Pago Móvil <span className="normal-case text-gray-600">(opcional)</span></label>
                 <div className="flex gap-2">
                   <div className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-sm text-gray-400 shrink-0 flex items-center">🇻🇪 +58</div>
                   <input
                     type="tel"
                     value={billing.phoneNumber}
                     onChange={e => {
-                      // Strip leading +58 or 58 if user types it, keep only local number
                       let val = e.target.value.replace(/\D/g, '');
                       if (val.startsWith('58')) val = val.slice(2);
-                      // Keep leading 0 (04XX format) or without it
                       setBill('phoneNumber', val.slice(0, 11));
                     }}
                     placeholder="04121234567"
                     className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
-                    required
                   />
                 </div>
-                <p className="text-xs text-yellow-700/80">⚠️ Ingresa el número que usas en tu cuenta de Pago Móvil. Debe coincidir exactamente con el número registrado en tu banco.</p>
               </div>
 
               {billingError && (
