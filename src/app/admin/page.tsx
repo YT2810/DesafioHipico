@@ -9,32 +9,30 @@ const SECTIONS = [
   {
     group: 'Datos de Carreras',
     items: [
-      { href: '/admin/ingest',       icon: '🏁', label: 'Cargar Resultados',   desc: 'Sube fotos del tablero y guarda posiciones, pagos y dividendos.' },
-      { href: '/admin/meetings',     icon: '📋', label: 'Subir Programa',       desc: 'Ingesta de PDFs con el programa de la reunión (INH / HINAVA).' },
-      { href: '/admin/workouts',     icon: '⏱️', label: 'Subir Traqueos',       desc: 'Sube archivos Excel o PDF de la División de Toma Tiempos.' },
-      { href: '/admin/meetings',     icon: '▶️',  label: 'Video Resumen Jornadas', desc: 'Sube o enlaza el video resumen de la jornada para cada reunión.' },
+      { href: '/admin/ingest',       icon: '🏁', label: 'Cargar Resultados',        desc: 'Sube fotos del tablero y guarda posiciones, pagos y dividendos.' },
+      { href: '/admin/meetings',     icon: '📋', label: 'Reuniones y Programas',    desc: 'Ingesta de PDFs del programa, video resumen y estado de cada reunión.' },
+      { href: '/admin/workouts',     icon: '⏱️', label: 'Subir Traqueos',            desc: 'Sube archivos Excel o PDF de la División de Toma Tiempos.' },
     ],
   },
   {
     group: 'Pronósticos',
     items: [
-      { href: '/admin/intelligence', icon: '🧠', label: 'Subir Pronóstico',     desc: 'Pega texto, imagen o URL de un handicapper. La IA extrae las marcas.' },
-      { href: '/staff/fuentes',      icon: '📡', label: 'Fuentes y Handicappers', desc: 'Catálogo de handicappers conocidos y sus fuentes.' },
+      { href: '/admin/intelligence', icon: '🧠', label: 'Subir Pronóstico',         desc: 'Pega texto, imagen o URL de un handicapper. La IA extrae las marcas.' },
+      { href: '/staff/fuentes',      icon: '📡', label: 'Fuentes y Handicappers',   desc: 'Catálogo de handicappers conocidos y sus fuentes.' },
     ],
   },
   {
     group: 'Usuarios y Economía',
     items: [
-      { href: '/admin/users',        icon: '👥', label: 'Usuarios',             desc: 'Busca usuarios, asigna roles y gestiona cuentas.' },
-      { href: '/admin/topup',        icon: '💳', label: 'Recargas Pendientes',  desc: 'Aprueba o rechaza solicitudes de recarga de Gold.' },
-      { href: '/admin/exchange-rate',icon: '💱', label: 'Tasa BCV',             desc: 'Actualiza la tasa de cambio BCV para calcular precios en Bs.' },
+      { href: '/admin/users',        icon: '👥', label: 'Usuarios',                  desc: 'Busca usuarios, asigna roles, revisa historial y gestiona cuentas.' },
+      { href: '/admin/topup',        icon: '💳', label: 'Recargas Pendientes',       desc: 'Aprueba o rechaza solicitudes de recarga de Gold.' },
+      { href: '/admin/exchange-rate',icon: '💱', label: 'Tasa BCV',                  desc: 'Actualiza la tasa de cambio BCV para calcular precios en Bs.' },
     ],
   },
   {
     group: 'Sistema',
     items: [
       { href: '/admin/handicapper-request', icon: '🎓', label: 'Solicitudes Handicapper', desc: 'Revisa solicitudes de usuarios que quieren ser handicappers.' },
-      { href: '/admin/audios',       icon: '🎙️', label: 'Audios',              desc: 'Gestión de audios de handicappers.' },
     ],
   },
 ];
@@ -83,6 +81,43 @@ export default function AdminPage() {
   const [goldLoading, setGoldLoading] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [welcomeBonus, setWelcomeBonus] = useState<number>(15);
+  const [welcomeBonusInput, setWelcomeBonusInput] = useState('15');
+  const [welcomeBonusMsg, setWelcomeBonusMsg] = useState('');
+  const [welcomeBonusLoading, setWelcomeBonusLoading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/site-config?key=welcomeBonus')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.value != null) {
+          setWelcomeBonus(d.value);
+          setWelcomeBonusInput(String(d.value));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleSaveWelcomeBonus() {
+    const val = parseInt(welcomeBonusInput);
+    if (!val || val < 0) return;
+    setWelcomeBonusLoading(true);
+    setWelcomeBonusMsg('');
+    try {
+      const res = await fetch('/api/admin/site-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'welcomeBonus', value: val }),
+      });
+      if (!res.ok) throw new Error('Error al guardar');
+      setWelcomeBonus(val);
+      setWelcomeBonusMsg(`✅ Bono actualizado a ${val} Gold`);
+    } catch (e: any) {
+      setWelcomeBonusMsg(`⚠️ ${e.message}`);
+    } finally {
+      setWelcomeBonusLoading(false);
+    }
+  }
 
   useEffect(() => {
     fetch('/api/exchange-rate')
@@ -234,7 +269,10 @@ export default function AdminPage() {
 
               {/* Recent users */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
-                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">Últimos registros</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Últimos registros</p>
+                  <Link href="/admin/users" className="text-xs text-yellow-600 hover:text-yellow-400 transition-colors">Ver todos →</Link>
+                </div>
                 <div className="space-y-2">
                   {stats.recentUsers.map(u => (
                     <div key={u._id} className="flex items-center gap-3">
@@ -321,15 +359,40 @@ export default function AdminPage() {
               </button>
             </div>
 
+            <div className="border-t border-gray-800 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">Bono de bienvenida</p>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full text-black" style={{ backgroundColor: GOLD }}>{welcomeBonus}G</span>
+              </div>
+              <p className="text-xs text-gray-500">Gold que reciben los nuevos usuarios al registrarse y en la bienvenida masiva.</p>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={welcomeBonusInput}
+                  onChange={e => setWelcomeBonusInput(e.target.value)}
+                  className="w-28 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+                />
+                <button
+                  onClick={handleSaveWelcomeBonus}
+                  disabled={welcomeBonusLoading}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-black disabled:opacity-40"
+                  style={{ backgroundColor: GOLD }}>
+                  {welcomeBonusLoading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              {welcomeBonusMsg && <p className="text-xs text-green-400">{welcomeBonusMsg}</p>}
+            </div>
+
             <div className="border-t border-gray-800 pt-4">
               <p className="text-sm font-semibold text-white mb-1">Bienvenida masiva</p>
-              <p className="text-xs text-gray-500 mb-3">Asigna 15 Gold a todos los usuarios con saldo 0. Operación única de bienvenida.</p>
+              <p className="text-xs text-gray-500 mb-3">Asigna <strong className="text-white">{welcomeBonus} Gold</strong> a todos los usuarios con saldo 0.</p>
               {bulkMsg && <p className="text-xs text-green-400 mb-2">{bulkMsg}</p>}
               <button
                 onClick={handleBulkWelcome}
                 disabled={bulkLoading}
                 className="px-5 py-2.5 rounded-xl text-sm font-bold border border-yellow-700/60 text-yellow-400 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
-                {bulkLoading ? 'Procesando...' : '🎁 Dar 15 Gold a todos (saldo 0)'}
+                {bulkLoading ? 'Procesando...' : `🎁 Dar ${welcomeBonus}G a todos (saldo 0)`}
               </button>
             </div>
           </div>

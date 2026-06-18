@@ -17,8 +17,10 @@ export const MARK_POINTS: Record<number, number> = { 1: 5, 2: 3, 3: 2, 4: 1, 5: 
 export const FIJO_BONUS_POINTS = 8; // replaces the 5 pts of position 1
 /** @deprecated Usar getFreeRacesAllowance(totalRaces) en su lugar. */
 export const FREE_RACES_PER_MEETING = 2;
-export const GOLD_COST_PER_RACE = 1;
-export const MEETING_PASS_COST = 8;
+/** Costo de desbloquear UNA carrera suelta */
+export const GOLD_COST_PER_RACE = 2;
+/** Costo por carrera al comprar la jornada completa (mitad de precio vs. sueltas) */
+export const GOLD_COST_FULL_DAY_PER_RACE = 1;
 
 /**
  * Carreras gratuitas por reunión según el tamaño del programa.
@@ -37,7 +39,7 @@ export const TOPUP_PACKAGES = [
   {
     id: 'arranque',
     label: 'Arranque',
-    description: 'Para probar la plataforma esta semana',
+    description: 'Cubre 1 jornada completa de hasta 10 carreras',
     priceBs: 2500,
     golds: 10,
     bsPerGold: 250,
@@ -47,7 +49,7 @@ export const TOPUP_PACKAGES = [
   {
     id: 'jinete',
     label: 'Jinete',
-    description: 'El paquete del que juega en serio',
+    description: '2 jornadas completas — te queda saldo para el siguiente domingo',
     priceBs: 4500,
     golds: 20,
     bsPerGold: 225,
@@ -57,7 +59,7 @@ export const TOPUP_PACKAGES = [
   {
     id: 'padrillo',
     label: 'Padrillo',
-    description: 'Acceso completo por todo el mes',
+    description: '6 jornadas — para el aficionado que no se pierde ninguna reunión',
     priceBs: 10000,
     golds: 50,
     bsPerGold: 200,
@@ -90,11 +92,3 @@ export const VENEZUELAN_BANKS = [
 
 export type VenezuelanBank = typeof VENEZUELAN_BANKS[number];
 
-/** Datos de la cuenta destino para Pago Móvil */
-export const PAYMENT_DESTINATION = {
-  bank: 'Banco de Venezuela (0102)',
-  bankCode: '0102',
-  legalId: 'V-16108291',
-  phone: '04122220545',
-  name: 'Desafío Hípico',
-} as const;

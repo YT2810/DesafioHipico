@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
-export { GOLD_RATE, FREE_RACES_PER_MEETING, GOLD_COST_PER_RACE, MEETING_PASS_COST, getFreeRacesAllowance } from '@/lib/constants';
+export { GOLD_RATE, FREE_RACES_PER_MEETING, GOLD_COST_PER_RACE, GOLD_COST_FULL_DAY_PER_RACE, getFreeRacesAllowance } from '@/lib/constants';
 
 /**
  * Tracks which races a user has unlocked (free or paid) per meeting.

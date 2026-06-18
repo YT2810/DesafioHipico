@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { VENEZUELAN_BANKS, PAYMENT_DESTINATION, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/constants';
+import { VENEZUELAN_BANKS, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/constants';
 
 const GOLD = '#D4AF37';
 
@@ -21,6 +21,8 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState('');
+  const [paymentBanks, setPaymentBanks] = useState<{ priority: number; bankName: string; phone: string; legalId: string; holderName: string }[]>([]);
+  const [selectedBankIdx, setSelectedBankIdx] = useState(0);
   const [successData, setSuccessData] = useState<{ goldAmount: number; requestId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -28,6 +30,15 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [rateVes, setRateVes] = useState<number | null>(null);
   const [rateStale, setRateStale] = useState(false);
   const [rateUpdatedAt, setRateUpdatedAt] = useState<string | null>(null);
+  // Fetch payment destination from server (auth-protected, never in bundle)
+  useEffect(() => {
+    if (step !== 'destination') return;
+    fetch('/api/topup/payment-info')
+      .then(r => r.json())
+      .then(d => { if (d.banks?.length) setPaymentBanks(d.banks); })
+      .catch(() => {});
+  }, [step]);
+
   useEffect(() => {
     if (payMethod === 'pagomovil') return;
     fetch('/api/exchange-rate')
@@ -336,24 +347,51 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
           {/* ── Step 2: Payment destination ── */}
           {step === 'destination' && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-400">Realiza un <strong className="text-white">Pago Móvil</strong> con los siguientes datos:</p>
-              <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cuenta destino</span>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full text-black" style={{ backgroundColor: GOLD }}>{PAYMENT_DESTINATION.bankCode}</span>
-                </div>
-                <div className="divide-y divide-gray-700/50">
-                  <DestRow label="Banco"    value={PAYMENT_DESTINATION.bank} />
-                  <DestRow label="Cédula"   value={PAYMENT_DESTINATION.legalId} copyable />
-                  <DestRow label="Teléfono" value={PAYMENT_DESTINATION.phone}   copyable />
-                  <DestRow label="Nombre"   value={PAYMENT_DESTINATION.name} />
-                  <DestRow label="Paquete"  value={`${selectedPkg.label} — ${selectedPkg.golds} Golds`} />
-                  <DestRow label="Monto Bs" value={`Bs ${selectedPkg.priceBs.toLocaleString('es-VE')}`} highlight copyable />
-                </div>
+              <div>
+                <p className="text-sm font-semibold text-white mb-1">Realiza tu Pago Móvil a esta cuenta:</p>
+                <p className="text-xs text-gray-500">Elige cualquiera de los dos bancos disponibles.</p>
               </div>
-              <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3 text-xs text-blue-300 space-y-1">
-                <p>📸 Guarda el comprobante — lo necesitarás en el siguiente paso.</p>
-                <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles.</p>
+
+              {/* Bank selector tabs */}
+              {paymentBanks.length > 1 && (
+                <div className="flex gap-2">
+                  {paymentBanks.map((b, i) => (
+                    <button key={i} onClick={() => setSelectedBankIdx(i)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        selectedBankIdx === i
+                          ? 'border-yellow-600 bg-yellow-950/30 text-yellow-400'
+                          : 'border-gray-700 bg-gray-800/50 text-gray-500'
+                      }`}>
+                      {i === 0 ? '⭐ ' : ''}{b.bankName.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {paymentBanks.length === 0 ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-5 h-5 rounded-full border-2 border-yellow-600 border-t-transparent animate-spin" />
+                </div>
+              ) : (
+                <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cuenta destino</span>
+                    {selectedBankIdx === 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-black" style={{ backgroundColor: GOLD }}>Preferida</span>}
+                  </div>
+                  <div className="divide-y divide-gray-700/50">
+                    <DestRow label="Banco"    value={paymentBanks[selectedBankIdx]?.bankName ?? ''} />
+                    <DestRow label="Cédula"   value={paymentBanks[selectedBankIdx]?.legalId ?? ''} copyable />
+                    <DestRow label="Teléfono" value={paymentBanks[selectedBankIdx]?.phone ?? ''}   copyable />
+                    <DestRow label="Titular"  value={paymentBanks[selectedBankIdx]?.holderName ?? ''} />
+                    <DestRow label="Paquete"  value={`${selectedPkg.label} — ${selectedPkg.golds} Golds`} />
+                    <DestRow label="Monto Bs" value={`Bs ${selectedPkg.priceBs.toLocaleString('es-VE')}`} highlight copyable />
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-xl px-4 py-3 text-xs text-yellow-200/80 space-y-1">
+                <p>📸 Guarda el comprobante con el número de referencia — lo necesitas en el paso siguiente.</p>
+                <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles una vez verificado.</p>
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={resetToPackage} className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>

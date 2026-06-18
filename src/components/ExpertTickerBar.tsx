@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import type { TickerEntry } from './HandicapperQuickDrawer';
 import HandicapperQuickDrawer from './HandicapperQuickDrawer';
-import { MEETING_PASS_COST } from '@/lib/constants';
+import { GOLD_COST_FULL_DAY_PER_RACE } from '@/lib/constants';
 
 const GOLD = '#D4AF37';
 
@@ -18,9 +18,11 @@ interface Props {
   onBuyPass?: () => void;
   meetingPassLoading?: boolean;
   goldBalance?: number;
+  fullDayCost?: number;
 }
 
-export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuyPass, meetingPassLoading, goldBalance = 0 }: Props) {
+export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuyPass, meetingPassLoading, goldBalance = 0, fullDayCost }: Props) {
+  const dayCost = fullDayCost ?? GOLD_COST_FULL_DAY_PER_RACE;
   const trackRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TickerEntry | null>(null);
   const [entries, setEntries] = useState<TickerEntry[]>([]);
@@ -148,15 +150,15 @@ export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuy
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
         >
-          {/* Meeting Pass CTA pill — shown before ticker entries */}
+          {/* Full-day CTA pill — shown before ticker entries */}
           {showPassCta && (
             <button
               onClick={onBuyPass}
-              disabled={meetingPassLoading || goldBalance < MEETING_PASS_COST}
+              disabled={meetingPassLoading || goldBalance < dayCost}
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-yellow-700/60 bg-yellow-950/30 hover:bg-yellow-950/50 disabled:opacity-40 transition-all active:scale-95"
             >
               <span className="text-[10px] font-black text-yellow-300 whitespace-nowrap">
-                {meetingPassLoading ? '...' : `💫 ${MEETING_PASS_COST}G · Pase Reunión`}
+                {meetingPassLoading ? '...' : `� ${dayCost}G · Ver toda la jornada`}
               </span>
             </button>
           )}

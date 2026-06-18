@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getMeetingAccessMap } from '@/services/forecastAccessService';
+import dbConnect from '@/lib/mongodb';
+import Meeting from '@/models/Meeting';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,14 +45,28 @@ export async function GET(req: NextRequest) {
     const raceIdsParam = searchParams.get('raceIds');
     const raceIds: string[] = raceIdsParam ? raceIdsParam.split(',').filter(Boolean) : [];
 
+    await dbConnect();
+    const meeting = await Meeting.findById(meetingId).lean<{ date: Date; status: string }>();
+
     const result = await getMeetingAccessMap(userId, meetingId, raceIds, totalRaces);
+
+    // Expire pass if meeting is finished or its date is before today (day boundary, UTC-4 grace)
+    let passUnlocked = result.passUnlocked;
+    if (passUnlocked && meeting) {
+      const finished = meeting.status === 'finished' || meeting.status === 'cancelled';
+      // Grace: pass valid through the end of meeting day (UTC midnight = next calendar day)
+      const meetingDay = new Date(meeting.date);
+      meetingDay.setUTCHours(23, 59, 59, 999);
+      const pastDay = new Date() > meetingDay;
+      if (finished || pastDay) passUnlocked = false;
+    }
 
     return NextResponse.json({
       map: result.map,
       freeRemaining: result.freeRemaining === Infinity ? 99 : result.freeRemaining,
       goldBalance: result.goldBalance,
       isPrivileged: result.isPrivileged,
-      passUnlocked: result.passUnlocked,
+      passUnlocked,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error interno';

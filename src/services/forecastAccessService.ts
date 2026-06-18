@@ -14,7 +14,8 @@
  */
 
 import dbConnect from '@/lib/mongodb';
-import User, { GOLD_COST_PER_RACE, MEETING_PASS_COST, getFreeRacesAllowance } from '@/models/User';
+import User, { GOLD_COST_PER_RACE, getFreeRacesAllowance } from '@/models/User';
+import { GOLD_COST_FULL_DAY_PER_RACE } from '@/lib/constants';
 import GoldTransaction from '@/models/GoldTransaction';
 import { Types } from 'mongoose';
 import { notifyGoldLow } from '@/services/notificationService';
@@ -116,15 +117,17 @@ export async function requestRaceAccess(
 }
 
 /**
- * Purchase a Meeting Pass for a user, unlocking all races in a meeting.
- * Costs MEETING_PASS_COST Golds. Idempotent if already purchased.
+ * Purchase a full-day pass for a user, unlocking all races in a meeting.
+ * Cost = lockedRaces × GOLD_COST_FULL_DAY_PER_RACE (half price vs. buying sueltas).
+ * Idempotent if already purchased.
  */
 export async function purchaseMeetingPass(
   userId: string,
   meetingId: string,
+  lockedRaces: number,
 ): Promise<
-  | { success: true; balanceAfter: number }
-  | { success: false; reason: 'already_unlocked' | 'insufficient_gold'; currentBalance?: number }
+  | { success: true; balanceAfter: number; goldSpent: number }
+  | { success: false; reason: 'already_unlocked' | 'insufficient_gold'; currentBalance?: number; goldRequired?: number }
 > {
   await dbConnect();
 
@@ -139,12 +142,13 @@ export async function purchaseMeetingPass(
 
   if (mc.passUnlocked) return { success: false, reason: 'already_unlocked' };
 
+  const passCost = Math.max(1, lockedRaces) * GOLD_COST_FULL_DAY_PER_RACE;
   const currentGolds = user.balance.golds;
-  if (currentGolds < MEETING_PASS_COST) {
-    return { success: false, reason: 'insufficient_gold', currentBalance: currentGolds };
+  if (currentGolds < passCost) {
+    return { success: false, reason: 'insufficient_gold', currentBalance: currentGolds, goldRequired: passCost };
   }
 
-  user.balance.golds -= MEETING_PASS_COST;
+  user.balance.golds -= passCost;
   mc.passUnlocked = true;
   const balanceAfter = user.balance.golds;
   await user.save();
@@ -152,16 +156,16 @@ export async function purchaseMeetingPass(
   await GoldTransaction.create({
     userId: user._id,
     type: 'meeting_pass',
-    amount: -MEETING_PASS_COST,
+    amount: -passCost,
     balanceAfter,
-    description: `Meeting Pass — Reunión ${meetingId}`,
+    description: `Jornada completa (${lockedRaces} carreras) — Reunión ${meetingId}`,
   });
 
   if (balanceAfter < GOLD_LOW_THRESHOLD) {
     notifyGoldLow(userId, balanceAfter).catch(() => {});
   }
 
-  return { success: true, balanceAfter };
+  return { success: true, balanceAfter, goldSpent: passCost };
 }
 
 /**
@@ -201,7 +205,9 @@ export async function getMeetingAccessMap(
   }
 
   const mc = (user.meetingConsumptions ?? []).find((c: { meetingId: string }) => c.meetingId === meetingId);
-  const passUnlocked = mc?.passUnlocked ?? false;
+  // Pass expires when meeting is finished or date has passed (grace period: same day)
+  const rawPass = mc?.passUnlocked ?? false;
+  const passUnlocked = rawPass; // expiry enforced at API layer via meeting.status
   const freeUsed = mc?.freeUsed ?? 0;
   const unlockedIds = new Set<string>(mc?.unlockedRaceIds ?? []);
   const freeAllowance = getFreeRacesAllowance(totalRaces ?? raceIds.length);

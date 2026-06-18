@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, MEETING_PASS_COST, getFreeRacesAllowance } from '@/lib/constants';
+import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, GOLD_COST_PER_RACE, GOLD_COST_FULL_DAY_PER_RACE, getFreeRacesAllowance } from '@/lib/constants';
 import NotificationBell from '@/components/NotificationBell';
 import ExpertTickerBar from '@/components/ExpertTickerBar';
 
@@ -373,27 +373,29 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           {/* Paywall overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-950/70 backdrop-blur-[3px] px-4 py-6">
             <div className="text-center">
-              <p className="text-sm font-extrabold text-white mb-0.5">La Cátedra te espera</p>
-              <p className="text-xs text-gray-400">Desbloquea esta carrera con 1 Gold o accede a toda la reunión</p>
+              <p className="text-sm font-extrabold text-white mb-0.5">🔒 Factor de Victoria bloqueado</p>
+              <p className="text-xs text-gray-400">El consenso de los analistas para esta carrera</p>
             </div>
             <div className="flex flex-col gap-2 w-full max-w-xs">
               <button
                 onClick={onUnlock}
-                disabled={goldBalance < 1}
+                disabled={goldBalance < GOLD_COST_PER_RACE}
                 className="w-full py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40"
                 style={{ backgroundColor: GOLD }}>
-                🔓 1 Gold — Solo esta carrera
+                🔓 {GOLD_COST_PER_RACE}G — Solo esta carrera
               </button>
-              {!passUnlocked && (
+              {!passUnlocked && onBuyPass && (
                 <button
                   onClick={onBuyPass}
-                  disabled={meetingPassLoading || goldBalance < (MEETING_PASS_COST)}
+                  disabled={meetingPassLoading || goldBalance < GOLD_COST_FULL_DAY_PER_RACE}
                   className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
-                  {meetingPassLoading ? 'Procesando...' : `💫 ${MEETING_PASS_COST}G — Meeting Pass (toda la reunión)`}
+                  {meetingPassLoading
+                    ? 'Procesando...'
+                    : `� Toda la jornada — mitad de precio`}
                 </button>
               )}
-              {goldBalance < 1 && (
-                <p className="text-xs text-center text-gray-600">Sin Golds — recarga en tu perfil</p>
+              {goldBalance < GOLD_COST_PER_RACE && (
+                <p className="text-xs text-center text-yellow-700">Sin saldo · <Link href="/perfil" className="underline text-yellow-500">Recarga aquí</Link></p>
               )}
               {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
             </div>
@@ -600,50 +602,46 @@ export default function PronosticosPage() {
         <header className="border-b border-gray-800 px-4 py-3">
           <div className="mx-auto max-w-lg flex items-center gap-3">
             <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none">←</Link>
-            <span className="text-sm font-bold text-white">🏇 Pronósticos</span>
+            <span className="text-sm font-bold text-white">🏇 Factor de Victoria</span>
           </div>
         </header>
-        {/* Promo banner */}
-        <div className="bg-gradient-to-r from-yellow-900/60 to-yellow-800/40 border-b border-yellow-700/40 px-4 py-3 text-center">
-          <p className="text-sm font-bold text-yellow-300">🎁 PROMO DE LANZAMIENTO · Todo el análisis hípico liberado por tiempo limitado</p>
-        </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 text-center gap-6 py-10">
           {/* Blurred preview */}
           <div className="relative w-full max-w-sm">
             <div className="blur-sm pointer-events-none select-none space-y-2 opacity-60">
-              {[{name:'El Profeta',marks:['#3 RELÁMPAGO','#7 SOL NACIENTE','#1 VIENTO NORTE']},{name:'La Cátedra',marks:['#5 LUNA LLENA','#2 TRUENO REAL']}].map((exp,ei) => (
+              {[{name:'Erick Pignoloni',dorsals:['#3','#7','#1']},{name:'Manuel Rodríguez',dorsals:['#5','#2','#9']}].map((exp,ei) => (
                 <div key={ei} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-left">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="w-8 h-8 rounded-full bg-yellow-900/40 border border-yellow-700/30 flex items-center justify-center text-xs font-bold text-yellow-400">{exp.name[0]}</span>
                     <span className="text-sm font-bold text-white">{exp.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{color:'#D4AF37',backgroundColor:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.25)'}}>VIP</span>
                   </div>
-                  {exp.marks.map((m,mi) => (
-                    <div key={mi} className="flex items-center gap-2 bg-gray-800/50 rounded-xl px-3 py-2 mb-1.5">
-                      <span className="text-xs font-bold text-gray-500">{mi+1}</span>
-                      <span className="text-xs font-semibold text-white">{m}</span>
+                  {exp.dorsals.map((d,di) => (
+                    <div key={di} className="flex items-center gap-2 bg-gray-800/50 rounded-xl px-3 py-2 mb-1.5">
+                      <span className="text-xs font-bold text-gray-500">{di+1}</span>
+                      <span className="text-xs font-semibold text-white">{d} ████████████</span>
                     </div>
                   ))}
                 </div>
               ))}
             </div>
             {/* Overlay CTA */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-950/60 rounded-2xl backdrop-blur-[2px]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-950/60 rounded-2xl backdrop-blur-[2px] px-4">
               <div>
-                <p className="text-base font-extrabold text-white mb-1">Regístrate gratis para ver</p>
-                <p className="text-sm text-yellow-300 font-semibold">las marcas de los 10 mejores expertos</p>
+                <p className="text-base font-extrabold text-white mb-1">¿Quién llega primero al poste?</p>
+                <p className="text-sm text-yellow-300 font-semibold">El Factor de Victoria te da el consenso de los analistas · Gratis al registrarte</p>
               </div>
               <div className="flex flex-col gap-2 w-full max-w-[220px]">
                 <Link href="/auth/signin?mode=register"
                   className="w-full py-3 rounded-2xl text-sm font-bold text-black text-center"
                   style={{ backgroundColor: '#D4AF37' }}>
-                  🎁 Regístrate gratis
+                  🎁 Crear cuenta gratis
                 </Link>
                 <Link href="/auth/signin"
                   className="w-full py-2.5 rounded-2xl text-xs font-semibold text-gray-300 bg-gray-800 border border-gray-700 text-center">
                   Ya tengo cuenta
                 </Link>
               </div>
+              <p className="text-xs text-gray-600">Recibes 🪙 15 Gold de bienvenida para empezar</p>
             </div>
           </div>
         </div>
@@ -669,6 +667,9 @@ export default function PronosticosPage() {
     loadMeeting(selectedMeetingId);
   }
 
+  const lockedRacesCount = meeting ? meeting.races.filter(r => !isRaceUnlocked(r.raceId, meeting.races.indexOf(r))).length : 0;
+  const fullDayCost = Math.max(1, lockedRacesCount) * GOLD_COST_FULL_DAY_PER_RACE;
+
   async function handleBuyMeetingPass() {
     if (!selectedMeetingId) return;
     setMeetingPassLoading(true);
@@ -677,10 +678,10 @@ export default function PronosticosPage() {
       const res = await fetch('/api/forecasts/pass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId: selectedMeetingId }),
+        body: JSON.stringify({ meetingId: selectedMeetingId, lockedRaces: lockedRacesCount }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Error al comprar el pase');
+      if (!res.ok) throw new Error(data.error ?? 'Error al desbloquear la jornada');
       setPassUnlocked(true);
       loadMeeting(selectedMeetingId);
     } catch (err) {
@@ -741,6 +742,7 @@ export default function PronosticosPage() {
           onBuyPass={!isPrivileged ? handleBuyMeetingPass : undefined}
           meetingPassLoading={meetingPassLoading}
           goldBalance={goldBalance}
+          fullDayCost={fullDayCost}
         />
       </div>
 
@@ -789,16 +791,16 @@ export default function PronosticosPage() {
           ) : (
             <div className="rounded-xl border border-gray-700 bg-gray-900/60 px-4 py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">La Cátedra completa</p>
-                <p className="text-xs text-gray-500">{MEETING_PASS_COST} Golds — desbloquea toda la reunión</p>
+                <p className="text-xs font-bold text-white">📊 Toda la jornada — a mitad de precio</p>
+                <p className="text-xs text-gray-500">{fullDayCost}G · {lockedRacesCount} carrera{lockedRacesCount !== 1 ? 's' : ''} bloqueada{lockedRacesCount !== 1 ? 's' : ''}</p>
                 {meetingPassError && <p className="text-xs text-red-400 mt-1">{meetingPassError}</p>}
               </div>
               <button
                 onClick={handleBuyMeetingPass}
-                disabled={meetingPassLoading || goldBalance < MEETING_PASS_COST}
+                disabled={meetingPassLoading || goldBalance < fullDayCost}
                 className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-40 whitespace-nowrap"
                 style={{ backgroundColor: GOLD }}>
-                {meetingPassLoading ? '...' : `💫 ${MEETING_PASS_COST}G Pase`}
+                {meetingPassLoading ? '...' : `� ${fullDayCost}G`}
               </button>
             </div>
           )
