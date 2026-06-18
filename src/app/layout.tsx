@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
-import ElMelliChat from "@/components/ElMelliChat";
+// import ElMelliChat from "@/components/ElMelliChat"; // TEMP: oculto hasta fase 3
 import Script from "next/script";
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-DB6H4TPMJ1';
@@ -168,7 +168,7 @@ export default function RootLayout({
         />
         <SessionProviderWrapper>
           {children}
-          <ElMelliChat />
+          {/* <ElMelliChat /> */}
         </SessionProviderWrapper>
       </body>
     </html>
