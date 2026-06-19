@@ -303,13 +303,13 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
 }
 
 function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap, passUnlocked, onBuyPass, meetingPassLoading, meetingPassError }: {
-  race: RaceItem; 
-  unlocked: boolean; 
-  goldBalance: number; 
+  race: RaceItem;
+  unlocked: boolean;
+  goldBalance: number;
   followedIds: Set<string>;
-  onUnlock: () => void; 
+  onUnlock: () => void;
   onFollow: (id: string) => void;
-  isPrivileged?: boolean; 
+  isPrivileged?: boolean;
   onRefresh?: () => void;
   meetingInfo?: { trackName: string; meetingNumber: number };
   statsMap?: Map<string, { e1: number | null; eGeneral: number }>;
@@ -319,119 +319,91 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   meetingPassLoading?: boolean;
   meetingPassError?: string;
 }) {
-  const factors = unlocked ? calcFactors(race.forecasts) : [];
+  const factorUnlocked = isPrivileged || unlocked;
+  const factors = factorUnlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
-  // Sort forecasts: ranked handicappers first (by E1 desc), unranked last
-  const sortedForecasts = unlocked
-    ? [...race.forecasts].sort((a, b) => {
-        const as = statsMap?.get(a.handicapper.id);
-        const bs = statsMap?.get(b.handicapper.id);
-        const aE1 = as?.e1 ?? as?.eGeneral ?? -1;
-        const bE1 = bs?.e1 ?? bs?.eGeneral ?? -1;
-        return bE1 - aE1;
-      })
-    : race.forecasts;
+
+  // Forecasts always sorted — visible regardless of paywall
+  const sortedForecasts = [...race.forecasts].sort((a, b) => {
+    const as = statsMap?.get(a.handicapper.id);
+    const bs = statsMap?.get(b.handicapper.id);
+    const aE1 = as?.e1 ?? as?.eGeneral ?? -1;
+    const bE1 = bs?.e1 ?? bs?.eGeneral ?? -1;
+    return bE1 - aE1;
+  });
+
   return (
     <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-extrabold text-white">Carrera {race.raceNumber}</span>
-            <span className="text-sm text-gray-400">{race.distance} mts</span>
-            <span className="text-xs text-gray-600">{race.scheduledTime}</span>
-            {hasBatacazo && unlocked && <span className="text-xs font-bold text-orange-400 bg-orange-950/60 border border-orange-700/40 px-2 py-0.5 rounded-full">🔥 BATACAZO</span>}
-          </div>
-          <p className="text-xs text-gray-600 mt-0.5">{race.conditions}{typeof race.prizePool === 'object' && race.prizePool.bs ? ` · Premio Bs. ${race.prizePool.bs.toLocaleString()}` : typeof race.prizePool === 'number' && race.prizePool > 0 ? ` · Premio Bs. ${race.prizePool.toLocaleString()}` : ''}</p>
+      {/* ── Header ── */}
+      <div className="px-4 py-3 border-b border-gray-800">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-base font-extrabold text-white">Carrera {race.raceNumber}</span>
+          <span className="text-sm text-gray-400">{race.distance} mts</span>
+          <span className="text-xs text-gray-600">{race.scheduledTime}</span>
+          {hasBatacazo && <span className="text-xs font-bold text-orange-400 bg-orange-950/60 border border-orange-700/40 px-2 py-0.5 rounded-full">🔥 BATACAZO</span>}
         </div>
-        {!unlocked && (
-          <button onClick={onUnlock} disabled={goldBalance < 1}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-40"
-            style={{ backgroundColor: GOLD }}>
-            🔒 1 Gold
-          </button>
-        )}
+        <p className="text-xs text-gray-600 mt-0.5">{race.conditions}{typeof race.prizePool === 'object' && race.prizePool.bs ? ` · Premio Bs. ${race.prizePool.bs.toLocaleString()}` : typeof race.prizePool === 'number' && race.prizePool > 0 ? ` · Premio Bs. ${race.prizePool.toLocaleString()}` : ''}</p>
       </div>
-      {!unlocked && (
-        <div className="relative overflow-hidden">
-          {/* Blurred preview of fake forecast content */}
-          <div className="blur-sm pointer-events-none select-none px-4 py-3 space-y-2 opacity-50">
-            {[{ name: 'La Cátedra', marks: ['FAVO GRANDE', 'VIENTO SUR', 'EL CORCEL'] }, { name: 'El Profeta', marks: ['TRUENO REAL', 'SOL NACIENTE'] }].map((exp, ei) => (
-              <div key={ei} className="bg-gray-800/50 rounded-xl p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-6 h-6 rounded-full bg-yellow-900/40 flex items-center justify-center text-xs font-bold text-yellow-400">{exp.name[0]}</span>
-                  <span className="text-xs font-bold text-white">{exp.name}</span>
-                </div>
-                {exp.marks.map((m, mi) => (
-                  <div key={mi} className="flex items-center gap-2 bg-gray-700/40 rounded-lg px-2 py-1.5 mb-1">
-                    <span className="text-xs text-gray-500">{mi + 1}</span>
-                    <span className="text-xs font-semibold text-white">{m}</span>
+
+      {/* ── Factor de Victoria — bloqueado hasta pagar Gold ── */}
+      {factorUnlocked ? (
+        factors.length > 0 && (
+          <div className="px-4 py-3 border-b border-gray-800">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2.5">
+              Factor de Victoria <span className="ml-1 text-gray-700 font-normal normal-case">· {race.forecasts.filter(f => !f._locked).length} pronosticadores</span>
+            </p>
+            <div className="space-y-2">
+              {factors.slice(0, 6).map((h, i) => (
+                <div key={h.horseName} className="flex items-center gap-2">
+                  <span className="shrink-0 w-4 text-xs text-gray-600 font-bold">{i+1}</span>
+                  {h.dorsalNumber != null && <span className="shrink-0 w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-xs font-bold text-white">{h.dorsalNumber}</span>}
+                  <span className={`flex-1 text-xs font-semibold truncate ${h.dorsalNumber != null && race.scratchedDorsals?.includes(h.dorsalNumber) ? 'line-through text-gray-600' : 'text-white'}`}>{h.horseName}</span>
+                  <div className="w-20 h-2 rounded-full bg-gray-800 overflow-hidden shrink-0">
+                    <div className="h-full rounded-full" style={{ width: `${h.factor*100}%`, backgroundColor: h.factor>=0.5?'#22c55e':h.factor>=0.25?GOLD:'#6b7280' }} />
                   </div>
-                ))}
-              </div>
-            ))}
+                  <span className="shrink-0 text-xs font-bold font-mono w-9 text-right" style={{ color: h.factor>=0.5?'#22c55e':h.factor>=0.25?GOLD:'#9ca3af' }}>
+                    {h.factor.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          {/* Paywall overlay */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-950/70 backdrop-blur-[3px] px-4 py-6">
-            <div className="text-center">
-              <p className="text-sm font-extrabold text-white mb-0.5">🔒 Factor de Victoria bloqueado</p>
-              <p className="text-xs text-gray-400">El consenso de los analistas para esta carrera</p>
-            </div>
-            <div className="flex flex-col gap-2 w-full max-w-xs">
+        )
+      ) : (
+        <div className="mx-4 my-3 rounded-xl border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex flex-col gap-2.5">
+          <div>
+            <p className="text-sm font-extrabold text-white mb-0.5">🔒 Factor de Victoria bloqueado</p>
+            <p className="text-xs text-gray-400">El consenso ponderado por % de aciertos de los analistas</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={onUnlock}
+              disabled={goldBalance < GOLD_COST_PER_RACE}
+              className="w-full py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40"
+              style={{ backgroundColor: GOLD }}>
+              🔓 {GOLD_COST_PER_RACE}G — Solo esta carrera
+            </button>
+            {!passUnlocked && onBuyPass && (
               <button
-                onClick={onUnlock}
-                disabled={goldBalance < GOLD_COST_PER_RACE}
-                className="w-full py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40"
-                style={{ backgroundColor: GOLD }}>
-                🔓 {GOLD_COST_PER_RACE}G — Solo esta carrera
+                onClick={onBuyPass}
+                disabled={meetingPassLoading || goldBalance < GOLD_COST_FULL_DAY_PER_RACE}
+                className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
+                {meetingPassLoading ? 'Procesando...' : `◆ Toda la jornada — mitad de precio`}
               </button>
-              {!passUnlocked && onBuyPass && (
-                <button
-                  onClick={onBuyPass}
-                  disabled={meetingPassLoading || goldBalance < GOLD_COST_FULL_DAY_PER_RACE}
-                  className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
-                  {meetingPassLoading
-                    ? 'Procesando...'
-                    : `� Toda la jornada — mitad de precio`}
-                </button>
-              )}
-              {goldBalance < GOLD_COST_PER_RACE && (
-                <p className="text-xs text-center text-yellow-700">Sin saldo · <Link href="/perfil" className="underline text-yellow-500">Recarga aquí</Link></p>
-              )}
-              {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
-            </div>
+            )}
+            {goldBalance < GOLD_COST_PER_RACE && (
+              <p className="text-xs text-center text-yellow-700">Sin saldo · <Link href="/perfil" className="underline text-yellow-500">Recarga aquí</Link></p>
+            )}
+            {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
           </div>
         </div>
       )}
-      {unlocked && (
-        <>
-          {factors.length > 0 && (
-            <div className="px-4 py-3 border-b border-gray-800">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2.5">
-                Factor de Victoria <span className="ml-1 text-gray-700 font-normal normal-case">· {race.forecasts.filter(f => !f._locked).length} pronosticadores</span>
-              </p>
-              <div className="space-y-2">
-                {factors.slice(0, 6).map((h, i) => (
-                  <div key={h.horseName} className="flex items-center gap-2">
-                    <span className="shrink-0 w-4 text-xs text-gray-600 font-bold">{i+1}</span>
-                    {h.dorsalNumber != null && <span className="shrink-0 w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-xs font-bold text-white">{h.dorsalNumber}</span>}
-                    <span className={`flex-1 text-xs font-semibold truncate ${h.dorsalNumber != null && race.scratchedDorsals?.includes(h.dorsalNumber) ? 'line-through text-gray-600' : 'text-white'}`}>{h.horseName}</span>
-                    <div className="w-20 h-2 rounded-full bg-gray-800 overflow-hidden shrink-0">
-                      <div className="h-full rounded-full" style={{ width: `${h.factor*100}%`, backgroundColor: h.factor>=0.5?'#22c55e':h.factor>=0.25?GOLD:'#6b7280' }} />
-                    </div>
-                    <span className="shrink-0 text-xs font-bold font-mono w-9 text-right" style={{ color: h.factor>=0.5?'#22c55e':h.factor>=0.25?GOLD:'#9ca3af' }}>
-                      {h.factor.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {race.forecasts.length === 0
-            ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-            : <div className="divide-y divide-gray-800/60">{sortedForecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} rankPos={globalRankMap?.get(fc.handicapper.id)} />)}</div>
-          }
-        </>
-      )}
+
+      {/* ── Pronósticos individuales — siempre visibles (gratis) ── */}
+      {race.forecasts.length === 0
+        ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
+        : <div className="divide-y divide-gray-800/60">{sortedForecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} rankPos={globalRankMap?.get(fc.handicapper.id)} />)}</div>
+      }
     </div>
   );
 }
@@ -463,7 +435,7 @@ export default function PronosticosPage() {
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
   const goldBalance = user?.balance?.golds ?? 0;
-  const isPrivileged = roles.some(r => ['admin', 'staff', 'handicapper'].includes(r));
+  const isPrivileged = roles.some(r => ['admin', 'staff'].includes(r));
 
   // Load meetings list
   useEffect(() => {
@@ -627,18 +599,18 @@ export default function PronosticosPage() {
             {/* Overlay CTA */}
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-950/60 rounded-2xl backdrop-blur-[2px] px-4">
               <div>
-                <p className="text-base font-extrabold text-white mb-1">¿Quién llega primero al poste?</p>
-                <p className="text-sm text-yellow-300 font-semibold">El Factor de Victoria te da el consenso de los analistas · Gratis al registrarte</p>
+                <p className="text-base font-extrabold text-white mb-1">Pronósticos de los expertos · Gratis</p>
+                <p className="text-sm text-yellow-300 font-semibold">Regístrate para ver las marcas de todos los analistas · El Factor de Victoria (consenso) se desbloquea con Gold</p>
               </div>
               <div className="flex flex-col gap-2 w-full max-w-[220px]">
                 <Link href="/auth/signin?mode=register"
                   className="w-full py-3 rounded-2xl text-sm font-bold text-black text-center"
                   style={{ backgroundColor: '#D4AF37' }}>
-                  🎁 Crear cuenta gratis
+                  🎁 Regístrate gratis
                 </Link>
                 <Link href="/auth/signin"
                   className="w-full py-2.5 rounded-2xl text-xs font-semibold text-gray-300 bg-gray-800 border border-gray-700 text-center">
-                  Ya tengo cuenta
+                  Ya tengo cuenta →
                 </Link>
               </div>
               <p className="text-xs text-gray-600">Recibes 🪙 15 Gold de bienvenida para empezar</p>
