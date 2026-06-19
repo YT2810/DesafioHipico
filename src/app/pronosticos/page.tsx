@@ -474,7 +474,14 @@ export default function PronosticosPage() {
       // Fetch per-user access map in parallel with race metadata (lightweight)
       const accessRes = await fetch(
         `/api/forecasts/access?meetingId=${meetingId}&totalRaces=${races.length}&raceIds=${raceIds.join(',')}`
-      ).then(r => r.json()).catch(() => ({ map: {}, freeRemaining: getFreeRacesAllowance(races.length), passUnlocked: false }));
+      ).then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || data.error) {
+          console.error('Access API error:', r.status, data.error);
+          return { map: {}, freeRemaining: getFreeRacesAllowance(races.length), passUnlocked: false, goldBalance: 0, isPrivileged: false };
+        }
+        return data;
+      }).catch(() => ({ map: {}, freeRemaining: getFreeRacesAllowance(races.length), passUnlocked: false, goldBalance: 0, isPrivileged: false }));
 
       const accessMap: Record<string, { unlocked: boolean; free: boolean }> = accessRes.map ?? {};
       setFreeRemaining(accessRes.freeRemaining ?? getFreeRacesAllowance(races.length));

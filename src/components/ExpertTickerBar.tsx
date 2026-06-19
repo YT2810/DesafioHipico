@@ -158,7 +158,7 @@ export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuy
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-yellow-700/60 bg-yellow-950/30 hover:bg-yellow-950/50 disabled:opacity-40 transition-all active:scale-95"
             >
               <span className="text-[10px] font-black text-yellow-300 whitespace-nowrap">
-                {meetingPassLoading ? '...' : `� ${dayCost}G · Ver toda la jornada`}
+                {meetingPassLoading ? '...' : `◆ ${dayCost}G · Ver toda la jornada`}
               </span>
             </button>
           )}

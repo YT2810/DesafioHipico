@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { getMeetingAccessMap } from '@/services/forecastAccessService';
 import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
@@ -18,11 +18,8 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const secure = req.nextUrl.protocol === 'https:';
-    const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
-    const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
-
-    if (!token?.sub) {
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
         { map: {}, freeRemaining: 0, goldBalance: 0, isPrivileged: false, passUnlocked: false },
         { status: 200 }
@@ -37,7 +34,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'meetingId requerido.' }, { status: 400 });
     }
 
-    const userId = token.sub;
+    const userId = session.user.id;
 
     // We need raceIds to build the map — pass empty array here,
     // getMeetingAccessMap will use totalRaces for the allowance calculation.
