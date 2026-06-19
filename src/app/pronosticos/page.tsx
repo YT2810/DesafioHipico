@@ -319,18 +319,17 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   meetingPassLoading?: boolean;
   meetingPassError?: string;
 }) {
-  const factorUnlocked = isPrivileged || unlocked;
-  const factors = factorUnlocked ? calcFactors(race.forecasts) : [];
+  const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
-
-  // Forecasts always sorted — visible regardless of paywall
-  const sortedForecasts = [...race.forecasts].sort((a, b) => {
-    const as = statsMap?.get(a.handicapper.id);
-    const bs = statsMap?.get(b.handicapper.id);
-    const aE1 = as?.e1 ?? as?.eGeneral ?? -1;
-    const bE1 = bs?.e1 ?? bs?.eGeneral ?? -1;
-    return bE1 - aE1;
-  });
+  const sortedForecasts = unlocked
+    ? [...race.forecasts].sort((a, b) => {
+        const as = statsMap?.get(a.handicapper.id);
+        const bs = statsMap?.get(b.handicapper.id);
+        const aE1 = as?.e1 ?? as?.eGeneral ?? -1;
+        const bE1 = bs?.e1 ?? bs?.eGeneral ?? -1;
+        return bE1 - aE1;
+      })
+    : race.forecasts;
 
   return (
     <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
@@ -346,7 +345,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
       </div>
 
       {/* ── Factor de Victoria — bloqueado hasta pagar Gold ── */}
-      {factorUnlocked ? (
+      {unlocked ? (
         factors.length > 0 && (
           <div className="px-4 py-3 border-b border-gray-800">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2.5">
@@ -372,8 +371,8 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
       ) : (
         <div className="mx-4 my-3 rounded-xl border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex flex-col gap-2.5">
           <div>
-            <p className="text-sm font-extrabold text-white mb-0.5">🔒 Factor de Victoria bloqueado</p>
-            <p className="text-xs text-gray-400">El consenso ponderado por % de aciertos de los analistas</p>
+            <p className="text-sm font-extrabold text-white mb-0.5">🔒 Pronósticos + Factor de Victoria bloqueados</p>
+            <p className="text-xs text-gray-400">Desbloquea esta carrera para ver todo</p>
           </div>
           <div className="flex flex-col gap-2">
             <button
@@ -399,11 +398,12 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
         </div>
       )}
 
-      {/* ── Pronósticos individuales — siempre visibles (gratis) ── */}
-      {race.forecasts.length === 0
-        ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
-        : <div className="divide-y divide-gray-800/60">{sortedForecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} rankPos={globalRankMap?.get(fc.handicapper.id)} />)}</div>
-      }
+      {/* ── Pronósticos individuales — solo visibles si desbloqueado ── */}
+      {unlocked && (
+        race.forecasts.length === 0
+          ? <p className="px-4 py-8 text-sm text-gray-600 text-center italic">Sin pronósticos publicados aún para esta carrera.</p>
+          : <div className="divide-y divide-gray-800/60">{sortedForecasts.map((fc, i) => <HandicapperBlock key={i} forecast={fc} isFollowed={followedIds.has(fc.handicapper.id)} onFollow={() => onFollow(fc.handicapper.id)} isPrivileged={isPrivileged} raceId={race.raceId} onDeleted={onRefresh} scratchedDorsals={race.scratchedDorsals} statsMap={statsMap} rankPos={globalRankMap?.get(fc.handicapper.id)} />)}</div>
+      )}
     </div>
   );
 }
@@ -621,10 +621,13 @@ export default function PronosticosPage() {
     );
   }
 
-  function isRaceUnlocked(raceId: string, _idx: number) {
+  function isRaceUnlocked(raceId: string, idx: number) {
     if (isPrivileged || passUnlocked) return true;
     const race = meeting?.races.find(r => r.raceId === raceId);
-    return (race as any)?._access?.unlocked ?? false;
+    if ((race as any)?._access?.unlocked) return true;
+    // First freeRemaining races (by position) count as free even before first click
+    if (freeRemaining > 0 && idx < freeRemaining) return true;
+    return false;
   }
 
   async function handleUnlock(raceId: string) {
