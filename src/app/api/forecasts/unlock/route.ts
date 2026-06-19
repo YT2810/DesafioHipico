@@ -1,25 +1,30 @@
 /**
  * POST /api/forecasts/unlock
- * Body: { userId, meetingId, raceId }
+ * Body: { meetingId, raceId }
  * Consumes free quota or deducts 1 Gold to unlock a race's forecasts.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { requestRaceAccess } from '@/services/forecastAccessService';
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, meetingId, raceId } = await req.json();
-
-    if (!userId || !meetingId || !raceId) {
-      return NextResponse.json({ error: 'userId, meetingId y raceId son requeridos.' }, { status: 400 });
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
     }
 
-    const result = await requestRaceAccess(userId, meetingId, raceId);
+    const { meetingId, raceId } = await req.json();
+    if (!meetingId || !raceId) {
+      return NextResponse.json({ error: 'meetingId y raceId son requeridos.' }, { status: 400 });
+    }
+
+    const result = await requestRaceAccess(session.user.id, meetingId, raceId);
 
     if (!result.granted) {
       if (result.reason === 'already_unlocked') {
-        return NextResponse.json({ alreadyUnlocked: true }, { status: 200 });
+        return NextResponse.json({ alreadyUnlocked: true }, { status: 409 });
       }
       if (result.reason === 'insufficient_gold') {
         return NextResponse.json(

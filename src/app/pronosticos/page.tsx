@@ -633,14 +633,31 @@ export default function PronosticosPage() {
 
   async function handleUnlock(raceId: string) {
     if (!selectedMeetingId) return;
+    setMeetingPassLoading(true);
+    setMeetingPassError('');
     try {
-      await fetch('/api/forecasts/unlock', {
+      const res = await fetch('/api/forecasts/unlock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId: selectedMeetingId, raceId }),
       });
-    } catch { /* ignore, reload will show current state */ }
-    loadMeeting(selectedMeetingId);
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) {
+          // already unlocked — treat as success, just refresh
+          loadMeeting(selectedMeetingId);
+          return;
+        }
+        throw new Error(data.error ?? 'Error al desbloquear');
+      }
+      // Success — refresh meeting to pick up new unlock state
+      setFreeRemaining(data.freeRemaining ?? 0);
+      loadMeeting(selectedMeetingId);
+    } catch (err) {
+      setMeetingPassError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setMeetingPassLoading(false);
+    }
   }
 
   const lockedRacesCount = meeting ? meeting.races.filter(r => !isRaceUnlocked(r.raceId, meeting.races.indexOf(r))).length : 0;
