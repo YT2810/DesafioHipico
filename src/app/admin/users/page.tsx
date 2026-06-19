@@ -39,6 +39,7 @@ export default function AdminUsersPage() {
   const [goldAmount, setGoldAmount] = useState('');
   const [goldMsg, setGoldMsg] = useState('');
   const [goldLoading, setGoldLoading] = useState(false);
+  const [goldSort, setGoldSort] = useState<'none' | 'desc' | 'asc'>('none');
 
   // Debounce search
   useEffect(() => {
@@ -138,16 +139,29 @@ export default function AdminUsersPage() {
 
       <main className="mx-auto max-w-3xl px-4 py-5 space-y-4">
 
-        {/* Search */}
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm">🔍</span>
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar por email, nombre, alias o Telegram ID..."
-            className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors"
-          />
+        {/* Search + Sort */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm">🔍</span>
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Buscar por email, nombre, alias o Telegram ID..."
+              className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors"
+            />
+          </div>
+          <button
+            onClick={() => setGoldSort(prev => prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none')}
+            className={`shrink-0 px-3 py-3 rounded-xl text-xs font-bold border transition-colors ${
+              goldSort !== 'none'
+                ? 'text-yellow-400 bg-yellow-950/30 border-yellow-700/50'
+                : 'text-gray-500 bg-gray-900 border-gray-700 hover:border-gray-600'
+            }`}
+            title="Ordenar por Gold"
+          >
+            🪙 {goldSort === 'desc' ? '↓' : goldSort === 'asc' ? '↑' : '—'}
+          </button>
         </div>
 
         {/* User list */}
@@ -162,7 +176,11 @@ export default function AdminUsersPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {users.map(u => {
+            {[...users].sort((a, b) => {
+              if (goldSort === 'desc') return (b.balance?.golds ?? 0) - (a.balance?.golds ?? 0);
+              if (goldSort === 'asc') return (a.balance?.golds ?? 0) - (b.balance?.golds ?? 0);
+              return 0;
+            }).map(u => {
               const isSelected = selected?._id === u._id;
               return (
                 <div key={u._id}

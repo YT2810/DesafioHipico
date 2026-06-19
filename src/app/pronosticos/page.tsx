@@ -302,7 +302,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap, passUnlocked, onBuyPass, meetingPassLoading, meetingPassError }: {
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap, passUnlocked, onBuyPass, meetingPassLoading, meetingPassError, fullDayCost }: {
   race: RaceItem;
   unlocked: boolean;
   goldBalance: number;
@@ -318,6 +318,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   onBuyPass?: () => void;
   meetingPassLoading?: boolean;
   meetingPassError?: string;
+  fullDayCost: number;
 }) {
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
@@ -385,9 +386,9 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
             {!passUnlocked && onBuyPass && (
               <button
                 onClick={onBuyPass}
-                disabled={meetingPassLoading || goldBalance < GOLD_COST_FULL_DAY_PER_RACE}
+                disabled={meetingPassLoading || goldBalance < fullDayCost}
                 className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
-                {meetingPassLoading ? 'Procesando...' : `◆ Toda la jornada — mitad de precio`}
+                {meetingPassLoading ? 'Procesando...' : `◆ Jornada completa — ${fullDayCost}G`}
               </button>
             )}
             {goldBalance < GOLD_COST_PER_RACE && (
@@ -656,7 +657,15 @@ export default function PronosticosPage() {
         body: JSON.stringify({ meetingId: selectedMeetingId, lockedRaces: lockedRacesCount }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Error al desbloquear la jornada');
+      if (!res.ok) {
+        if (res.status === 409) {
+          // already_unlocked — treat as success (likely double-click race)
+          setPassUnlocked(true);
+          loadMeeting(selectedMeetingId);
+          return;
+        }
+        throw new Error(data.error ?? 'Error al desbloquear la jornada');
+      }
       setPassUnlocked(true);
       loadMeeting(selectedMeetingId);
     } catch (err) {
@@ -766,7 +775,7 @@ export default function PronosticosPage() {
           ) : (
             <div className="rounded-xl border border-gray-700 bg-gray-900/60 px-4 py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">📊 Toda la jornada — a mitad de precio</p>
+                <p className="text-xs font-bold text-white">📊 Jornada completa</p>
                 <p className="text-xs text-gray-500">{fullDayCost}G · {lockedRacesCount} carrera{lockedRacesCount !== 1 ? 's' : ''} bloqueada{lockedRacesCount !== 1 ? 's' : ''}</p>
                 {meetingPassError && <p className="text-xs text-red-400 mt-1">{meetingPassError}</p>}
               </div>
@@ -822,7 +831,8 @@ export default function PronosticosPage() {
             meetingInfo={meeting ? { trackName: meeting.trackName, meetingNumber: meeting.meetingNumber } : undefined}
             statsMap={statsMap} globalRankMap={globalRankMap}
             passUnlocked={passUnlocked} onBuyPass={handleBuyMeetingPass}
-            meetingPassLoading={meetingPassLoading} meetingPassError={meetingPassError} />
+            meetingPassLoading={meetingPassLoading} meetingPassError={meetingPassError}
+            fullDayCost={fullDayCost} />
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>
