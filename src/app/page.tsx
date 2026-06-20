@@ -407,19 +407,33 @@ export default function HomePage() {
 
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
 
-      {/* Sticky bottom CTA — non-logged users with blurred forecasters */}
-      {!isLoggedIn && previewForecasts.length > 1 && status !== 'loading' && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4 pt-2 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent pointer-events-none">
-          <div className="max-w-sm mx-auto pointer-events-auto">
-            <Link
-              href="/auth/signin?mode=register"
-              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-sm font-extrabold text-black shadow-lg shadow-yellow-900/30"
-              style={{ backgroundColor: GOLD }}
-            >
-              🎁 Ver todos los expertos — gratis
-            </Link>
+      {/* Sticky bottom CTA — non-logged users OR logged users with 0 gold */}
+      {previewForecasts.length > 1 && status !== 'loading' && (
+        !isLoggedIn ? (
+          <div className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4 pt-2 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent pointer-events-none">
+            <div className="max-w-sm mx-auto pointer-events-auto">
+              <Link
+                href="/auth/signin?mode=register"
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-sm font-extrabold text-black shadow-lg shadow-yellow-900/30"
+                style={{ backgroundColor: GOLD }}
+              >
+                🎁 Ver todos los expertos — gratis
+              </Link>
+            </div>
           </div>
-        </div>
+        ) : (session?.user as any)?.balance?.golds === 0 ? (
+          <div className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4 pt-2 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent pointer-events-none">
+            <div className="max-w-sm mx-auto pointer-events-auto">
+              <button
+                onClick={() => setShowTopUp(true)}
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-sm font-extrabold text-black shadow-lg shadow-yellow-900/30"
+                style={{ backgroundColor: GOLD }}
+              >
+                💰 Recarga Gold para desbloquear
+              </button>
+            </div>
+          </div>
+        ) : null
       )}
     </div>
   );
