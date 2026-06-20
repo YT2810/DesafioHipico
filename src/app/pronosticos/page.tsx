@@ -14,6 +14,12 @@ interface RaceItem { raceId: string; raceNumber: number; distance: number; sched
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
 interface HorseFactor { horseName: string; dorsalNumber?: number; points: number; factor: number; }
 
+function trackGA(eventName: string, params?: Record<string, string | number>) {
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag('event', eventName, params ?? {});
+  }
+}
+
 function calcFactors(forecasts: ForecastItem[]): HorseFactor[] {
   const pub = forecasts.filter(f => !f._locked);
   if (!pub.length) return [];
@@ -320,6 +326,12 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   meetingPassError?: string;
   fullDayCost: number;
 }) {
+  useEffect(() => {
+    if (!unlocked) {
+      trackGA('paywall_viewed', { race_number: race.raceNumber, meeting_info: `${meetingInfo?.trackName || ''} R${meetingInfo?.meetingNumber || ''}`, gold_cost: GOLD_COST_PER_RACE });
+    }
+  }, [unlocked, race.raceNumber]);
+
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
   const sortedForecasts = unlocked
@@ -377,7 +389,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
           </div>
           <div className="flex flex-col gap-2">
             <button
-              onClick={onUnlock}
+              onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: GOLD_COST_PER_RACE, type: 'single_race' }); onUnlock(); }}
               disabled={goldBalance < GOLD_COST_PER_RACE}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40"
               style={{ backgroundColor: GOLD }}>
@@ -385,14 +397,14 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
             </button>
             {!passUnlocked && onBuyPass && (
               <button
-                onClick={onBuyPass}
+                onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: fullDayCost, type: 'meeting_pass' }); onBuyPass(); }}
                 disabled={meetingPassLoading || goldBalance < fullDayCost}
                 className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
                 {meetingPassLoading ? 'Procesando...' : `◆ Jornada completa — ${fullDayCost}G`}
               </button>
             )}
             {goldBalance < GOLD_COST_PER_RACE && (
-              <p className="text-xs text-center text-yellow-700">Sin saldo · <Link href="/perfil" className="underline text-yellow-500">Recarga aquí</Link></p>
+              <p className="text-xs text-center text-yellow-700">Sin saldo · <Link href="/perfil" onClick={() => trackGA('topup_initiated', { source: 'paywall_insufficient_gold', race_number: race.raceNumber })} className="underline text-yellow-500">Recarga aquí</Link></p>
             )}
             {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
           </div>
