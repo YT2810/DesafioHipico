@@ -29,6 +29,7 @@ export async function GET() {
     days7.setDate(days7.getDate() - 6);
     days7.setHours(0, 0, 0, 0);
     const days30 = new Date(now.getTime() - 30 * 86400000);
+    const days365 = new Date(now.getTime() - 365 * 86400000);
 
     const [
       totalUsers,
@@ -36,6 +37,7 @@ export async function GET() {
       goldStats,
       registrationsByDay,
       loginsByDay,
+      dailyGold,
       recentUsers,
       txStats,
       txByType,
@@ -64,7 +66,7 @@ export async function GET() {
       ]),
 
       User.aggregate([
-        { $match: { createdAt: { $gte: days7 } } },
+        { $match: { createdAt: { $gte: days365 } } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
@@ -77,13 +79,29 @@ export async function GET() {
       User.aggregate([
         {
           $match: {
-            lastLoginDate: { $gte: days7.toISOString().slice(0, 10) },
+            lastLoginDate: { $gte: days365.toISOString().slice(0, 10) },
           },
         },
         {
           $group: {
             _id: '$lastLoginDate',
             count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+
+      GoldTransaction.aggregate([
+        { $match: { createdAt: { $gte: days365 } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            bonus: { $sum: { $cond: [{ $eq: ['$type', 'bonus'] }, '$amount', 0] } },
+            purchase: { $sum: { $cond: [{ $eq: ['$type', 'purchase'] }, '$amount', 0] } },
+            raceUnlock: { $sum: { $cond: [{ $eq: ['$type', 'race_unlock'] }, '$amount', 0] } },
+            meetingPass: { $sum: { $cond: [{ $eq: ['$type', 'meeting_pass'] }, '$amount', 0] } },
+            refund: { $sum: { $cond: [{ $eq: ['$type', 'refund'] }, '$amount', 0] } },
+            other: { $sum: { $cond: [{ $not: [{ $in: ['$type', ['bonus', 'purchase', 'race_unlock', 'meeting_pass', 'refund']] }] }, '$amount', 0] } },
           },
         },
         { $sort: { _id: 1 } },
@@ -131,20 +149,29 @@ export async function GET() {
       Forecast.countDocuments(),
     ]);
 
-    const last7: string[] = [];
-    for (let i = 6; i >= 0; i--) {
+    const last365: string[] = [];
+    for (let i = 364; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      last7.push(d.toISOString().slice(0, 10));
+      last365.push(d.toISOString().slice(0, 10));
     }
 
     const regMap = Object.fromEntries(registrationsByDay.map((r: any) => [r._id, r.count]));
     const loginMap = Object.fromEntries(loginsByDay.map((r: any) => [r._id, r.count]));
+    const goldMap = Object.fromEntries(dailyGold.map((g: any) => [g._id, g]));
 
-    const dailyStats = last7.map(date => ({
+    const dailyStats = last365.map(date => ({
       date,
       registrations: regMap[date] ?? 0,
       logins: loginMap[date] ?? 0,
+      gold: {
+        bonus: goldMap[date]?.bonus ?? 0,
+        purchase: goldMap[date]?.purchase ?? 0,
+        raceUnlock: goldMap[date]?.raceUnlock ?? 0,
+        meetingPass: goldMap[date]?.meetingPass ?? 0,
+        refund: goldMap[date]?.refund ?? 0,
+        other: goldMap[date]?.other ?? 0,
+      },
     }));
 
     const roleMap = Object.fromEntries(byRole.map((r: any) => [r._id, r.count]));

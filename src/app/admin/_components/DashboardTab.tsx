@@ -2,11 +2,14 @@ import Link from 'next/link';
 import KpiCard from './KpiCard';
 import type { AdminStats } from '../_hooks/useAdminStats';
 import { fmtDay } from '../_hooks/useAdminStats';
+import { useState } from 'react';
 
 const GOLD = '#D4AF37';
 
 export default function DashboardTab({ stats, loading }: { stats: AdminStats | null; loading: boolean }) {
-  const maxLogins = stats ? Math.max(...stats.dailyStats.map(x => x.logins), 1) : 1;
+  const [range, setRange] = useState<7 | 14 | 30 | 90 | 365>(7);
+  const sliced = stats ? stats.dailyStats.slice(-range) : [];
+  const maxLogins = sliced.length ? Math.max(...sliced.map(x => x.logins), 1) : 1;
   const pendingTopups = stats?.tokenomics?.topups?.pending ?? 0;
 
   return (
@@ -65,22 +68,32 @@ export default function DashboardTab({ stats, loading }: { stats: AdminStats | n
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
-        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">Últimos 7 días · Logins y Registros</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Logins y Registros</p>
+          <div className="flex gap-1">
+            {[7, 14, 30, 90, 365].map(d => (
+              <button key={d} onClick={() => setRange(d as any)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${range === d ? 'bg-yellow-700/40 text-yellow-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                {d === 365 ? '1Y' : `${d}d`}
+              </button>
+            ))}
+          </div>
+        </div>
         {loading ? (
           <div className="h-20 rounded-xl bg-gray-800 animate-pulse" />
-        ) : stats ? (
+        ) : sliced.length ? (
           <>
-            <div className="flex items-end gap-2 h-20">
-              {stats.dailyStats.map(d => {
+            <div className="flex items-end gap-1.5 h-24">
+              {sliced.map(d => {
                 const pct = Math.round((d.logins / maxLogins) * 100);
                 return (
-                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                    <p className="text-[10px] text-gray-600">{d.logins}</p>
-                    <div className="w-full rounded-t-md bg-blue-700/60" style={{ height: `${Math.max(pct, 4)}%` }} />
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5">
+                    <p className="text-[9px] text-gray-600">{d.logins}</p>
+                    <div className="w-full rounded-t-sm bg-blue-700/60" style={{ height: `${Math.max(pct, 3)}%` }} />
                     {d.registrations > 0 && (
                       <div className="w-full rounded-t-sm bg-yellow-600/80" style={{ height: `${Math.round((d.registrations / maxLogins) * 100)}%`, marginTop: '-100%' }} />
                     )}
-                    <p className="text-[10px] text-gray-600 leading-none">{fmtDay(d.date)}</p>
+                    <p className="text-[9px] text-gray-600 leading-none">{fmtDay(d.date)}</p>
                   </div>
                 );
               })}

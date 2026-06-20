@@ -10,7 +10,8 @@ export interface BcvStatus {
   message?: string;
 }
 
-export interface DayStats { date: string; registrations: number; logins: number; }
+export interface DayGold { bonus: number; purchase: number; raceUnlock: number; meetingPass: number; refund: number; other: number; }
+export interface DayStats { date: string; registrations: number; logins: number; gold: DayGold; }
 
 export interface Tokenomics {
   txVolume30d: { spent: number; income: number; count: number };
