@@ -6,10 +6,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ meetingId: string }> }
 ) {
-  const token = await getToken({ req });
+  const secure = req.nextUrl.protocol === 'https:';
+  const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
   const roles: string[] = (token?.roles as string[]) ?? [];
-  if (!roles.some(r => ['admin', 'staff'].includes(r))) {
-    return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
+  if (!token || !roles.some(r => ['admin', 'staff'].includes(r))) {
+    return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
   const { meetingId } = await params;
