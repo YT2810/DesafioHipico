@@ -40,6 +40,8 @@ export default function AdminMeetingsPage() {
   const [loadingRaces, setLoadingRaces] = useState<string | null>(null);
   const [cancellingRace, setCancellingRace] = useState<string | null>(null);
   const [settingMeetingStatus, setSettingMeetingStatus] = useState<string | null>(null);
+  const [generatingSnapshot, setGeneratingSnapshot] = useState<string | null>(null);
+  const [snapshotFeedback, setSnapshotFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({});
 
   const roles: string[] = (session?.user as any)?.roles ?? [];
   const canAccess = roles.some(r => ['admin', 'staff'].includes(r));
@@ -107,6 +109,21 @@ export default function AdminMeetingsPage() {
       if (!res.ok) throw new Error('Error al actualizar');
       setMeetings(prev => prev.map(m => m._id === meetingId ? { ...m, status: newStatus } : m));
     } catch { /* ignore */ } finally { setSettingMeetingStatus(null); }
+  }
+
+  async function regenerateSnapshot(meetingId: string) {
+    setGeneratingSnapshot(meetingId);
+    setSnapshotFeedback(prev => ({ ...prev, [meetingId]: { ok: false, msg: '' } }));
+    try {
+      const res = await fetch(`/api/admin/snapshot/${meetingId}`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? 'Error');
+      setSnapshotFeedback(prev => ({ ...prev, [meetingId]: { ok: true, msg: `✓ Snapshot listo (${d.races} carreras)` } }));
+    } catch (e: any) {
+      setSnapshotFeedback(prev => ({ ...prev, [meetingId]: { ok: false, msg: e.message } }));
+    } finally {
+      setGeneratingSnapshot(null);
+    }
   }
 
   async function saveStream(meetingId: string) {
@@ -234,7 +251,17 @@ export default function AdminMeetingsPage() {
                     ↺ Reabrir
                   </button>
                 )}
+                <button
+                  onClick={() => regenerateSnapshot(m._id)}
+                  disabled={generatingSnapshot === m._id}
+                  className="text-[11px] px-3 py-1 rounded-lg border border-purple-800 text-purple-400 hover:bg-purple-950/40 transition-colors disabled:opacity-50"
+                >
+                  {generatingSnapshot === m._id ? '⏳ Generando...' : '⚡ Regenerar Revista'}
+                </button>
               </div>
+              {snapshotFeedback[m._id]?.msg && (
+                <p className={`text-[11px] font-semibold ${snapshotFeedback[m._id].ok ? 'text-green-400' : 'text-red-400'}`}>{snapshotFeedback[m._id].msg}</p>
+              )}
 
               {/* Race list panel */}
               {isExpanded && (
