@@ -9,6 +9,8 @@ const BASE = 'https://www.desafiohipico.com';
 const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: 'Retrospectos Hípicos · Gaceta Hípica La Rinconada y Valencia',
   description: 'Retrospectos hípicos Venezuela: inscritos, historial, traqueos y revista digital por reunión. La Rinconada y Valencia. Datos INH actualizados.',

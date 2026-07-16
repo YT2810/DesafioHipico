@@ -12,6 +12,8 @@ import { Types } from 'mongoose';
 
 export const dynamic = 'force-dynamic';
 
+// Cache helper applied per-response below
+
 // ── Module-level helpers ──
 function resolveTrackCode(t: any): string {
   if (!t) return '';
@@ -322,7 +324,7 @@ export async function GET(
 
     const hasWorkouts = allWorkouts.length > 0;
 
-    return NextResponse.json({
+    const responseBody = {
       meeting: {
         id: String(meeting._id),
         meetingNumber: meeting.meetingNumber,
@@ -335,7 +337,19 @@ export async function GET(
       },
       races: racesOut,
       hasWorkouts,
-    });
+    };
+
+    // Past meetings (already ran): cache 1 hour at CDN — data won't change
+    // Upcoming/today meetings: no-store so users always get fresh inscritos
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const meetingDateStr = new Date(meeting.date).toISOString().slice(0, 10);
+    const isPast = meetingDateStr < todayStr;
+
+    const headers: Record<string, string> = isPast
+      ? { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=600' }
+      : { 'Cache-Control': 'no-store' };
+
+    return NextResponse.json(responseBody, { headers });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido';
     return NextResponse.json({ error: msg }, { status: 500 });

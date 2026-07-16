@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
 import RevistaClient from './RevistaClient';
 
 const BASE = 'https://www.desafiohipico.com';
@@ -10,7 +11,7 @@ interface Props {
   params: Promise<{ meetingId: string }>;
 }
 
-async function fetchMeta(meetingId: string) {
+const fetchMeta = cache(async (meetingId: string) => {
   try {
     const base = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.desafiohipico.com';
     const res = await fetch(`${base}/api/revista/${meetingId}`, { cache: 'no-store' });
@@ -19,7 +20,7 @@ async function fetchMeta(meetingId: string) {
   } catch {
     return null;
   }
-}
+});
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { meetingId } = await params;
