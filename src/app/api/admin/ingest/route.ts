@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { processDocument } from '@/services/pdfProcessor';
 import { ingestDocument } from '@/services/ingestService';
 import { notifyNewMeeting } from '@/services/notificationService';
+import { generateMeetingSnapshot } from '@/lib/generateMeetingSnapshot';
 import connectDB from '@/lib/mongodb';
 import Track from '@/models/Track';
 import Meeting from '@/models/Meeting';
@@ -120,6 +121,13 @@ export async function POST(request: NextRequest) {
     if (m?.meetingNumber && m?.track?.name && m?.date) {
       const dateStr = new Date(m.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       notifyNewMeeting(m.meetingNumber, m.track.name, dateStr).catch(() => {});
+    }
+
+    // Pre-compute snapshot so first user visit is instant
+    if (result?.meetingId) {
+      generateMeetingSnapshot(String(result.meetingId)).catch((e) =>
+        console.error('[snapshot] generation failed after ingest:', e)
+      );
     }
 
     return NextResponse.json({
