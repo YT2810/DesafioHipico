@@ -126,7 +126,7 @@ export default async function RevistaPage({ params }: Props) {
           </p>
         </>
       )}
-      <RevistaClient meetingId={meetingId} />
+      <RevistaClient meetingId={meetingId} initialData={data ?? undefined} />
     </>
   );
 }

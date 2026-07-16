@@ -284,6 +284,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Link href={`/revista/${m.id}`}
+                      prefetch={true}
                       className="px-3 py-1.5 rounded-lg text-xs font-bold border border-yellow-700/40 text-yellow-400 hover:bg-yellow-900/20 transition-colors">
                       📰 Revista
                     </Link>

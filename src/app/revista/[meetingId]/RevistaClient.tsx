@@ -355,12 +355,18 @@ function HorseCard({ entry, hasWorkouts }: { entry: EntryItem; hasWorkouts: bool
   );
 }
 
-export default function RevistaClient({ meetingId }: { meetingId: string }) {
-  const [meeting, setMeeting] = useState<MeetingData | null>(null);
-  const [races, setRaces] = useState<RaceItem[]>([]);
-  const [hasWorkouts, setHasWorkouts] = useState(false);
-  const [selectedRace, setSelectedRace] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+interface InitialData {
+  meeting: MeetingData;
+  races: RaceItem[];
+  hasWorkouts: boolean;
+}
+
+export default function RevistaClient({ meetingId, initialData }: { meetingId: string; initialData?: InitialData }) {
+  const [meeting, setMeeting] = useState<MeetingData | null>(initialData?.meeting ?? null);
+  const [races, setRaces] = useState<RaceItem[]>(initialData?.races ?? []);
+  const [hasWorkouts, setHasWorkouts] = useState(initialData?.hasWorkouts ?? false);
+  const [selectedRace, setSelectedRace] = useState<number | null>(initialData?.races?.[0]?.raceNumber ?? null);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState('');
 
   function handlePrint() {
@@ -368,6 +374,7 @@ export default function RevistaClient({ meetingId }: { meetingId: string }) {
   }
 
   useEffect(() => {
+    if (initialData) return; // server already provided data — skip fetch
     fetch(`/api/revista/${meetingId}`)
       .then(r => r.json())
       .then(d => {
