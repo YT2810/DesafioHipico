@@ -6,18 +6,15 @@ import { VENEZUELAN_BANKS, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/con
 
 const GOLD = '#D4AF37';
 
-type PayMethod = 'pagomovil' | 'paypal' | 'binance';
-
 interface TopUpModalProps { onClose: () => void; }
 
 export default function TopUpModal({ onClose }: TopUpModalProps) {
   const { data: session } = useSession();
   const user = session?.user as any;
-
   const today = new Date().toISOString().slice(0, 10);
-  const [step, setStep] = useState<'package' | 'billing' | 'destination' | 'form' | 'success'>('package');
+
+  const [step, setStep] = useState<'package' | 'destination' | 'form' | 'success'>('package');
   const [selectedPkgId, setSelectedPkgId] = useState<TopUpPackageId>('jinete');
-  const [payMethod, setPayMethod] = useState<PayMethod>('pagomovil');
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState('');
@@ -26,32 +23,13 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [successData, setSuccessData] = useState<{ goldAmount: number; requestId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Exchange rate — only fetched when PayPal/Binance tab is active
-  const [rateVes, setRateVes] = useState<number | null>(null);
-  const [rateStale, setRateStale] = useState(false);
-  const [rateUpdatedAt, setRateUpdatedAt] = useState<string | null>(null);
-  // Fetch payment destination from server (auth-protected, never in bundle)
+  // Prefetch bank data immediately when modal opens — no spinner on destination step
   useEffect(() => {
-    if (step !== 'destination') return;
     fetch('/api/topup/payment-info')
       .then(r => r.json())
       .then(d => { if (d.banks?.length) setPaymentBanks(d.banks); })
       .catch(() => {});
-  }, [step]);
-
-  useEffect(() => {
-    if (payMethod === 'pagomovil') return;
-    fetch('/api/exchange-rate')
-      .then(r => r.json())
-      .then(d => {
-        if (d.rateVes) {
-          setRateVes(d.rateVes);
-          setRateStale(d.stale ?? false);
-          if (d.updatedAt) setRateUpdatedAt(d.updatedAt);
-        }
-      })
-      .catch(() => {});
-  }, [payMethod]);
+  }, []);
 
   const selectedPkg = TOPUP_PACKAGES.find(p => p.id === selectedPkgId) ?? TOPUP_PACKAGES[1];
   const goldAmount = selectedPkg.golds;
@@ -65,65 +43,12 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
     paymentDate: today,
     receiptUrl: '',
     receiptName: '',
-  });
-
-  const [billing, setBilling] = useState({
-    fullName:         user?.fullName ?? '',
+    fullName: user?.fullName ?? '',
     identityDocument: user?.identityDocument ?? '',
-    phoneNumber:      user?.phoneNumber ?? '',
+    idPrefix: 'V',
   });
-  const [billingLoading, setBillingLoading] = useState(false);
-  const [billingError, setBillingError] = useState('');
 
   function set(field: string, value: string) { setForm(p => ({ ...p, [field]: value })); }
-  function setBill(field: string, value: string) { setBilling(p => ({ ...p, [field]: value })); }
-  function resetToPackage() { setStep('package'); setError(''); }
-
-  async function handleContinueFromPackage() {
-    // If billing already complete in session, skip billing step
-    if (user?.billingComplete) { setStep('destination'); return; }
-    // Otherwise check DB
-    setBillingLoading(true);
-    try {
-      const res = await fetch('/api/user/billing');
-      const data = await res.json();
-      if (data.complete) {
-        setBilling({ fullName: data.fullName, identityDocument: data.identityDocument, phoneNumber: data.phoneNumber });
-        setStep('destination');
-      } else {
-        setBilling({ fullName: data.fullName ?? '', identityDocument: data.identityDocument ?? '', phoneNumber: data.phoneNumber ?? '' });
-        setStep('billing');
-      }
-    } catch {
-      setStep('billing');
-    } finally {
-      setBillingLoading(false);
-    }
-  }
-
-  async function handleSaveBilling(e: React.FormEvent) {
-    e.preventDefault();
-    setBillingError('');
-    if (!billing.fullName.trim() || !billing.identityDocument.trim()) {
-      setBillingError('El nombre y la cédula son requeridos.');
-      return;
-    }
-    setBillingLoading(true);
-    try {
-      const res = await fetch('/api/user/billing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(billing),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Error');
-      setStep('destination');
-    } catch (err) {
-      setBillingError(err instanceof Error ? err.message : 'Error al guardar');
-    } finally {
-      setBillingLoading(false);
-    }
-  }
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -143,6 +68,19 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setError(''); setLoading(true);
     try {
+      // Save billing in background (fire-and-forget)
+      if (form.fullName.trim() && form.identityDocument.trim()) {
+        fetch('/api/user/billing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: form.fullName.trim(),
+            identityDocument: form.idPrefix + form.identityDocument.trim(),
+            phoneNumber: form.phone.trim(),
+          }),
+        }).catch(() => {});
+      }
+
       const res = await fetch('/api/topup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,7 +88,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
           packageId: selectedPkgId,
           referenceNumber: form.referenceNumber,
           phone: form.phone,
-          legalId: form.legalId,
+          legalId: form.idPrefix + form.identityDocument,
           bank: form.bank,
           amountBs: parseFloat(form.amountBs) || selectedPkg.priceBs,
           paymentDate: form.paymentDate,
@@ -165,6 +103,8 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally { setLoading(false); }
   }
+
+  const stepIndex = step === 'package' ? 0 : step === 'destination' ? 1 : step === 'form' ? 2 : 3;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -181,14 +121,14 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
         {step !== 'success' && (
           <div className="flex items-center gap-1.5 px-5 pt-3 pb-1 shrink-0">
-            {(['package','billing','destination','form'] as const).map((s, i) => (
+            {(['package','destination','form'] as const).map((s, i) => (
               <div key={s} className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full transition-colors ${step === s ? 'bg-yellow-500' : (['package','billing','destination','form'].indexOf(step) > i) ? 'bg-yellow-800' : 'bg-gray-700'}`} />
-                {i < 3 && <div className="w-4 h-px bg-gray-700" />}
+                <div className={`w-2 h-2 rounded-full transition-colors ${stepIndex === i ? 'bg-yellow-500' : stepIndex > i ? 'bg-yellow-800' : 'bg-gray-700'}`} />
+                {i < 2 && <div className="w-4 h-px bg-gray-700" />}
               </div>
             ))}
             <span className="ml-2 text-xs text-gray-600">
-              {step === 'package' ? 'Elige paquete' : step === 'billing' ? 'Perfil de facturación' : step === 'destination' ? 'Realiza el pago' : 'Confirma el pago'}
+              {step === 'package' ? 'Elige paquete' : step === 'destination' ? 'Realiza el pago' : 'Confirma el pago'}
             </span>
           </div>
         )}
@@ -198,146 +138,45 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
           {/* ── Step 1: Package ── */}
           {step === 'package' && (
             <div className="space-y-4">
-
-              {/* Payment method tabs */}
               <div className="flex gap-2">
-                <button onClick={() => setPayMethod('pagomovil')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
-                    payMethod === 'pagomovil'
-                      ? 'border-yellow-600 bg-yellow-950/30 text-yellow-400'
-                      : 'border-gray-700 bg-gray-800/50 text-gray-500'
-                  }`}>
-                  📱 Pago Móvil
-                </button>
-                <button disabled title="Próximamente"
-                  className="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-800 bg-gray-900/50 text-gray-700 cursor-not-allowed relative">
-                  PayPal
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">Próx.</span>
-                </button>
-                <button disabled title="Próximamente"
-                  className="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-800 bg-gray-900/50 text-gray-700 cursor-not-allowed relative">
-                  Binance
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">Próx.</span>
-                </button>
+                <div className="flex-1 py-2 rounded-xl text-xs font-bold border border-yellow-600 bg-yellow-950/30 text-yellow-400 text-center">📱 Pago Móvil</div>
+                <div className="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-800 bg-gray-900/50 text-gray-700 text-center relative">
+                  PayPal<span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">Próx.</span>
+                </div>
+                <div className="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-800 bg-gray-900/50 text-gray-700 text-center relative">
+                  Binance<span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">Próx.</span>
+                </div>
               </div>
 
-              {/* Package cards */}
               <div className="grid grid-cols-3 gap-2.5">
                 {TOPUP_PACKAGES.map(pkg => (
                   <button key={pkg.id} onClick={() => setSelectedPkgId(pkg.id as TopUpPackageId)}
-                    className={`relative flex flex-col items-center gap-1 p-3.5 rounded-2xl border-2 transition-all ${
-                      selectedPkgId === pkg.id
-                        ? 'border-yellow-600 bg-yellow-950/30'
-                        : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                    }`}>
+                    className={`relative flex flex-col items-center gap-1 p-3.5 rounded-2xl border-2 transition-all ${selectedPkgId === pkg.id ? 'border-yellow-600 bg-yellow-950/30' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
                     {pkg.badge && (
-                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9px] font-extrabold px-2 py-0.5 rounded-full text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>
-                        {pkg.badge}
-                      </span>
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9px] font-extrabold px-2 py-0.5 rounded-full text-black whitespace-nowrap" style={{ backgroundColor: GOLD }}>{pkg.badge}</span>
                     )}
                     <span className="text-2xl font-extrabold text-white">{pkg.golds}</span>
                     <span className="text-[11px] font-semibold" style={{ color: GOLD }}>Golds</span>
                     <span className="text-sm font-bold text-white mt-0.5">Bs {pkg.priceBs.toLocaleString('es-VE')}</span>
                     <span className="text-[10px] text-gray-500">{pkg.bsPerGold} Bs/Gold</span>
-                    {pkg.saving && (
-                      <span className="text-[9px] font-bold text-green-400 bg-green-950/50 border border-green-800/40 rounded-full px-1.5 py-0.5 mt-0.5 text-center leading-tight">
-                        {pkg.saving}
-                      </span>
-                    )}
+                    {pkg.saving && <span className="text-[9px] font-bold text-green-400 bg-green-950/50 border border-green-800/40 rounded-full px-1.5 py-0.5 mt-0.5 text-center leading-tight">{pkg.saving}</span>}
                   </button>
                 ))}
               </div>
 
-              {/* Package description */}
               <p className="text-xs text-center text-gray-500 italic">{selectedPkg.description}</p>
 
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400 space-y-1">
                 <p>📌 Realiza un <strong className="text-white">Pago Móvil</strong> al número de la plataforma.</p>
-                <p>📋 Luego completa el formulario con los datos del pago.</p>
+                <p>📋 Luego completa el formulario con el número de referencia.</p>
                 <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles.</p>
               </div>
-              <button onClick={handleContinueFromPackage} disabled={billingLoading}
-                className="w-full py-3.5 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ backgroundColor: GOLD }}>
-                {billingLoading ? 'Verificando...' : `Continuar con ${goldAmount} Golds →`}
+
+              <button onClick={() => setStep('destination')}
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>
+                Continuar con {goldAmount} Golds →
               </button>
             </div>
-          )}
-
-          {/* ── Step 1b: Billing profile ── */}
-          {step === 'billing' && (
-            <form onSubmit={handleSaveBilling} className="space-y-4">
-              <div className="bg-blue-950/30 border border-blue-800/40 rounded-xl px-4 py-3 text-xs text-blue-300 space-y-1">
-                <p className="font-semibold text-blue-200">📋 Perfil de Facturación</p>
-                <p>Necesitamos estos datos para verificar tu pago. Solo se piden una vez.</p>
-              </div>
-
-              <Field label="Nombre completo *" value={billing.fullName} onChange={e => setBill('fullName', e.target.value)}
-                placeholder="Ej: Juan Carlos Pérez" required />
-
-              {/* Cédula — prefijo selector + número sin guión */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cédula o Pasaporte *</label>
-                <div className="flex gap-2">
-                  <select
-                    value={billing.identityDocument.match(/^[VEJPG]/)?.[0] ?? 'V'}
-                    onChange={e => {
-                      const num = billing.identityDocument.replace(/^[VEJPG]/i, '');
-                      setBill('identityDocument', e.target.value + num.toUpperCase());
-                    }}
-                    className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-yellow-600 w-20 shrink-0">
-                    <option value="V">V</option>
-                    <option value="E">E</option>
-                    <option value="J">J</option>
-                    <option value="P">P</option>
-                    <option value="G">G</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={billing.identityDocument.replace(/^[VEJPG]/i, '')}
-                    onChange={e => {
-                      const prefix = billing.identityDocument.match(/^[VEJPG]/i)?.[0] ?? 'V';
-                      setBill('identityDocument', prefix + e.target.value.replace(/\D/g, ''));
-                    }}
-                    placeholder="16108291"
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
-                    required
-                  />
-                </div>
-                <p className="text-xs text-gray-600">Solo el número, sin guiones ni espacios</p>
-              </div>
-
-              {/* Teléfono Pago Móvil — manejo automático prefijo Venezuela */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Teléfono de Pago Móvil <span className="normal-case text-gray-600">(opcional)</span></label>
-                <div className="flex gap-2">
-                  <div className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-sm text-gray-400 shrink-0 flex items-center">🇻🇪 +58</div>
-                  <input
-                    type="tel"
-                    value={billing.phoneNumber}
-                    onChange={e => {
-                      let val = e.target.value.replace(/\D/g, '');
-                      if (val.startsWith('58')) val = val.slice(2);
-                      setBill('phoneNumber', val.slice(0, 11));
-                    }}
-                    placeholder="04121234567"
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
-                  />
-                </div>
-              </div>
-
-              {billingError && (
-                <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2">⚠️ {billingError}</p>
-              )}
-
-              <div className="flex gap-3 pb-2">
-                <button type="button" onClick={() => setStep('package')}
-                  className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
-                <button type="submit" disabled={billingLoading}
-                  className="flex-1 py-3.5 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ backgroundColor: GOLD }}>
-                  {billingLoading ? 'Guardando...' : 'Guardar y continuar →'}
-                </button>
-              </div>
-            </form>
           )}
 
           {/* ── Step 2: Payment destination ── */}
@@ -345,19 +184,14 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-white mb-1">Realiza tu Pago Móvil a esta cuenta:</p>
-                <p className="text-xs text-gray-500">Elige cualquiera de los dos bancos disponibles.</p>
+                <p className="text-xs text-gray-500">Elige cualquiera de los bancos disponibles.</p>
               </div>
 
-              {/* Bank selector tabs */}
               {paymentBanks.length > 1 && (
                 <div className="flex gap-2">
                   {paymentBanks.map((b, i) => (
                     <button key={i} onClick={() => setSelectedBankIdx(i)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
-                        selectedBankIdx === i
-                          ? 'border-yellow-600 bg-yellow-950/30 text-yellow-400'
-                          : 'border-gray-700 bg-gray-800/50 text-gray-500'
-                      }`}>
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${selectedBankIdx === i ? 'border-yellow-600 bg-yellow-950/30 text-yellow-400' : 'border-gray-700 bg-gray-800/50 text-gray-500'}`}>
                       {i === 0 ? '⭐ ' : ''}{b.bankName.split(' ')[0]}
                     </button>
                   ))}
@@ -386,17 +220,18 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               )}
 
               <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-xl px-4 py-3 text-xs text-yellow-200/80 space-y-1">
-                <p>📸 Guarda el comprobante con el número de referencia — lo necesitas en el paso siguiente.</p>
+                <p>📸 Guarda el comprobante con el número de referencia — lo necesitas en el siguiente paso.</p>
                 <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles una vez verificado.</p>
               </div>
+
               <div className="flex gap-3">
-                <button type="button" onClick={resetToPackage} className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
+                <button type="button" onClick={() => setStep('package')} className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
                 <button onClick={() => setStep('form')} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>Ya pagué →</button>
               </div>
             </div>
           )}
 
-          {/* ── Step 3: Confirm form ── */}
+          {/* ── Step 3: Confirm form (with inline billing) ── */}
           {step === 'form' && (
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="bg-yellow-950/30 border border-yellow-800/40 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -408,7 +243,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                 placeholder="Ej: 00123456789" required hint="Mínimo 7 dígitos — rellena con 0 a la izquierda si es necesario" />
 
               <Field label="Fecha del pago *" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)}
-                placeholder="2026-02-18" required type="date" />
+                placeholder={today} required type="date" />
 
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5 font-medium">Banco emisor *</label>
@@ -420,13 +255,25 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               </div>
 
               <Field label="Monto en Bs. *" value={form.amountBs} onChange={e => set('amountBs', e.target.value)}
-                placeholder="Ej: 360000" required type="number" />
+                placeholder={`Ej: ${selectedPkg.priceBs.toLocaleString('es-VE')}`} required type="number" />
 
               <Field label="Teléfono del pagador *" value={form.phone} onChange={e => set('phone', e.target.value)}
                 placeholder="Ej: 04121234567" required hint="El número desde el que realizaste el Pago Móvil" />
 
-              <Field label="Cédula de identidad *" value={form.legalId} onChange={e => set('legalId', e.target.value)}
-                placeholder="Ej: V-16108291" required />
+              {/* Cédula inline */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cédula de identidad *</label>
+                <div className="flex gap-2">
+                  <select value={form.idPrefix} onChange={e => set('idPrefix', e.target.value)}
+                    className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-yellow-600 w-20 shrink-0">
+                    <option value="V">V</option><option value="E">E</option><option value="J">J</option><option value="P">P</option><option value="G">G</option>
+                  </select>
+                  <input type="text" value={form.identityDocument}
+                    onChange={e => set('identityDocument', e.target.value.replace(/\D/g, ''))}
+                    placeholder="16108291" required
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
+                </div>
+              </div>
 
               {/* Receipt image */}
               <div>
@@ -459,11 +306,8 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               <div className="flex gap-3 pb-2">
                 <button type="button" onClick={() => setStep('destination')}
                   className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
-                {/* rateVes/rateStale/rateUpdatedAt vars kept for PayPal/Binance future use - silence unused warning */}
-                {false && rateVes && rateStale && rateUpdatedAt && null}
                 <button type="submit" disabled={loading || uploadingImg}
-                  className="flex-1 py-3 rounded-xl text-sm font-bold text-black disabled:opacity-50"
-                  style={{ backgroundColor: GOLD }}>
+                  className="flex-1 py-3 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ backgroundColor: GOLD }}>
                   {loading ? 'Enviando...' : '📤 Enviar solicitud'}
                 </button>
               </div>
@@ -476,9 +320,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               <div className="w-16 h-16 rounded-full bg-green-900/40 border border-green-700/50 flex items-center justify-center text-3xl">✅</div>
               <div>
                 <p className="text-base font-bold text-white">¡Solicitud enviada!</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Se acreditarán <span className="font-bold" style={{ color: GOLD }}>{successData.goldAmount} Golds</span> una vez verificado el pago.
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Se acreditarán <span className="font-bold" style={{ color: GOLD }}>{successData.goldAmount} Golds</span> una vez verificado el pago.</p>
                 <p className="text-xs text-gray-700 mt-2 font-mono">Ref: {successData.requestId.slice(-8)}</p>
               </div>
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400 w-full text-left space-y-1">

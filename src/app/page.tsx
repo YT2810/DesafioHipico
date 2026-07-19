@@ -397,6 +397,24 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* ── Permanent Gold recharge banner ── */}
+        {isLoggedIn && (
+          <div className="w-full rounded-2xl border border-yellow-700/40 bg-gradient-to-br from-yellow-950/40 to-gray-900 px-5 py-4 flex items-center gap-4">
+            <div className="text-3xl shrink-0">🪙</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-extrabold text-white leading-tight">Recarga tus Golds</p>
+              <p className="text-xs text-gray-400 mt-0.5">Accede a pronósticos VIP y funciones exclusivas</p>
+            </div>
+            <button
+              onClick={() => setShowTopUp(true)}
+              className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-extrabold text-black whitespace-nowrap shadow-md"
+              style={{ backgroundColor: '#D4AF37' }}
+            >
+              Recargar →
+            </button>
+          </div>
+        )}
+
         {/* SEO footer text — visible but subtle, helps Google index key terms */}
         <p className="text-xs text-gray-800 text-center leading-relaxed">
           Pronósticos La Rinconada hoy · Datos La Rinconada · Inscritos La Rinconada · Inscritos Valencia ·
