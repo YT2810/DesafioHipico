@@ -10,7 +10,9 @@ import { getToken } from 'next-auth/jwt';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const secure = req.nextUrl.protocol === 'https:';
+  const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
   if (!token?.sub) {
     return NextResponse.json(
       { error: 'Debes iniciar sesión para ver los datos de pago.', unauthenticated: true },
