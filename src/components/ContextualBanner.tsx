@@ -101,7 +101,7 @@ function getBanner(
   // No logueado — adquisición
   if (!isLoggedIn) {
     return {
-      text: '🎁 Regístrate gratis y recibe 🪙 15 Gold de bienvenida',
+      text: '🎁 Regístrate gratis y recibe 🪙 2 Gold de bienvenida',
       href: '/auth/signin',
       bg: 'from-yellow-900/70 to-yellow-800/40',
       textColor: 'text-yellow-300',
