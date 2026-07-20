@@ -680,7 +680,8 @@ export default function PronosticosPage() {
   }
 
   const lockedRacesCount = meeting ? meeting.races.filter(r => !isRaceUnlocked(r.raceId, meeting.races.indexOf(r))).length : 0;
-  const fullDayCost = Math.max(1, lockedRacesCount) * GOLD_COST_FULL_DAY_PER_RACE;
+  const totalRacesCount = meeting ? meeting.races.length : 0;
+  const fullDayCost = Math.max(1, totalRacesCount) * GOLD_COST_FULL_DAY_PER_RACE;
 
   async function handleBuyMeetingPass() {
     if (!selectedMeetingId) return;
@@ -690,7 +691,7 @@ export default function PronosticosPage() {
       const res = await fetch('/api/forecasts/pass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId: selectedMeetingId, lockedRaces: lockedRacesCount }),
+        body: JSON.stringify({ meetingId: selectedMeetingId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -812,7 +813,7 @@ export default function PronosticosPage() {
             <div className="rounded-xl border border-gray-700 bg-gray-900/60 px-4 py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-bold text-white">📊 Jornada completa</p>
-                <p className="text-xs text-gray-500">{fullDayCost}G · {lockedRacesCount} carrera{lockedRacesCount !== 1 ? 's' : ''} bloqueada{lockedRacesCount !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-gray-500">{fullDayCost}G · {totalRacesCount} carreras · {lockedRacesCount} bloqueada{lockedRacesCount !== 1 ? 's' : ''}</p>
                 {meetingPassError && <p className="text-xs text-red-400 mt-1">{meetingPassError}</p>}
               </div>
               <button

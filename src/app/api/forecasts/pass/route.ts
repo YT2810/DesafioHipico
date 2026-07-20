@@ -9,6 +9,8 @@ import { auth } from '@/auth';
 import { purchaseMeetingPass } from '@/services/forecastAccessService';
 import dbConnect from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
+import Race from '@/models/Race';
+import { Types } from 'mongoose';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
     }
 
-    const { meetingId, lockedRaces } = await req.json();
+    const { meetingId } = await req.json();
     if (!meetingId) {
       return NextResponse.json({ error: 'meetingId es requerido.' }, { status: 400 });
     }
@@ -39,7 +41,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await purchaseMeetingPass(session.user.id, meetingId, lockedRaces ?? 1);
+    const totalRaces = await Race.countDocuments({ meetingId: new Types.ObjectId(meetingId) });
+    const result = await purchaseMeetingPass(session.user.id, meetingId, Math.max(1, totalRaces));
 
     if (!result.success) {
       if (result.reason === 'already_unlocked') {
