@@ -6,7 +6,7 @@ export type TopUpStatus = 'pending' | 'approved' | 'rejected';
 
 export interface ITopUpRequest extends Document {
   userId: Types.ObjectId;
-  amountUsd: number;
+  amountUsd?: number;
   goldAmount: number;
   referenceNumber: string;
   phone: string;
@@ -26,7 +26,7 @@ export interface ITopUpRequest extends Document {
 const TopUpRequestSchema = new Schema<ITopUpRequest>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    amountUsd: { type: Number, required: true, min: 10 },
+    amountUsd: { type: Number, min: 0 },
     goldAmount: { type: Number, required: true },
     referenceNumber: { type: String, required: true, trim: true },
     phone: { type: String, required: true, trim: true },
