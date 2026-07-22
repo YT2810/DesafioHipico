@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     // Pre-compute snapshot so first user visit is instant
     if (result?.meetingId) {
-      generateMeetingSnapshot(String(result.meetingId)).catch((e) =>
+      await generateMeetingSnapshot(String(result.meetingId)).catch((e) =>
         console.error('[snapshot] generation failed after ingest:', e)
       );
     }
