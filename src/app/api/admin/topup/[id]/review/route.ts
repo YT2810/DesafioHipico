@@ -46,32 +46,19 @@ export async function POST(
         return NextResponse.json({ error: `La solicitud tiene goldAmount inválido (${request.goldAmount}). No se puede aprobar.` }, { status: 400 });
       }
 
-      // Fetch current balance to compute balanceAfter
-      const user = await User.findById(request.userId).select('balance').lean() as any;
-      const currentGolds = user?.balance?.golds ?? 0;
-      const balanceAfter = currentGolds + request.goldAmount;
+      // Fetch user and update balance directly to avoid pipeline-update issues
+      const user = await User.findById(request.userId);
+      if (!user) return NextResponse.json({ error: 'Usuario no encontrado.' }, { status: 404 });
 
-      // Credit golds to user — use $set to initialize balance object first
-      // (handles legacy docs where balance=0 as a number instead of {golds:0})
-      await User.findByIdAndUpdate(request.userId, [
-        {
-          $set: {
-            balance: {
-              $cond: {
-                if: { $eq: [{ $type: '$balance' }, 'object'] },
-                then: {
-                  golds: { $add: [{ $ifNull: ['$balance.golds', 0] }, request.goldAmount] },
-                  diamonds: { $ifNull: ['$balance.diamonds', 0] },
-                },
-                else: {
-                  golds: request.goldAmount,
-                  diamonds: 0,
-                },
-              },
-            },
-          },
-        },
-      ]);
+      // Handle legacy docs where balance could be a number or missing
+      if (!user.balance || typeof user.balance !== 'object') {
+        user.balance = { golds: request.goldAmount, diamonds: 0 } as any;
+      } else {
+        user.balance.golds = (user.balance.golds ?? 0) + request.goldAmount;
+        user.balance.diamonds = user.balance.diamonds ?? 0;
+      }
+      const balanceAfter = user.balance.golds;
+      await user.save();
 
       // Log transaction
       await GoldTransaction.create({
