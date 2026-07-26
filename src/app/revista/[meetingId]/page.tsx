@@ -126,6 +126,27 @@ export default async function RevistaPage({ params }: Props) {
           </p>
         </>
       )}
+      {/* CTA pronósticos — al final de los metadatos, antes del contenido */}
+      {m && (
+        <div className="max-w-2xl mx-auto px-4 pt-3 pb-1">
+          <a
+            href="/pronosticos"
+            className="flex items-center gap-4 rounded-2xl border border-yellow-700/50 bg-gradient-to-r from-yellow-950/40 to-yellow-900/10 px-4 py-3 hover:border-yellow-600/70 transition-colors group"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-yellow-300 group-hover:text-yellow-200">
+                🎯 Ver qué dicen los expertos de esta reunión
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Pronósticos para {trackShort2} Reunión {m.meetingNumber} — desde 2G
+              </p>
+            </div>
+            <span className="shrink-0 text-xs font-black px-3 py-2 rounded-xl text-black whitespace-nowrap" style={{ backgroundColor: '#D4AF37' }}>
+              Ver pronósticos →
+            </span>
+          </a>
+        </div>
+      )}
       <RevistaClient meetingId={meetingId} initialData={data ?? undefined} />
     </>
   );

@@ -206,6 +206,26 @@ export default async function RetrospectosPage() {
             )}
           </div>
 
+          {/* ── CTA pronósticos ── */}
+          <Link
+            href="/pronosticos"
+            className="block rounded-2xl border border-yellow-700/50 bg-gradient-to-r from-yellow-950/40 to-yellow-900/10 p-4 hover:border-yellow-600/70 transition-colors group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-yellow-300 group-hover:text-yellow-200">
+                  🎯 ¿Ya tienes los pronósticos de los expertos?
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Los handicappers ya publicaron sus fijos — accede desde 2G
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-black px-3 py-2 rounded-xl text-black whitespace-nowrap" style={{ backgroundColor: '#D4AF37' }}>
+                Ver pronósticos →
+              </span>
+            </div>
+          </Link>
+
           {/* ── CTA traqueos ── */}
           <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4 flex items-center gap-4">
             <div className="flex-1">

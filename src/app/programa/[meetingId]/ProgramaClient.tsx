@@ -263,6 +263,29 @@ export default function ProgramaClient({ meetingId: initialMeetingId }: { meetin
               </div>
             </div>
 
+            {/* CTA pronósticos por carrera */}
+            {selectedRace.forecastCount > 0 && (
+              <a
+                href="/pronosticos"
+                className="flex items-center gap-3 rounded-xl border border-yellow-700/40 bg-yellow-950/20 px-3 py-2.5 hover:border-yellow-600/60 hover:bg-yellow-950/30 transition-colors group"
+              >
+                <span className="text-base">🎯</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-yellow-300 group-hover:text-yellow-200">
+                    {selectedRace.forecastCount} experto{selectedRace.forecastCount !== 1 ? 's tienen' : ' tiene'} pronóstico para esta carrera
+                  </p>
+                  {selectedRace.forecastPreview.length > 0 && (
+                    <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                      {selectedRace.forecastPreview.map(h => h.pseudonym).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 text-[10px] font-black px-2 py-1 rounded-lg text-black whitespace-nowrap" style={{ backgroundColor: '#D4AF37' }}>
+                  Ver →
+                </span>
+              </a>
+            )}
+
             {/* Entries table */}
             {selectedRace.entries.length === 0 ? (
               <div className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-8 text-center">
