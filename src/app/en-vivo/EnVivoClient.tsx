@@ -283,6 +283,30 @@ export default function EnVivoClient() {
           </div>
         )}
 
+        {/* ── CTA pronósticos — justo tras el video, momento de máxima emoción ── */}
+        {!loading && meeting && (
+          <a
+            href="/pronosticos"
+            className="flex items-center gap-4 rounded-2xl border-2 border-yellow-600/70 px-4 py-3.5 transition-colors hover:border-yellow-500 group"
+            style={{ background: 'linear-gradient(135deg, rgba(120,80,0,0.35) 0%, rgba(30,20,0,0.6) 100%)' }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-yellow-300 group-hover:text-yellow-100 leading-tight">
+                🎯 ¿Ya tienes los fijos de los expertos?
+              </p>
+              <p className="text-xs text-gray-300 mt-0.5 leading-snug">
+                Mientras ves la carrera, los handicappers ya marcaron sus favoritos. Única forma de ganar con criterio.
+              </p>
+            </div>
+            <span
+              className="shrink-0 text-sm font-black px-4 py-2.5 rounded-xl text-black whitespace-nowrap animate-pulse"
+              style={{ backgroundColor: '#D4AF37' }}
+            >
+              Ver ahora →
+            </span>
+          </a>
+        )}
+
         {/* ── No meeting ── */}
         {!loading && !meeting && (
           <div className="text-center py-8 text-gray-600 text-sm">
@@ -321,10 +345,11 @@ export default function EnVivoClient() {
             </Link>
           )}
           <Link
-            href="/resultados"
-            className="py-3 rounded-2xl text-sm font-bold text-center border border-gray-700 text-gray-300 hover:border-yellow-700/50 hover:text-yellow-400 transition-colors bg-gray-900"
+            href="/pronosticos"
+            className="py-3 rounded-2xl text-sm font-bold text-center text-black transition-colors hover:brightness-110"
+            style={{ backgroundColor: '#D4AF37' }}
           >
-            🏆 Resultados
+            🎯 Pronósticos
           </Link>
           <Link
             href="/traqueos"
