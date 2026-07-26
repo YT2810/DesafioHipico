@@ -7,9 +7,9 @@ interface Props {
   isLoggedIn: boolean;
   hasRecentWorkouts?: boolean;
   latestWorkoutTrack?: string;
-  todayMeetingTrack?: string;   // nombre del hipódromo si hay programa HOY
+  todayMeetingTrack?: string;
   hasRecentResults?: boolean;
-  latestResultsDate?: string;   // "sábado 15" etc.
+  latestResultsDate?: string;
 }
 
 interface BannerConfig {
@@ -18,6 +18,16 @@ interface BannerConfig {
   bg: string;
   textColor: string;
   borderColor: string;
+  gaLabel: string;
+}
+
+function trackBannerClick(label: string) {
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag('event', 'banner_click', {
+      banner_label: label,
+      page: window.location.pathname,
+    });
+  }
 }
 
 function getBanner(
@@ -31,23 +41,37 @@ function getBanner(
 ): BannerConfig {
   const day = new Date().getDay(); // 0=Dom 1=Lun ... 5=Vie 6=Sáb
 
-  // Racha — milestone cada 7 días (prioridad máxima)
-  if (isLoggedIn && streak > 0 && streak % 7 === 0) {
+  // No logueado — adquisición (prioridad máxima para no-auth)
+  if (!isLoggedIn) {
+    return {
+      text: '🎁 Regístrate gratis y recibe 🪙 Gold de bienvenida',
+      href: '/auth/signin?mode=register',
+      bg: 'from-yellow-900/70 to-yellow-800/40',
+      textColor: 'text-yellow-300',
+      borderColor: 'border-yellow-700/50',
+      gaLabel: 'registro_bienvenida',
+    };
+  }
+
+  // Racha — milestone cada 7 días
+  if (streak > 0 && streak % 7 === 0) {
     return {
       text: `🔥 ¡${streak} días de racha! Eres de los más constantes en la plataforma`,
       bg: 'from-orange-900/70 to-orange-800/40',
       textColor: 'text-orange-300',
       borderColor: 'border-orange-700/50',
+      gaLabel: 'racha_milestone',
     };
   }
 
   // Racha activa (3–6 días)
-  if (isLoggedIn && streak >= 3) {
+  if (streak >= 3) {
     return {
-      text: `🔥 ${streak} días de racha — el día 7 desbloqueas un bonus Gold especial`,
+      text: `🔥 ${streak} días de racha — ¡sigue así para ganar un bonus Gold!`,
       bg: 'from-orange-900/50 to-yellow-900/30',
       textColor: 'text-orange-200',
       borderColor: 'border-orange-800/40',
+      gaLabel: 'racha_activa',
     };
   }
 
@@ -59,18 +83,7 @@ function getBanner(
       bg: 'from-green-900/60 to-green-800/30',
       textColor: 'text-green-300',
       borderColor: 'border-green-700/40',
-    };
-  }
-
-  // Viernes — traqueos (solo si hay traqueos reales recientes)
-  if (day === 5 && hasRecentWorkouts) {
-    const track = latestWorkoutTrack ? ` de ${latestWorkoutTrack}` : '';
-    return {
-      text: `⏱ Nuevos traqueos${track} disponibles — revisa cómo viene tu favorito`,
-      href: '/traqueos',
-      bg: 'from-blue-900/60 to-blue-800/30',
-      textColor: 'text-blue-300',
-      borderColor: 'border-blue-700/40',
+      gaLabel: 'dia_carreras',
     };
   }
 
@@ -83,10 +96,11 @@ function getBanner(
       bg: 'from-purple-900/60 to-purple-800/30',
       textColor: 'text-purple-300',
       borderColor: 'border-purple-700/40',
+      gaLabel: 'resultados_disponibles',
     };
   }
 
-  // Traqueos recientes cualquier día
+  // Viernes o cualquier día con traqueos recientes
   if (hasRecentWorkouts) {
     const track = latestWorkoutTrack ? ` de ${latestWorkoutTrack}` : '';
     return {
@@ -95,27 +109,18 @@ function getBanner(
       bg: 'from-blue-900/60 to-blue-800/30',
       textColor: 'text-blue-300',
       borderColor: 'border-blue-700/40',
-    };
-  }
-
-  // No logueado — adquisición
-  if (!isLoggedIn) {
-    return {
-      text: '🎁 Regístrate gratis y recibe 🪙 2 Gold de bienvenida',
-      href: '/auth/signin',
-      bg: 'from-yellow-900/70 to-yellow-800/40',
-      textColor: 'text-yellow-300',
-      borderColor: 'border-yellow-700/50',
+      gaLabel: 'traqueos_disponibles',
     };
   }
 
   // Default — CTA pronósticos
   return {
-    text: '� Consulta los pronósticos de hoy y sigue a los mejores handicappers',
+    text: '🏇 Consulta los pronósticos de hoy y sigue a los mejores handicappers',
     href: '/pronosticos',
     bg: 'from-yellow-900/60 to-yellow-800/30',
     textColor: 'text-yellow-300',
     borderColor: 'border-yellow-700/50',
+    gaLabel: 'pronosticos_default',
   };
 }
 
@@ -137,7 +142,11 @@ export default function ContextualBanner({
   );
 
   if (banner.href) {
-    return <Link href={banner.href}>{inner}</Link>;
+    return (
+      <Link href={banner.href} onClick={() => trackBannerClick(banner.gaLabel)}>
+        {inner}
+      </Link>
+    );
   }
   return inner;
 }

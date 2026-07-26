@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, GOLD_COST_PER_RACE, GOLD_COST_FULL_DAY_PER_RACE, getFreeRacesAllowance } from '@/lib/constants';
 import NotificationBell from '@/components/NotificationBell';
 import ExpertTickerBar from '@/components/ExpertTickerBar';
+import TopUpModal from '@/components/TopUpModal';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; e1?: number | null; eGeneral?: number; }
@@ -308,7 +309,7 @@ function HandicapperBlock({ forecast, isFollowed, onFollow, isPrivileged, raceId
   );
 }
 
-function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap, passUnlocked, onBuyPass, meetingPassLoading, meetingPassError, fullDayCost }: {
+function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollow, isPrivileged, onRefresh, meetingInfo, statsMap, globalRankMap, passUnlocked, onBuyPass, meetingPassLoading, meetingPassError, fullDayCost, onTopUp }: {
   race: RaceItem;
   unlocked: boolean;
   goldBalance: number;
@@ -325,6 +326,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   meetingPassLoading?: boolean;
   meetingPassError?: string;
   fullDayCost: number;
+  onTopUp?: () => void;
 }) {
   useEffect(() => {
     if (!unlocked) {
@@ -388,23 +390,36 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
             <p className="text-xs text-gray-400">Desbloquea esta carrera para ver todo</p>
           </div>
           <div className="flex flex-col gap-2">
-            <button
-              onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: GOLD_COST_PER_RACE, type: 'single_race' }); onUnlock(); }}
-              disabled={goldBalance < GOLD_COST_PER_RACE}
-              className="w-full py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-40"
-              style={{ backgroundColor: GOLD }}>
-              🔓 {GOLD_COST_PER_RACE}G — Solo esta carrera
-            </button>
-            {!passUnlocked && onBuyPass && (
+            {goldBalance < GOLD_COST_PER_RACE ? (
+              <button
+                onClick={() => { trackGA('topup_initiated', { source: 'paywall_insufficient_gold', race_number: race.raceNumber }); onTopUp?.(); }}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-black animate-pulse"
+                style={{ backgroundColor: GOLD }}>
+                💰 Sin saldo — Recargar ahora →
+              </button>
+            ) : (
+              <button
+                onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: GOLD_COST_PER_RACE, type: 'single_race' }); onUnlock(); }}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-black"
+                style={{ backgroundColor: GOLD }}>
+                🔓 {GOLD_COST_PER_RACE}G — Solo esta carrera
+              </button>
+            )}
+            {!passUnlocked && onBuyPass && goldBalance >= fullDayCost && (
               <button
                 onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: fullDayCost, type: 'meeting_pass' }); onBuyPass(); }}
-                disabled={meetingPassLoading || goldBalance < fullDayCost}
+                disabled={meetingPassLoading}
                 className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
                 {meetingPassLoading ? 'Procesando...' : `◆ Jornada completa — ${fullDayCost}G`}
               </button>
             )}
-            {goldBalance < GOLD_COST_PER_RACE && (
-              <p className="text-xs text-center text-yellow-700">Sin saldo · <Link href="/perfil" onClick={() => trackGA('topup_initiated', { source: 'paywall_insufficient_gold', race_number: race.raceNumber })} className="underline text-yellow-500">Recarga aquí</Link></p>
+            {!passUnlocked && onBuyPass && goldBalance < fullDayCost && goldBalance >= GOLD_COST_PER_RACE && (
+              <button
+                onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: fullDayCost, type: 'meeting_pass' }); onBuyPass(); }}
+                disabled={meetingPassLoading}
+                className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
+                {meetingPassLoading ? 'Procesando...' : `◆ Jornada completa — ${fullDayCost}G`}
+              </button>
             )}
             {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
           </div>
@@ -426,6 +441,9 @@ export default function PronosticosPage() {
   const [selectedMeetingId, setSelectedMeetingId] = useState('');
   const [selectedRaceNumber, setSelectedRaceNumber] = useState<number | null>(null);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [pulsedRaceId, setPulsedRaceId] = useState<string | null>(null);
+  const racePanelRef = useRef<HTMLDivElement>(null);
 
   // Real data state
   const [apiMeetings, setApiMeetings] = useState<ApiMeeting[]>([]);
@@ -714,6 +732,17 @@ export default function PronosticosPage() {
   function toggleFollow(id: string) {
     setFollowedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
+  function handleRaceClick(race: RaceItem, idx: number) {
+    const alreadySelected = selectedRaceNumber === race.raceNumber;
+    setSelectedRaceNumber(alreadySelected ? null : race.raceNumber);
+    if (!alreadySelected && !isRaceUnlocked(race.raceId, idx)) {
+      setTimeout(() => {
+        racePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setPulsedRaceId(race.raceId);
+        setTimeout(() => setPulsedRaceId(null), 1200);
+      }, 80);
+    }
+  }
 
   const races = meeting?.races ?? [];
   const selectedRace = selectedRaceNumber != null ? races.find(r => r.raceNumber === selectedRaceNumber) ?? null : null;
@@ -739,10 +768,13 @@ export default function PronosticosPage() {
               🏆
             </Link>
             {!isPrivileged && (
-              <div className="flex items-center gap-1.5 bg-gray-800 rounded-lg px-2.5 py-1.5">
+              <button
+                onClick={() => setShowTopUp(true)}
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors ${goldBalance === 0 ? 'bg-yellow-900/40 border border-yellow-600/60 animate-pulse hover:bg-yellow-900/60' : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'}`}
+              >
                 <span className="text-sm">🪙</span>
-                <span className="text-sm font-bold" style={{ color: GOLD }}>{goldBalance}</span>
-              </div>
+                <span className="text-sm font-bold" style={{ color: GOLD }}>{goldBalance === 0 ? '+ Recargar' : goldBalance}</span>
+              </button>
             )}
             <NotificationBell />
             <Link href="/perfil"
@@ -842,7 +874,7 @@ export default function PronosticosPage() {
               const topFactor = unlocked ? (calcFactors(race.forecasts)[0]?.factor ?? 0) : 0;
               return (
                 <button key={race.raceId}
-                  onClick={() => setSelectedRaceNumber(isSelected ? null : race.raceNumber)}
+                  onClick={() => handleRaceClick(race, idx)}
                   className={`relative flex flex-col items-center gap-0.5 py-2.5 px-1 rounded-xl border text-xs font-bold transition-all active:scale-95 ${isSelected ? 'text-black border-yellow-600' : unlocked ? 'bg-gray-900 border-gray-700 text-white hover:border-gray-500' : 'bg-gray-900/50 border-gray-800 text-gray-600'}`}
                   style={isSelected ? { backgroundColor: GOLD } : {}}>
                   <span className="text-sm font-extrabold">C{race.raceNumber}</span>
@@ -862,6 +894,7 @@ export default function PronosticosPage() {
         </div>
         {/* Race detail */}
         {selectedRace ? (
+          <div ref={racePanelRef} className={`rounded-2xl transition-all duration-300 ${pulsedRaceId === selectedRace.raceId ? 'ring-2 ring-yellow-500/70 ring-offset-2 ring-offset-gray-950' : ''}`}>
           <RacePanel race={selectedRace} unlocked={selectedUnlocked} goldBalance={goldBalance} followedIds={followedIds}
             onUnlock={() => handleUnlock(selectedRace.raceId)} onFollow={toggleFollow}
             isPrivileged={isPrivileged} onRefresh={() => loadMeeting(selectedMeetingId)}
@@ -869,7 +902,8 @@ export default function PronosticosPage() {
             statsMap={statsMap} globalRankMap={globalRankMap}
             passUnlocked={passUnlocked} onBuyPass={handleBuyMeetingPass}
             meetingPassLoading={meetingPassLoading} meetingPassError={meetingPassError}
-            fullDayCost={fullDayCost} />
+            fullDayCost={fullDayCost} onTopUp={() => setShowTopUp(true)} />
+          </div>
         ) : (
           <div className="text-center py-10 text-gray-700">
             <p className="text-4xl mb-3">☝️</p>
@@ -877,6 +911,7 @@ export default function PronosticosPage() {
           </div>
         )}
       </main>
+      {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
     </div>
   );
 }

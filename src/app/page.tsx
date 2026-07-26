@@ -122,9 +122,9 @@ export default function HomePage() {
               <>
                 <NotificationBell />
                 <button onClick={() => setShowTopUp(true)}
-                  className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-gray-700"
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors ${golds === 0 ? 'bg-yellow-900/50 border border-yellow-600/70 animate-pulse hover:bg-yellow-900/70' : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'}`}
                   style={{ color: GOLD }}>
-                  🪙 {golds}
+                  🪙 {golds === 0 ? '+ Recargar' : golds}
                 </button>
                 <div className="relative">
                   <button onClick={() => setMenuOpen(o => !o)}
