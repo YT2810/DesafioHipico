@@ -414,12 +414,14 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
               </button>
             )}
             {!passUnlocked && onBuyPass && goldBalance < fullDayCost && goldBalance >= GOLD_COST_PER_RACE && (
-              <button
-                onClick={() => { trackGA('unlock_attempt', { race_number: race.raceNumber, cost: fullDayCost, type: 'meeting_pass' }); onBuyPass(); }}
-                disabled={meetingPassLoading}
-                className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-700/50 text-yellow-400 bg-yellow-950/20 hover:bg-yellow-950/40 disabled:opacity-40 transition-colors">
-                {meetingPassLoading ? 'Procesando...' : `◆ Jornada completa — ${fullDayCost}G`}
-              </button>
+              <div className="space-y-1.5">
+                <button
+                  onClick={() => { trackGA('topup_initiated', { source: 'paywall_pass_insufficient', race_number: race.raceNumber }); onTopUp?.(); }}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold border border-yellow-600/60 text-yellow-300 bg-yellow-950/30 hover:bg-yellow-950/50 transition-colors">
+                  {`◆ Jornada completa — faltan ${fullDayCost - goldBalance}G · Recargar →`}
+                </button>
+                <p className="text-[10px] text-gray-500 text-center">{`Tienes ${goldBalance}G · necesitas ${fullDayCost}G para toda la jornada`}</p>
+              </div>
             )}
             {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
           </div>
@@ -796,6 +798,8 @@ export default function PronosticosPage() {
           meetingPassLoading={meetingPassLoading}
           goldBalance={goldBalance}
           fullDayCost={fullDayCost}
+          raceUnlocked={selectedRace ? selectedUnlocked : undefined}
+          onTopUp={() => setShowTopUp(true)}
         />
       </div>
 
@@ -846,15 +850,23 @@ export default function PronosticosPage() {
               <div className="min-w-0">
                 <p className="text-xs font-bold text-white">📊 Jornada completa</p>
                 <p className="text-xs text-gray-500">{fullDayCost}G · {totalRacesCount} carreras · {lockedRacesCount} bloqueada{lockedRacesCount !== 1 ? 's' : ''}</p>
-                {meetingPassError && <p className="text-xs text-red-400 mt-1">{meetingPassError}</p>}
+                {meetingPassError && goldBalance >= fullDayCost && <p className="text-xs text-red-400 mt-1">{meetingPassError}</p>}
               </div>
-              <button
-                onClick={handleBuyMeetingPass}
-                disabled={meetingPassLoading || goldBalance < fullDayCost}
-                className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-40 whitespace-nowrap"
-                style={{ backgroundColor: GOLD }}>
-                {meetingPassLoading ? '...' : `� ${fullDayCost}G`}
-              </button>
+              {goldBalance < fullDayCost ? (
+                <button
+                  onClick={() => setShowTopUp(true)}
+                  className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold border border-yellow-600/60 text-yellow-300 bg-yellow-950/30 hover:bg-yellow-950/50 whitespace-nowrap transition-colors">
+                  +{fullDayCost - goldBalance}G →
+                </button>
+              ) : (
+                <button
+                  onClick={handleBuyMeetingPass}
+                  disabled={meetingPassLoading}
+                  className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-40 whitespace-nowrap"
+                  style={{ backgroundColor: GOLD }}>
+                  {meetingPassLoading ? '...' : `◆ ${fullDayCost}G`}
+                </button>
+              )}
             </div>
           )
         )}

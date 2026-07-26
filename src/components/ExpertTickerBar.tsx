@@ -19,9 +19,11 @@ interface Props {
   meetingPassLoading?: boolean;
   goldBalance?: number;
   fullDayCost?: number;
+  raceUnlocked?: boolean;
+  onTopUp?: () => void;
 }
 
-export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuyPass, meetingPassLoading, goldBalance = 0, fullDayCost }: Props) {
+export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuyPass, meetingPassLoading, goldBalance = 0, fullDayCost, raceUnlocked, onTopUp }: Props) {
   const dayCost = fullDayCost ?? GOLD_COST_FULL_DAY_PER_RACE;
   const trackRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TickerEntry | null>(null);
@@ -129,6 +131,9 @@ export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuy
   // Show Meeting Pass CTA pill when: user has no pass, onBuyPass provided, and has enough gold
   const showPassCta = !!onBuyPass && !passUnlocked;
 
+  // Blur ticker when a specific locked race is selected
+  const isRaceLocked = raceId !== undefined && raceUnlocked === false && !passUnlocked;
+
   return (
     <>
       <div
@@ -136,6 +141,22 @@ export default function ExpertTickerBar({ meetingId, raceId, passUnlocked, onBuy
         onMouseEnter={() => { pausedRef.current = true; }}
         onMouseLeave={() => { pausedRef.current = false; }}
       >
+        {/* Blur overlay when selected race is locked */}
+        {isRaceLocked && (
+          <div className="absolute inset-0 z-20 backdrop-blur-sm bg-gray-950/70 flex items-center justify-center gap-3 px-4">
+            <span className="text-xs font-bold text-gray-300">🔒 Desbloquea la carrera para ver los fijos</span>
+            {onTopUp && (
+              <button
+                onClick={onTopUp}
+                className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg text-black whitespace-nowrap"
+                style={{ backgroundColor: '#D4AF37' }}
+              >
+                + Recargar Gold
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Fade edges */}
         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-10 bg-gradient-to-r from-gray-950 to-transparent" />
         <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 z-10 bg-gradient-to-l from-gray-950 to-transparent" />
