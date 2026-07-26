@@ -219,6 +219,27 @@ export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackI
         </div>
       </div>
 
+      {/* ── CTA sticky pronósticos ── */}
+      <div className="sticky top-0 z-10 border-b border-yellow-800/60 bg-yellow-950/95 backdrop-blur">
+        <a
+          href="/pronosticos"
+          onClick={() => trackGA('traqueos_cta_click', { destination: 'pronosticos_sticky' })}
+          className="flex items-center gap-3 max-w-3xl mx-auto px-4 py-2.5 group"
+        >
+          <span className="text-base animate-bounce">🏆</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black text-yellow-300 group-hover:text-yellow-100 leading-tight">
+              Los handicappers ya cruzaron estos traqueos — mira sus conclusiones
+            </p>
+          </div>
+          <span
+            className="shrink-0 text-[10px] font-black px-3 py-1.5 rounded-lg text-black whitespace-nowrap"
+            style={{ backgroundColor: '#D4AF37' }}>
+            Ver →
+          </span>
+        </a>
+      </div>
+
       <div className="max-w-3xl mx-auto px-4 py-5 space-y-4">
 
         {/* ── Búsqueda global por caballo ── */}

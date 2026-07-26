@@ -447,6 +447,24 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
         </div>
       </header>
 
+      {/* ── CTA sticky pronósticos — visible en scroll, bajo el header ── */}
+      <div className="screen-only sticky top-[52px] z-10 bg-yellow-950/95 backdrop-blur border-b border-yellow-700/50 px-4 py-2">
+        <a href="/pronosticos" className="flex items-center gap-3 max-w-2xl mx-auto group">
+          <span className="text-sm animate-pulse">🎯</span>
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-black text-yellow-300 group-hover:text-yellow-100">
+              Ver qué dicen los expertos de esta reunión
+            </span>
+            <span className="text-[10px] text-yellow-700 ml-2">desde 2G</span>
+          </div>
+          <span
+            className="shrink-0 text-[10px] font-black px-3 py-1.5 rounded-lg text-black whitespace-nowrap animate-pulse"
+            style={{ backgroundColor: '#D4AF37' }}>
+            Pronósticos →
+          </span>
+        </a>
+      </div>
+
       {/* ── Contenido pantalla ── */}
       <main className="screen-only mx-auto max-w-2xl px-4 py-4 space-y-4">
 
