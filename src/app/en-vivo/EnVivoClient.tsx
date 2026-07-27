@@ -283,8 +283,8 @@ export default function EnVivoClient() {
           </div>
         )}
 
-        {/* ── CTA pronósticos — justo tras el video, momento de máxima emoción ── */}
-        {!loading && meeting && (
+        {/* ── CTA pronósticos — justo tras el video, cuando hay jornada activa ── */}
+        {!loading && races.length > 0 && (
           <a
             href="/pronosticos"
             className="flex items-center gap-4 rounded-2xl border-2 border-yellow-600/70 px-4 py-3.5 transition-colors hover:border-yellow-500 group"
@@ -344,6 +344,12 @@ export default function EnVivoClient() {
               📋 Ver revista completa
             </Link>
           )}
+          <Link
+            href="/resultados"
+            className="py-3 rounded-2xl text-sm font-bold text-center border border-gray-700 text-gray-300 hover:border-yellow-700/50 hover:text-yellow-400 transition-colors bg-gray-900"
+          >
+            🏆 Resultados
+          </Link>
           <Link
             href="/pronosticos"
             className="py-3 rounded-2xl text-sm font-bold text-center text-black transition-colors hover:brightness-110"
