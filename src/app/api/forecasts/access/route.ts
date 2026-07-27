@@ -45,13 +45,32 @@ export async function GET(req: NextRequest) {
     await dbConnect();
     const meeting = await Meeting.findById(meetingId).lean<{ date: Date; status: string }>();
 
-    const result = await getMeetingAccessMap(userId, meetingId, raceIds, totalRaces);
+    // A meeting is "past" if its date (UTC-4 boundary = UTC+4h offset) is strictly before today's start
+    // We use UTC midnight of the meeting date day — if that day < today → past
+    const isPastMeeting = meeting
+      ? (() => {
+          const now = new Date();
+          // Start of today in UTC-4 = UTC midnight + 4h
+          const todayStartUTC4 = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate(),
+            4, 0, 0, 0, // UTC 04:00 = UTC-4 00:00
+          ));
+          const meetingDate = new Date(meeting.date);
+          // Compare dates only (strip time)
+          const meetingDay = Date.UTC(meetingDate.getUTCFullYear(), meetingDate.getUTCMonth(), meetingDate.getUTCDate());
+          const todayDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+          return meetingDay < todayDay;
+        })()
+      : false;
+
+    const result = await getMeetingAccessMap(userId, meetingId, raceIds, totalRaces, isPastMeeting);
 
     // Expire pass if meeting is finished or its date is before today (day boundary, UTC-4 grace)
     let passUnlocked = result.passUnlocked;
-    if (passUnlocked && meeting) {
+    if (passUnlocked && meeting && !isPastMeeting) {
       const finished = meeting.status === 'finished' || meeting.status === 'cancelled';
-      // Grace: pass valid through the end of meeting day (UTC midnight = next calendar day)
       const meetingDay = new Date(meeting.date);
       meetingDay.setUTCHours(23, 59, 59, 999);
       const pastDay = new Date() > meetingDay;
@@ -63,7 +82,7 @@ export async function GET(req: NextRequest) {
       freeRemaining: result.freeRemaining === Infinity ? 99 : result.freeRemaining,
       goldBalance: result.goldBalance,
       isPrivileged: result.isPrivileged,
-      passUnlocked,
+      passUnlocked: isPastMeeting ? false : passUnlocked,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error interno';

@@ -183,6 +183,7 @@ export async function getMeetingAccessMap(
   meetingId: string,
   raceIds: string[],
   totalRaces?: number,
+  isPastMeeting?: boolean,
 ): Promise<{
   map: Record<string, { unlocked: boolean; free: boolean }>;
   freeRemaining: number;
@@ -198,10 +199,11 @@ export async function getMeetingAccessMap(
   const roles = user.roles ?? [];
   const isPrivileged = roles.some((r: string) => ['staff', 'admin'].includes(r));
 
-  if (isPrivileged) {
+  // Past meetings are free for everyone — historical access, no Gold required
+  if (isPrivileged || isPastMeeting) {
     const map: Record<string, { unlocked: boolean; free: boolean }> = {};
     for (const raceId of raceIds) map[raceId] = { unlocked: true, free: true };
-    return { map, freeRemaining: Infinity, goldBalance: user.balance?.golds ?? 0, isPrivileged: true, passUnlocked: false };
+    return { map, freeRemaining: Infinity, goldBalance: user.balance?.golds ?? 0, isPrivileged: isPrivileged || false, passUnlocked: false };
   }
 
   const mc = (user.meetingConsumptions ?? []).find((c: { meetingId: string }) => c.meetingId === meetingId);

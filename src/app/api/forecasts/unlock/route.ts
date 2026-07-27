@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { requestRaceAccess } from '@/services/forecastAccessService';
+import dbConnect from '@/lib/mongodb';
+import Meeting from '@/models/Meeting';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +20,23 @@ export async function POST(req: NextRequest) {
     const { meetingId, raceId } = await req.json();
     if (!meetingId || !raceId) {
       return NextResponse.json({ error: 'meetingId y raceId son requeridos.' }, { status: 400 });
+    }
+
+    // Backend guard: past meetings are free — no Gold charge allowed
+    await dbConnect();
+    const meeting = await Meeting.findById(meetingId).lean<{ date: Date }>();
+    if (meeting) {
+      const now = new Date();
+      const meetingDay = Date.UTC(
+        new Date(meeting.date).getUTCFullYear(),
+        new Date(meeting.date).getUTCMonth(),
+        new Date(meeting.date).getUTCDate(),
+      );
+      const todayDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      if (meetingDay < todayDay) {
+        // Past meeting — grant access for free, no DB write needed for quota
+        return NextResponse.json({ granted: true, free: true, freeRemaining: 99 });
+      }
     }
 
     const result = await requestRaceAccess(session.user.id, meetingId, raceId);
