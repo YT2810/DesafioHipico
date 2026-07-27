@@ -8,11 +8,11 @@ import { fmtDay } from '../_hooks/useAdminStats';
 const GOLD = '#D4AF37';
 
 function goldNet(d: any): number {
-  return (d.gold?.bonus ?? 0) + (d.gold?.purchase ?? 0) + (d.gold?.refund ?? 0) + (d.gold?.other ?? 0) + (d.gold?.raceUnlock ?? 0) + (d.gold?.meetingPass ?? 0);
+  return (d.gold?.bonus ?? 0) + (d.gold?.welcomeBonus ?? 0) + (d.gold?.purchase ?? 0) + (d.gold?.adminAssign ?? 0) + (d.gold?.refund ?? 0) + (d.gold?.other ?? 0) + (d.gold?.raceUnlock ?? 0) + (d.gold?.meetingPass ?? 0);
 }
 
 function goldEmitted(d: any): number {
-  return (d.gold?.bonus ?? 0) + (d.gold?.purchase ?? 0) + (d.gold?.refund ?? 0) + (d.gold?.other ?? 0);
+  return (d.gold?.bonus ?? 0) + (d.gold?.welcomeBonus ?? 0) + (d.gold?.purchase ?? 0) + (d.gold?.adminAssign ?? 0) + (d.gold?.refund ?? 0) + (d.gold?.other ?? 0);
 }
 
 function goldBurned(d: any): number {
@@ -20,8 +20,11 @@ function goldBurned(d: any): number {
 }
 
 export default function FinanzasTab({ stats, loading }: { stats: AdminStats | null; loading: boolean }) {
-  const [range, setRange] = useState<7 | 14 | 30 | 90 | 365>(7);
-  const sliced = stats ? stats.dailyStats.slice(-range) : [];
+  const [range, setRange] = useState<'hoy' | 'ayer' | 7 | 14 | 30 | 90 | 365>(7);
+  const sliced = stats && typeof range === 'number' ? stats.dailyStats.slice(-range) : [];
+  const todayData = stats?.dailyStats[stats.dailyStats.length - 1] ?? null;
+  const yesterdayData = stats?.dailyStats[stats.dailyStats.length - 2] ?? null;
+  const dayDetail = range === 'hoy' ? todayData : range === 'ayer' ? yesterdayData : null;
   const approvedUsd = stats?.tokenomics?.topups?.approved?.usd ?? 0;
   const pendingTopups = stats?.tokenomics?.topups?.pending ?? 0;
 
@@ -41,11 +44,11 @@ export default function FinanzasTab({ stats, loading }: { stats: AdminStats | nu
       <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Gold Economics · Emitido vs Quemado</p>
-          <div className="flex gap-1">
-            {[7, 14, 30, 90, 365].map(d => (
-              <button key={d} onClick={() => setRange(d as any)}
+          <div className="flex gap-1 flex-wrap">
+            {(['hoy', 'ayer', 7, 14, 30, 90, 365] as const).map(d => (
+              <button key={String(d)} onClick={() => setRange(d)}
                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${range === d ? 'bg-yellow-700/40 text-yellow-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                {d === 365 ? '1Y' : `${d}d`}
+                {d === 365 ? '1Y' : typeof d === 'number' ? `${d}d` : d.charAt(0).toUpperCase() + d.slice(1)}
               </button>
             ))}
           </div>
@@ -66,6 +69,43 @@ export default function FinanzasTab({ stats, loading }: { stats: AdminStats | nu
         </div>
         {loading ? (
           <div className="h-20 rounded-xl bg-gray-800 animate-pulse" />
+        ) : dayDetail ? (
+          <div className="space-y-3">
+            <p className="text-[10px] text-gray-600">{dayDetail.date}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-green-400">+{goldEmitted(dayDetail)}</p>
+                <p className="text-[10px] text-gray-500">Emitido</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-red-400">-{goldBurned(dayDetail)}</p>
+                <p className="text-[10px] text-gray-500">Quemado</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-white">{goldEmitted(dayDetail) - goldBurned(dayDetail)}</p>
+                <p className="text-[10px] text-gray-500">Neto</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-yellow-400">{dayDetail.registrations}</p>
+                <p className="text-[10px] text-gray-500">Registros</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-center">
+              {[
+                { label: 'Compras (recarga)', key: 'purchase', color: 'text-green-300' },
+                { label: 'Welcome bonus', key: 'welcomeBonus', color: 'text-yellow-300' },
+                { label: 'Bonus/promo', key: 'bonus', color: 'text-orange-300' },
+                { label: 'Desbloqueos', key: 'raceUnlock', color: 'text-red-300' },
+                { label: 'Pases jornada', key: 'meetingPass', color: 'text-red-300' },
+                { label: 'Asig. admin', key: 'adminAssign', color: 'text-blue-300' },
+              ].map(({ label, key, color }) => (
+                <div key={key} className="bg-gray-800/40 rounded-lg px-2 py-1.5 flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500">{label}</span>
+                  <span className={`text-[10px] font-bold ${color}`}>{(dayDetail.gold?.[key as keyof typeof dayDetail.gold] ?? 0) > 0 ? '+' : ''}{dayDetail.gold?.[key as keyof typeof dayDetail.gold] ?? 0}G</span>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : sliced.length ? (
           <>
             <div className="flex items-end gap-1.5 h-24">
@@ -88,9 +128,26 @@ export default function FinanzasTab({ stats, loading }: { stats: AdminStats | nu
                 );
               })}
             </div>
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2.5 h-2.5 rounded-sm bg-green-700/60 inline-block" /> Emitido</span>
               <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2.5 h-2.5 rounded-sm bg-red-700/60 inline-block" /> Quemado</span>
+            </div>
+            {/* Emitted breakdown */}
+            <div className="mt-3 pt-3 border-t border-gray-800 grid grid-cols-2 gap-1.5">
+              {[
+                { label: 'Compras (recarga)', key: 'purchase', color: 'text-green-300' },
+                { label: 'Asig. admin', key: 'adminAssign', color: 'text-blue-300' },
+                { label: 'Welcome bonus', key: 'welcomeBonus', color: 'text-yellow-300' },
+                { label: 'Bonus/promo', key: 'bonus', color: 'text-orange-300' },
+              ].map(({ label, key, color }) => {
+                const total = sliced.reduce((a, d) => a + (d.gold?.[key as keyof typeof d.gold] ?? 0), 0);
+                return total > 0 ? (
+                  <div key={key} className="flex items-center justify-between bg-gray-800/40 rounded-lg px-2 py-1">
+                    <span className="text-[10px] text-gray-500">{label}</span>
+                    <span className={`text-[10px] font-bold ${color}`}>+{total}G</span>
+                  </div>
+                ) : null;
+              })}
             </div>
           </>
         ) : null}

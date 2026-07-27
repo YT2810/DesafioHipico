@@ -7,10 +7,13 @@ import { useState } from 'react';
 const GOLD = '#D4AF37';
 
 export default function DashboardTab({ stats, loading }: { stats: AdminStats | null; loading: boolean }) {
-  const [range, setRange] = useState<7 | 14 | 30 | 90 | 365>(7);
-  const sliced = stats ? stats.dailyStats.slice(-range) : [];
+  const [range, setRange] = useState<'hoy' | 'ayer' | 7 | 14 | 30 | 90 | 365>(7);
+  const sliced = stats && typeof range === 'number' ? stats.dailyStats.slice(-range) : [];
   const maxLogins = sliced.length ? Math.max(...sliced.map(x => x.logins), 1) : 1;
   const pendingTopups = stats?.tokenomics?.topups?.pending ?? 0;
+  const todayData = stats?.dailyStats[stats.dailyStats.length - 1] ?? null;
+  const yesterdayData = stats?.dailyStats[stats.dailyStats.length - 2] ?? null;
+  const dayDetail = range === 'hoy' ? todayData : range === 'ayer' ? yesterdayData : null;
 
   return (
     <div className="space-y-6">
@@ -70,17 +73,53 @@ export default function DashboardTab({ stats, loading }: { stats: AdminStats | n
       <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Logins y Registros</p>
-          <div className="flex gap-1">
-            {[7, 14, 30, 90, 365].map(d => (
-              <button key={d} onClick={() => setRange(d as any)}
+          <div className="flex gap-1 flex-wrap justify-end">
+            {(['hoy', 'ayer', 7, 14, 30, 90, 365] as const).map(d => (
+              <button key={String(d)} onClick={() => setRange(d)}
                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${range === d ? 'bg-yellow-700/40 text-yellow-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                {d === 365 ? '1Y' : `${d}d`}
+                {d === 365 ? '1Y' : typeof d === 'number' ? `${d}d` : d.charAt(0).toUpperCase() + d.slice(1)}
               </button>
             ))}
           </div>
         </div>
         {loading ? (
           <div className="h-20 rounded-xl bg-gray-800 animate-pulse" />
+        ) : dayDetail ? (
+          <div className="space-y-3">
+            <p className="text-[10px] text-gray-600">{dayDetail.date}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-blue-400">{dayDetail.logins}</p>
+                <p className="text-[10px] text-gray-500">Logins</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-yellow-400">{dayDetail.registrations}</p>
+                <p className="text-[10px] text-gray-500">Registros</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-red-400">-{dayDetail.gold.raceUnlock + dayDetail.gold.meetingPass}</p>
+                <p className="text-[10px] text-gray-500">Gold gastado</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-green-400">+{dayDetail.gold.purchase + dayDetail.gold.bonus}</p>
+                <p className="text-[10px] text-gray-500">Gold ingresado</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-gray-800/60 rounded-lg px-2 py-1.5">
+                <p className="text-sm font-bold text-white">{dayDetail.gold.raceUnlock}</p>
+                <p className="text-[9px] text-gray-600">Desbloqueos</p>
+              </div>
+              <div className="bg-gray-800/60 rounded-lg px-2 py-1.5">
+                <p className="text-sm font-bold text-white">{dayDetail.gold.meetingPass}</p>
+                <p className="text-[9px] text-gray-600">Pases jornada</p>
+              </div>
+              <div className="bg-gray-800/60 rounded-lg px-2 py-1.5">
+                <p className="text-sm font-bold text-white">{dayDetail.gold.purchase}</p>
+                <p className="text-[9px] text-gray-600">Recargas</p>
+              </div>
+            </div>
+          </div>
         ) : sliced.length ? (
           <>
             <div className="flex items-end gap-1.5 h-24">
