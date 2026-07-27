@@ -12,6 +12,7 @@ import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import Notification from '@/models/Notification';
+import GoldTransaction from '@/models/GoldTransaction';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,15 @@ export async function POST(req: NextRequest) {
 
     user.balance.golds = Math.max(0, (user.balance.golds ?? 0) + amount);
     await user.save();
+
+    // Audit trail
+    await GoldTransaction.create({
+      userId: user._id,
+      type: amount > 0 ? 'admin_assign' : 'refund',
+      amount,
+      balanceAfter: user.balance.golds,
+      description: `Asignación manual admin${note ? ` — ${note}` : ''}`,
+    });
 
     // Notify the user if Gold was added (not deducted)
     if (amount > 0) {

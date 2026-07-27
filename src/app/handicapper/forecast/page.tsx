@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import BackToHome from '@/components/BackToHome';
 import { FORECAST_LABELS, ForecastLabel, FIJO_BONUS_POINTS } from '@/lib/constants';
 
 const GOLD = '#D4AF37';
@@ -223,7 +224,7 @@ export default function HandicapperForecastPage() {
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center gap-3">
-          <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none shrink-0">←</Link>
+          <BackToHome href="/" label="Inicio" />
           <div>
             <h1 className="text-base font-bold text-white">🎯 Subir Pronóstico</h1>
             <p className="text-xs text-gray-500">Panel de Handicapper</p>

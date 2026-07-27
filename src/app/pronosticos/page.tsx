@@ -7,6 +7,7 @@ import { ForecastLabel, MARK_POINTS, FIJO_BONUS_POINTS, GOLD_COST_PER_RACE, GOLD
 import NotificationBell from '@/components/NotificationBell';
 import ExpertTickerBar from '@/components/ExpertTickerBar';
 import TopUpModal from '@/components/TopUpModal';
+import BackToHome from '@/components/BackToHome';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; e1?: number | null; eGeneral?: number; }
@@ -613,7 +614,7 @@ export default function PronosticosPage() {
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
         <header className="border-b border-gray-800 px-4 py-3">
           <div className="mx-auto max-w-lg flex items-center gap-3">
-            <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none">←</Link>
+            <BackToHome href="/" label="Inicio" />
             <span className="text-sm font-bold text-white">🏇 Factor de Victoria</span>
           </div>
         </header>

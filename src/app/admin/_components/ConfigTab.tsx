@@ -34,7 +34,7 @@ export default function ConfigTab({ bcv }: { bcv: BcvStatus | null }) {
 
   async function handleSaveWelcomeBonus() {
     const val = parseInt(welcomeBonusInput);
-    if (!val || val < 0) return;
+    if (isNaN(val) || val < 0) return;
     setWelcomeBonusLoading(true);
     setWelcomeBonusMsg('');
     try {
@@ -78,6 +78,7 @@ export default function ConfigTab({ bcv }: { bcv: BcvStatus | null }) {
   }
 
   async function handleBulkWelcome() {
+    if (welcomeBonus <= 0) return;
     if (!confirm(`¿Asignar ${welcomeBonus} Gold a todos los usuarios con saldo 0?`)) return;
     setBulkLoading(true);
     setBulkMsg('');

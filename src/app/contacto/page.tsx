@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import BackToHome from '@/components/BackToHome';
 
 const GOLD = '#D4AF37';
 
@@ -38,7 +39,7 @@ export default function ContactoPage() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="border-b border-gray-800 px-4 py-3">
         <div className="mx-auto max-w-lg flex items-center gap-3">
-          <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none transition-colors">←</Link>
+          <BackToHome href="/" label="Inicio" />
           <span className="text-sm font-bold text-white">Contacto</span>
         </div>
       </header>

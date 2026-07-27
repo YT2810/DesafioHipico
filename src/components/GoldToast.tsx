@@ -39,7 +39,7 @@ export default function GoldToast() {
     const isNew = balance <= 23 && streak <= 1;
     const isStreakBonus = goldEarned === 8;
 
-    if (isNew && balance >= 15) {
+    if (isNew && balance > 0) {
       setMessage('🎉 ¡Bienvenido a Desafío Hípico!');
       setSubMessage(`Recibiste 🪙 ${balance} Gold de bienvenida`);
     } else if (isStreakBonus) {

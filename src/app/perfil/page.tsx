@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import TopUpModal from '@/components/TopUpModal';
+import BackToHome from '@/components/BackToHome';
 
 const GOLD = '#D4AF37';
 
@@ -236,7 +237,7 @@ export default function PerfilPage() {
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-lg flex items-center gap-3">
-          <Link href="/" className="text-gray-500 hover:text-white text-lg leading-none">←</Link>
+          <BackToHome href="/" label="Inicio" />
           <h1 className="text-sm font-bold text-white">👤 Mi Perfil</h1>
         </div>
       </header>

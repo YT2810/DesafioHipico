@@ -8,6 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 import GoldToast from '@/components/GoldToast';
 import ContextualBanner from '@/components/ContextualBanner';
 import InactivitySignout from '@/components/InactivitySignout';
+import FvDonut, { type FvAccuracy } from '@/components/FvDonut';
 
 const GOLD = '#D4AF37';
 
@@ -46,6 +47,7 @@ export default function HomePage() {
   const [todayMeetingTrack, setTodayMeetingTrack] = useState('');
   const [hasRecentResults, setHasRecentResults] = useState(false);
   const [latestResultsDate, setLatestResultsDate] = useState('');
+  const [fvStats, setFvStats] = useState<{ rinconada: FvAccuracy | null; valencia: FvAccuracy | null }>({ rinconada: null, valencia: null });
 
   useEffect(() => {
     // Fetch meetings + ranking in parallel
@@ -95,6 +97,15 @@ export default function HomePage() {
           .catch(() => {});
       }
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/stats/fv-accuracy?track=rinconada').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/stats/fv-accuracy?track=valencia').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([rinconadaData, valenciaData]) => {
+      setFvStats({ rinconada: rinconadaData, valencia: valenciaData });
+    });
   }, []);
 
   const user = session?.user;
@@ -324,6 +335,32 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* ── FV accuracy charts ── */}
+        {(fvStats.rinconada?.totalRaces || fvStats.valencia?.totalRaces) ? (
+          <div className="w-full space-y-4">
+            <div className="text-left">
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Efectividad del Factor de Victoria</p>
+              <p className="text-[10px] text-gray-700">Historial con resultados oficiales</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {fvStats.rinconada?.totalRaces ? (
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center">
+                  <p className="text-sm font-bold text-white mb-0.5">La Rinconada</p>
+                  <p className="text-xs text-gray-500 mb-3">{fvStats.rinconada.totalRaces} carreras evaluadas</p>
+                  <FvDonut data={fvStats.rinconada} />
+                </div>
+              ) : null}
+              {fvStats.valencia?.totalRaces ? (
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center">
+                  <p className="text-sm font-bold text-white mb-0.5">Valencia</p>
+                  <p className="text-xs text-gray-500 mb-3">{fvStats.valencia.totalRaces} carreras evaluadas</p>
+                  <FvDonut data={fvStats.valencia} />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {/* ── Forecast preview ── */}
         {status !== 'loading' && (
           <div className="w-full space-y-3">
@@ -436,7 +473,7 @@ export default function HomePage() {
                 className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-sm font-extrabold text-black shadow-lg shadow-yellow-900/30"
                 style={{ backgroundColor: GOLD }}
               >
-                🎁 Ver todos los expertos — gratis
+                🎁 Regístrate gratis — todos los expertos
               </Link>
             </div>
           </div>

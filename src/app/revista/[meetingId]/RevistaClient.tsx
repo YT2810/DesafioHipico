@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import BackToHome from '@/components/BackToHome';
 
 const GOLD = '#D4AF37';
 const SITE = 'desafiohipico.com';
@@ -423,7 +424,7 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
       <header className="screen-only sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/" className="text-gray-400 hover:text-white text-lg leading-none shrink-0">←</Link>
+            <BackToHome href="/" label="Inicio" />
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-white truncate">
                 {trackEmoji} Revista · <span className={trackColor}>{meeting.trackName}</span> R{meeting.meetingNumber}

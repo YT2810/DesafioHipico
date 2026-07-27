@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import BackToHome from '@/components/BackToHome';
 
 interface MeetingOption {
   id: string;
@@ -96,10 +97,7 @@ export default function RetiradosClient({ initialMeetingId }: { initialMeetingId
       <header className="border-b border-gray-800 bg-gray-950/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm font-bold" style={{ color: GOLD }}>
-              DH
-            </Link>
-            <span className="text-gray-700">/</span>
+            <BackToHome href="/" label="Inicio" />
             <span className="text-sm font-bold text-white">Retirados</span>
           </div>
           <Link href="/pronosticos" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">

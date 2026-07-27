@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import BackToHome from '@/components/BackToHome';
 
 const GOLD = '#D4AF37';
 
@@ -141,7 +142,7 @@ export default function MisAudiosPage() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center gap-3">
-          <Link href="/perfil" className="text-gray-400 hover:text-white text-sm transition-colors">←</Link>
+          <BackToHome href="/perfil" label="Panel" />
           <h1 className="text-base font-bold text-white flex-1">🎧 Mis Audios VIP</h1>
           <button
             onClick={() => { setShowForm(true); setSaveError(''); setSaveSuccess(''); }}
