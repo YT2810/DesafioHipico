@@ -452,6 +452,14 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* Support contact */}
+        <p className="text-xs text-gray-600 text-center">
+          ¿Necesitas ayuda?{' '}
+          <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">
+            desafiohipicoapp@gmail.com
+          </a>
+        </p>
+
         {/* SEO footer text — visible but subtle, helps Google index key terms */}
         <p className="text-xs text-gray-800 text-center leading-relaxed">
           Pronósticos La Rinconada hoy · Datos La Rinconada · Inscritos La Rinconada · Inscritos Valencia ·

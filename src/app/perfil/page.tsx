@@ -629,6 +629,11 @@ export default function PerfilPage() {
             <span className="text-sm text-gray-300">🏇 Ver pronósticos</span>
             <span className="text-gray-600 text-sm">›</span>
           </Link>
+          <a href="mailto:desafiohipicoapp@gmail.com"
+            className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-800 transition-colors">
+            <span className="text-sm text-gray-300">📩 ¿Necesitas ayuda? Escríbenos</span>
+            <span className="text-xs text-yellow-600">desafiohipicoapp@gmail.com</span>
+          </a>
           <button onClick={() => signOut({ callbackUrl: '/' })}
             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-800 transition-colors">
             <span className="text-sm text-red-400">🚪 Cerrar sesión</span>

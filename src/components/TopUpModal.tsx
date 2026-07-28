@@ -170,6 +170,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                 <p>📌 Realiza un <strong className="text-white">Pago Móvil</strong> al número de la plataforma.</p>
                 <p>📋 Luego completa el formulario con el número de referencia.</p>
                 <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles.</p>
+                <p>📩 ¿Dudas? <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-500 underline">desafiohipicoapp@gmail.com</a></p>
               </div>
 
               <button onClick={() => setStep('destination')}
@@ -325,7 +326,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               </div>
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400 w-full text-left space-y-1">
                 <p>⏱ Acreditación: <strong className="text-white">menos de 24h hábiles</strong></p>
-                <p>📞 ¿Dudas? Contáctanos por Telegram</p>
+                <p>📩 ¿Dudas? <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-400 underline">desafiohipicoapp@gmail.com</a></p>
               </div>
               <button onClick={onClose} className="w-full py-3 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>Entendido</button>
             </div>
