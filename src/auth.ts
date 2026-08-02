@@ -133,27 +133,31 @@ export const authConfig: NextAuthConfig = {
 
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        await dbConnect();
-        const query = {
-          $or: [
-            ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
-            ...((user as any).telegramId ? [{ telegramId: (user as any).telegramId }] : []),
-          ],
-        };
+        try {
+          await dbConnect();
+          const query = {
+            $or: [
+              ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
+              ...((user as any).telegramId ? [{ telegramId: (user as any).telegramId }] : []),
+            ],
+          };
 
-        const dbUser = await User.findOne(query).lean() as any;
+          const dbUser = await User.findOne(query).lean() as any;
 
-        if (dbUser) {
-          token.userId    = dbUser._id.toString();
-          token.roles     = dbUser.roles;
-          token.balance   = dbUser.balance;
-          token.alias     = dbUser.alias;
-          token.phone     = dbUser.phone;
-          token.legalId   = dbUser.legalId;
-          token.fullName  = dbUser.fullName;
-          token.identityDocument = dbUser.identityDocument;
-          token.phoneNumber      = dbUser.phoneNumber;
-          token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument);
+          if (dbUser) {
+            token.userId    = dbUser._id.toString();
+            token.roles     = dbUser.roles;
+            token.balance   = dbUser.balance;
+            token.alias     = dbUser.alias;
+            token.phone     = dbUser.phone;
+            token.legalId   = dbUser.legalId;
+            token.fullName  = dbUser.fullName;
+            token.identityDocument = dbUser.identityDocument;
+            token.phoneNumber      = dbUser.phoneNumber;
+            token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument);
+          }
+        } catch {
+          // DB timeout during login — keep token with basic user info, retry on next request
         }
       }
 
