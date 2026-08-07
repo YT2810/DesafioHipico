@@ -7,7 +7,7 @@ interface YouTubeSource { _id: string; name: string; handle: string | null; link
 type DiffStatus = 'match' | 'similar' | 'missing' | 'extra';
 interface DiffMark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label?: string; rawLabel?: string; status: DiffStatus; matchedWith?: string; confidence: number; }
 interface RaceDiff { raceNumber: number; raceId: string | null; dbMarks: DiffMark[]; extractedMarks: DiffMark[]; matchScore: number; hasDbData: boolean; }
-interface VideoResult { videoId: string; title: string; videoUrl: string; publishedAt: string; transcriptAvailable: boolean; expertNames: string[]; diffs: RaceDiff[]; globalMatchScore: number; racesExtracted: number; llmError?: string; }
+interface VideoResult { videoId: string; title: string; videoUrl: string; publishedAt: string; transcriptAvailable: boolean; method?: 'transcript' | 'video_fallback'; expertNames: string[]; diffs: RaceDiff[]; globalMatchScore: number; racesExtracted: number; llmError?: string; }
 interface ShadowResult { success: boolean; channelId?: string; meetingLabel: string; videos: VideoResult[]; overallMatchScore: number | null; message?: string; }
 interface AccumEntry { sourceId: string; channelLabel: string; channelUrl: string; result: ShadowResult; }
 
@@ -77,7 +77,13 @@ function RaceDiffRow({ diff }: { diff: RaceDiff }) {
 }
 
 function VideoCard({ video }: { video: VideoResult }) {
-  const [expanded, setExpanded] = useState(video.transcriptAvailable && video.globalMatchScore < 90);
+  const hasResult = (video.transcriptAvailable || video.method === 'video_fallback') && !video.llmError && video.racesExtracted > 0;
+  const [expanded, setExpanded] = useState(hasResult && video.globalMatchScore < 90);
+  const methodBadge = video.method === 'transcript'
+    ? <span className="text-[9px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded font-bold ml-2">📝 texto</span>
+    : video.method === 'video_fallback'
+    ? <span className="text-[9px] bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded font-bold ml-2">▶ video</span>
+    : null;
   return (
     <div className={`bg-gray-900 border rounded-2xl overflow-hidden ${scoreBorder(video.globalMatchScore)}`}>
       <div className="px-4 py-3 flex items-start gap-3">
@@ -88,20 +94,21 @@ function VideoCard({ video }: { video: VideoResult }) {
           </a>
           <p className="text-xs text-gray-500 mt-1">
             {new Date(video.publishedAt).toLocaleDateString('es-VE', { weekday:'short', day:'numeric', month:'short' })}
+            {methodBadge}
             {video.expertNames.length > 0 && <span className="ml-2 text-blue-400">· {video.expertNames.join(', ')}</span>}
           </p>
           {video.llmError && <p className="text-[10px] text-red-400 mt-1 break-all">{video.llmError}</p>}
         </div>
         <div className="shrink-0 text-center min-w-[56px]">
-          {!video.transcriptAvailable
-            ? <span className="text-xs text-red-500/80 bg-gray-800 px-2 py-1 rounded-lg block text-center">{video.llmError ? 'Error LLM' : 'Sin transcripción'}</span>
+          {!hasResult
+            ? <span className="text-xs text-red-500/80 bg-gray-800 px-2 py-1 rounded-lg block text-center">{video.llmError ? 'Error LLM' : 'Sin transcript'}</span>
             : <>
                 <p className={`text-xl font-bold ${scoreColor(video.globalMatchScore)}`}>{video.globalMatchScore}%</p>
                 <p className="text-[10px] text-gray-600">{video.racesExtracted} carreras</p>
               </>}
         </div>
       </div>
-      {video.transcriptAvailable && video.diffs.length > 0 && (
+      {hasResult && video.diffs.length > 0 && (
         <>
           <div className="px-4 pb-2 border-t border-gray-800 pt-2 flex items-center gap-3">
             <div className="flex gap-3 text-[11px]">

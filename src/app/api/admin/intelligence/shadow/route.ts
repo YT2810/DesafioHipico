@@ -18,6 +18,42 @@ import { YoutubeTranscript } from 'youtube-transcript';
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
+// ── Fallback: video directo con gemini-2.5-flash-lite (~$0.05/video) ──────────
+async function callVideoFallback(prompt: string, youtubeUrl: string): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY no configurado.');
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://desafiohipico.com',
+      'X-Title': 'Desafío Hípico Shadow',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash-lite',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'video_url', video_url: { url: youtubeUrl } },
+        ],
+      }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`OpenRouter error ${res.status}: ${text.slice(0, 300)}`);
+  let data: any;
+  try { data = JSON.parse(text); } catch { throw new Error(`Respuesta no-JSON: ${text.slice(0, 200)}`); }
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content ?? '';
+  if (!content) throw new Error(`Sin contenido del modelo. finish_reason: ${choice?.finish_reason}`);
+  if (choice?.finish_reason === 'length') return content + '__TRUNCATED__';
+  return content;
+}
+
 // ── Fetch YouTube transcript via youtube-transcript (free, no API key needed) ──
 async function fetchYouTubeTranscript(videoId: string): Promise<string | null> {
   try {
@@ -374,6 +410,7 @@ export async function POST(req: NextRequest) {
       videoUrl: string;
       publishedAt: string;
       transcriptAvailable: boolean;
+      method?: 'transcript' | 'video_fallback';
       expertNames: string[];
       diffs: RaceDiff[];
       globalMatchScore: number;
@@ -385,22 +422,38 @@ export async function POST(req: NextRequest) {
 
     for (const video of videos.slice(0, 3)) {
       const transcript = await fetchYouTubeTranscript(video.videoId);
-      if (!transcript) {
-        console.warn(`[shadow] no transcript for ${video.videoId} — ${video.title}`);
-        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: 'Sin transcripción disponible para este video.' });
-        continue;
-      }
-
-      const prompt = buildMasterPrompt(enrolledEntries) + `\n\nTRANSCRIPCIÓN:\n${transcript.slice(0, 14000)}`;
+      const basePrompt = buildMasterPrompt(enrolledEntries);
       let rawLLM = '';
-      try {
-        rawLLM = await callLLM(prompt);
-        console.log(`[shadow] video processed: ${video.videoId} — ${video.title}`);
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        console.error(`[shadow] callLLM failed for ${video.videoId}:`, errMsg);
-        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: true, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
-        continue;
+      let method: 'transcript' | 'video_fallback';
+
+      if (transcript) {
+        method = 'transcript';
+        const prompt = basePrompt + `\n\nTRANSCRIPCIÓN:\n${transcript.slice(0, 14000)}`;
+        try {
+          rawLLM = await callLLM(prompt);
+          console.log(`[shadow] transcript+LLM OK: ${video.videoId}`);
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.error(`[shadow] callLLM failed for ${video.videoId}:`, errMsg);
+          videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: true, method: 'transcript', expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
+          continue;
+        }
+      } else {
+        method = 'video_fallback';
+        console.log(`[shadow] no transcript → video fallback (flash-lite) for ${video.videoId}`);
+        const prompt = basePrompt.replace(
+          'Analiza la TRANSCRIPCIÓN de un video y extrae los pronósticos.',
+          'Analiza este VIDEO y extrae los pronósticos.'
+        );
+        try {
+          rawLLM = await callVideoFallback(prompt, video.videoUrl);
+          console.log(`[shadow] video fallback OK: ${video.videoId}`);
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.error(`[shadow] video fallback failed for ${video.videoId}:`, errMsg);
+          videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, method: 'video_fallback', expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
+          continue;
+        }
       }
 
       const extracted = parseLLMForecasts(rawLLM);
@@ -446,7 +499,7 @@ export async function POST(req: NextRequest) {
         ? Math.round(scored.reduce((sum, d) => sum + d.matchScore, 0) / scored.length)
         : 0;
 
-      videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: true, expertNames, diffs, globalMatchScore, racesExtracted: extracted.length });
+      videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: transcript !== null, method, expertNames, diffs, globalMatchScore, racesExtracted: extracted.length });
     }
 
     const allScored = videoResults.flatMap(v => v.diffs.filter(d => d.hasDbData));
