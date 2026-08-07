@@ -12,10 +12,46 @@ import Entry from '@/models/Entry';
 import Forecast from '@/models/Forecast';
 import HandicapperProfile from '@/models/HandicapperProfile';
 import '@/models/Horse';
-import { callLLM, callLLMVideo, findBestMatch, RaceEntryItem } from '@/services/ai/geminiProcessor';
+import { callLLM, findBestMatch, RaceEntryItem } from '@/services/ai/geminiProcessor';
 
-export const maxDuration = 90;
+export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
+
+// ── Shadow LLM call: OpenRouter with gemini-2.0-flash (cheaper than 2.5-flash) ──
+async function callGeminiVideoShadow(prompt: string, youtubeUrl: string): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY no configurado.');
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://desafiohipico.com',
+      'X-Title': 'Desafío Hípico Shadow',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-001',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'video_url', video_url: { url: youtubeUrl } },
+        ],
+      }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`OpenRouter error ${res.status}: ${text.slice(0, 300)}`);
+  let data: any;
+  try { data = JSON.parse(text); } catch { throw new Error(`Respuesta no-JSON de OpenRouter: ${text.slice(0, 200)}`); }
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content ?? '';
+  if (!content) throw new Error(`Sin contenido del modelo. finish_reason: ${choice?.finish_reason}`);
+  if (choice?.finish_reason === 'length') return content + '__TRUNCATED__';
+  return content;
+}
 
 // ── Master prompt with enrolled entries as context ────────────────────────────
 function buildMasterPrompt(
@@ -362,7 +398,7 @@ export async function POST(req: NextRequest) {
       const prompt = buildMasterPrompt(enrolledEntries);
       let rawLLM = '';
       try {
-        rawLLM = await callLLMVideo(prompt, video.videoUrl);
+        rawLLM = await callGeminiVideoShadow(prompt, video.videoUrl);
         console.log(`[shadow] video processed: ${video.videoId} — ${video.title}`);
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
