@@ -12,14 +12,13 @@ import Entry from '@/models/Entry';
 import Forecast from '@/models/Forecast';
 import HandicapperProfile from '@/models/HandicapperProfile';
 import '@/models/Horse';
-import { callLLM, findBestMatch, RaceEntryItem } from '@/services/ai/geminiProcessor';
+import { callLLM, callLLMVideo, findBestMatch, RaceEntryItem } from '@/services/ai/geminiProcessor';
 
 export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // ── Master prompt with enrolled entries as context ────────────────────────────
 function buildMasterPrompt(
-  transcript: string,
   enrolledEntries: Array<{ raceNumber: number; entries: RaceEntryItem[] }>
 ): string {
   const entriesContext = enrolledEntries
@@ -48,10 +47,7 @@ FORMATOS DE CARRERA:
 ETIQUETAS (rawLabel verbatim): Fijo, Línea, SF, SSF, Martillazo, Garrotazo, Encapillao, Casi Fijo
 
 JSON PURO sin markdown:
-{"forecasts":[{"expertName":null,"raceNumber":1,"raceType":"carrera","hasOrder":true,"marks":[{"preferenceOrder":1,"dorsalNumber":3,"rawName":"CARIBEAN GOLD","rawLabel":"Fijo"}]}]}
-
-TRANSCRIPCIÓN:
-${transcript.slice(0, 14000)}`;
+{"forecasts":[{"expertName":null,"raceNumber":1,"raceType":"carrera","hasOrder":true,"marks":[{"preferenceOrder":1,"dorsalNumber":3,"rawName":"CARIBEAN GOLD","rawLabel":"Fijo"}]}]}`;
 }
 
 interface ExtractedMark {
@@ -267,25 +263,7 @@ async function fetchRecentVideos(channelId: string, sinceDate: Date): Promise<Vi
   } catch { return []; }
 }
 
-async function fetchTranscript(videoId: string): Promise<string | null> {
-  try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: { 'Accept-Language': 'es-VE,es;q=0.9', 'User-Agent': 'Mozilla/5.0' },
-    });
-    const html = await res.text();
-    const captionMatch = html.match(/"captionTracks":\[.*?"baseUrl":"(.*?)"/);
-    if (!captionMatch) return null;
-    const captionUrl = captionMatch[1].replace(/\\u0026/g, '&');
-    const captionRes = await fetch(captionUrl);
-    const xml = await captionRes.text();
-    const texts = xml.match(/<text[^>]*>(.*?)<\/text>/g) ?? [];
-    const transcript = texts.map(t =>
-      t.replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
-    ).join(' ');
-    return transcript.length > 100 ? transcript : null;
-  } catch { return null; }
-}
+// fetchTranscript removed — shadow now uses callLLMVideo (direct YouTube URL to Gemini)
 
 // ── Main POST handler ─────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -375,21 +353,21 @@ export async function POST(req: NextRequest) {
       diffs: RaceDiff[];
       globalMatchScore: number;
       racesExtracted: number;
+      llmError?: string;
     }
 
     const videoResults: VideoResult[] = [];
 
-    for (const video of videos.slice(0, 5)) {
-      const transcript = await fetchTranscript(video.videoId);
-      if (!transcript) {
-        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0 });
-        continue;
-      }
-
-      const prompt = buildMasterPrompt(transcript, enrolledEntries);
+    for (const video of videos.slice(0, 3)) {
+      const prompt = buildMasterPrompt(enrolledEntries);
       let rawLLM = '';
-      try { rawLLM = await callLLM(prompt); } catch {
-        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: true, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0 });
+      try {
+        rawLLM = await callLLMVideo(prompt, video.videoUrl);
+        console.log(`[shadow] video processed: ${video.videoId} — ${video.title}`);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        console.error(`[shadow] callLLMVideo failed for ${video.videoId}:`, errMsg);
+        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
         continue;
       }
 

@@ -228,7 +228,7 @@ async function callLLMVision(prompt: string, imageBase64: string, mimeType: stri
 
 // ─── Video URL caller (YouTube direct via OpenRouter) ───────────────────────
 
-async function callLLMVideo(prompt: string, youtubeUrl: string): Promise<string> {
+export async function callLLMVideo(prompt: string, youtubeUrl: string): Promise<string> {
   if (!USE_OPENROUTER) {
     // Google direct API supports YouTube URLs via fileData
     if (!GOOGLE_AI_KEY) throw new Error('No AI key configured.');
