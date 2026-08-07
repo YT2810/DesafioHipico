@@ -404,6 +404,9 @@ export default function IntelligencePage() {
             <h1 className="text-base font-bold text-white">🧠 Inteligencia Hípica</h1>
             <p className="text-xs text-gray-500">Ingesta de pronósticos externos con IA</p>
           </div>
+          <Link href="/admin/intelligence/shadow" className="text-xs text-blue-400 hover:text-blue-300 font-medium shrink-0 transition-colors border border-blue-800/50 px-2 py-1 rounded-lg">
+            🔬 Shadow
+          </Link>
           <Link href="/staff/fuentes" className="text-xs text-gray-400 hover:text-yellow-400 font-medium shrink-0 transition-colors">
             📋 Fuentes
           </Link>
