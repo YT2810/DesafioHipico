@@ -13,6 +13,7 @@ interface SourceStatus {
   platform: string;
   handle: string | null;
   link: string | null;
+  youtubeChannelUrl: string | null;
   isVerified: boolean;
   isGhost: boolean;
   totalForecasts: number;
@@ -34,7 +35,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   baja: 'bg-gray-800 text-gray-400 border-gray-700',
 };
 
-interface EditState { name: string; platform: string; handle: string; link: string; }
+interface EditState { name: string; platform: string; handle: string; link: string; youtubeChannelUrl: string; }
 
 interface SourceCardProps {
   s: SourceStatus;
@@ -76,10 +77,11 @@ function SourceCard({ s, editing, editState, onEdit, onCancel, onSave, onChange,
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-gray-500 uppercase">URL del canal</label>
-            <input value={editState.link} onChange={e => onChange({ ...editState, link: e.target.value })}
+            <label className="text-[10px] text-gray-500 uppercase">URL canal YouTube</label>
+            <input value={editState.youtubeChannelUrl} onChange={e => onChange({ ...editState, youtubeChannelUrl: e.target.value })}
               placeholder="https://www.youtube.com/@canal"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
+            <p className="text-[10px] text-gray-600">Solo el canal, NO un video específico</p>
           </div>
         </div>
         {saveError && <p className="text-xs text-red-400">{saveError}</p>}
@@ -106,7 +108,9 @@ function SourceCard({ s, editing, editState, onEdit, onCancel, onSave, onChange,
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-xs text-gray-500">{s.platform}</span>
             {s.handle && <span className="text-xs text-sky-400">@{s.handle}</span>}
-            {s.link && <a href={s.link} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-600 hover:text-sky-400 truncate max-w-[140px]">{s.link.replace('https://www.youtube.com/', '')}</a>}
+            {s.youtubeChannelUrl
+              ? <a href={s.youtubeChannelUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 hover:text-green-400 truncate max-w-[160px]">{s.youtubeChannelUrl.replace('https://www.youtube.com/', '')}</a>
+              : s.platform === 'YouTube' && <span className="text-xs text-red-500/70 italic">Sin URL de canal</span>}
             {!s.hasForecastForMeeting && s.totalForecasts > 0 && <span className="text-xs text-gray-600">{s.totalForecasts} pronóst. totales</span>}
           </div>
         </div>
@@ -128,7 +132,7 @@ export default function SourcesPage() {
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditState>({ name: '', platform: '', handle: '', link: '' });
+  const [editState, setEditState] = useState<EditState>({ name: '', platform: '', handle: '', link: '', youtubeChannelUrl: '' });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -169,7 +173,7 @@ export default function SourcesPage() {
 
   function startEdit(s: SourceStatus) {
     setEditingId(s._id);
-    setEditState({ name: s.name, platform: s.platform, handle: s.handle ?? '', link: s.link ?? '' });
+    setEditState({ name: s.name, platform: s.platform, handle: s.handle ?? '', link: s.link ?? '', youtubeChannelUrl: s.youtubeChannelUrl ?? '' });
     setSaveError('');
   }
 
@@ -185,7 +189,7 @@ export default function SourcesPage() {
       const data = await res.json();
       if (!res.ok) { setSaveError(data.error ?? 'Error al guardar'); return; }
       setSources(prev => prev.map(s => s._id === id
-        ? { ...s, name: data.source.name, platform: data.source.platform, handle: data.source.handle, link: data.source.link }
+        ? { ...s, name: data.source.name, platform: data.source.platform, handle: data.source.handle, link: data.source.link, youtubeChannelUrl: data.source.youtubeChannelUrl }
         : s
       ));
       setEditingId(null);

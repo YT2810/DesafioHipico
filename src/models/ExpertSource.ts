@@ -7,6 +7,7 @@ export interface IExpertSource extends Document {
   platform: ExpertPlatform;
   handle?: string;
   link?: string;
+  youtubeChannelUrl?: string;
   avatarUrl?: string;
   isVerified: boolean;
   isClaimable: boolean;
@@ -28,6 +29,7 @@ const ExpertSourceSchema = new Schema<IExpertSource>(
     },
     handle: { type: String, trim: true },
     link: { type: String, trim: true },
+    youtubeChannelUrl: { type: String, trim: true },
     avatarUrl: { type: String, trim: true },
     isVerified: { type: Boolean, default: false },
     isClaimable: { type: Boolean, default: true },

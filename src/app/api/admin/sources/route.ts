@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
         platform: s.platform,
         handle: s.handle ?? null,
         link: s.link ?? null,
+        youtubeChannelUrl: (s as any).youtubeChannelUrl ?? null,
         isVerified: s.isVerified,
         isGhost: s.isGhost,
         totalForecasts: s.totalForecasts,
@@ -99,12 +100,13 @@ export async function PATCH(req: NextRequest) {
 
   await dbConnect();
 
-  const { _id, name, platform, handle, link } = body;
+  const { _id, name, platform, handle, link, youtubeChannelUrl } = body;
   const update: Record<string, string | null> = {};
   if (name !== undefined) update.name = name.trim();
   if (platform !== undefined) update.platform = platform;
   if (handle !== undefined) update.handle = handle.trim() || null;
   if (link !== undefined) update.link = link.trim() || null;
+  if (youtubeChannelUrl !== undefined) update.youtubeChannelUrl = youtubeChannelUrl.trim() || null;
 
   const updated = await ExpertSource.findByIdAndUpdate(_id, { $set: update }, { new: true }).lean() as any;
   if (!updated) return NextResponse.json({ error: 'Fuente no encontrada.' }, { status: 404 });
@@ -116,6 +118,7 @@ export async function PATCH(req: NextRequest) {
       platform: updated.platform,
       handle: updated.handle ?? null,
       link: updated.link ?? null,
+      youtubeChannelUrl: updated.youtubeChannelUrl ?? null,
     },
   });
 }

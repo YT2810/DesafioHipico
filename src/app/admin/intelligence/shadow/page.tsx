@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 interface Meeting { id: string; meetingNumber: number; date: string; trackName?: string; }
-interface YouTubeSource { _id: string; name: string; handle: string | null; link: string | null; hasForecastForMeeting: boolean; forecastCountForMeeting: number; }
+interface YouTubeSource { _id: string; name: string; handle: string | null; link: string | null; youtubeChannelUrl: string | null; hasForecastForMeeting: boolean; forecastCountForMeeting: number; }
 type DiffStatus = 'match' | 'similar' | 'missing' | 'extra';
 interface DiffMark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label?: string; rawLabel?: string; status: DiffStatus; matchedWith?: string; confidence: number; }
 interface RaceDiff { raceNumber: number; raceId: string | null; dbMarks: DiffMark[]; extractedMarks: DiffMark[]; matchScore: number; hasDbData: boolean; }
@@ -187,12 +187,13 @@ export default function ShadowPage() {
       .then(r => r.json())
       .then(data => {
         const all: YouTubeSource[] = (data.sources ?? [])
-          .filter((s: any) => s.platform === 'YouTube' && s.link)
+          .filter((s: any) => s.platform === 'YouTube' && s.youtubeChannelUrl)
           .map((s: any) => ({
             _id: s._id,
             name: s.name,
             handle: s.handle,
             link: s.link,
+            youtubeChannelUrl: s.youtubeChannelUrl,
             hasForecastForMeeting: s.hasForecastForMeeting,
             forecastCountForMeeting: s.forecastCountForMeeting,
           }));
@@ -295,11 +296,11 @@ export default function ShadowPage() {
                       <div key={s._id} className="flex items-center gap-3 bg-gray-800/50 rounded-xl px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                          <p className="text-[11px] text-gray-500 truncate">{s.link}</p>
+                          <p className="text-[11px] text-gray-500 truncate">{s.youtubeChannelUrl}</p>
                         </div>
                         <span className="text-xs text-green-400 shrink-0">{s.forecastCountForMeeting} C</span>
                         <button
-                          onClick={() => handleRun(s.link!, s.name, s._id)}
+                          onClick={() => handleRun(s.youtubeChannelUrl!, s.name, s._id)}
                           disabled={loading || done}
                           className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           style={{ backgroundColor: done ? '#374151' : '#D4AF37', color: done ? '#9CA3AF' : '#000' }}>
@@ -326,10 +327,10 @@ export default function ShadowPage() {
                     <div key={s._id} className="flex items-center gap-3 bg-gray-800/30 rounded-xl px-3 py-2 border border-gray-700/30">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-300 truncate">{s.name}</p>
-                        <p className="text-[11px] text-gray-600 truncate">{s.link}</p>
+                        <p className="text-[11px] text-gray-600 truncate">{s.youtubeChannelUrl}</p>
                       </div>
                       <button
-                        onClick={() => handleRun(s.link!, s.name, s._id)}
+                        onClick={() => handleRun(s.youtubeChannelUrl!, s.name, s._id)}
                         disabled={loading || done}
                         className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 disabled:opacity-40 disabled:cursor-not-allowed bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
                         {done ? '✓ Listo' : loading ? '…' : 'Ver extracción'}
