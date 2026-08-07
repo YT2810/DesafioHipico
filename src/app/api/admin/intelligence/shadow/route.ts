@@ -31,7 +31,7 @@ async function callVideoFallback(prompt: string, youtubeUrl: string): Promise<st
       'X-Title': 'Desafío Hípico Shadow',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash-lite',
+      model: 'google/gemini-2.5-flash',
       messages: [{
         role: 'user',
         content: [
@@ -451,7 +451,7 @@ export async function POST(req: NextRequest) {
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           console.error(`[shadow] video fallback failed for ${video.videoId}:`, errMsg);
-          videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, method: 'video_fallback', expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
+          videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, method: 'video_fallback', expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: `[fallback] ${errMsg.slice(0, 250)}` });
           continue;
         }
       }
