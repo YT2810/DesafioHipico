@@ -201,19 +201,38 @@ async function assertAdminOrStaff(req: NextRequest): Promise<string[] | NextResp
 }
 
 async function resolveChannelId(url: string): Promise<string | null> {
-  const handleMatch = url.match(/youtube\.com\/@([A-Za-z0-9_.-]+)/);
-  if (handleMatch) {
-    try {
-      const res = await fetch(`https://www.youtube.com/@${handleMatch[1]}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'es-VE,es;q=0.9' },
-      });
-      const html = await res.text();
-      const m = html.match(/"channelId":"([A-Za-z0-9_-]+)"/);
-      return m?.[1] ?? null;
-    } catch { return null; }
+  // Direct channel ID
+  const directMatch = url.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]+)/);
+  if (directMatch) return directMatch[1];
+
+  // Extract handle from @handle, /c/, or /user/ URLs
+  const handleMatch =
+    url.match(/youtube\.com\/@([A-Za-z0-9_.-]+)/) ||
+    url.match(/youtube\.com\/c\/([A-Za-z0-9_.-]+)/) ||
+    url.match(/youtube\.com\/user\/([A-Za-z0-9_.-]+)/);
+  if (!handleMatch) return null;
+
+  const handle = handleMatch[1];
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    console.error('[shadow] YOUTUBE_API_KEY not set');
+    return null;
   }
-  const directMatch = url.match(/youtube\.com\/channel\/([A-Za-z0-9_-]+)/);
-  return directMatch?.[1] ?? null;
+
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(handle)}&key=${apiKey}`
+    );
+    if (!res.ok) {
+      console.error('[shadow] YouTube API error', res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return data?.items?.[0]?.id ?? null;
+  } catch (e) {
+    console.error('[shadow] resolveChannelId failed', e);
+    return null;
+  }
 }
 
 interface VideoItem {
