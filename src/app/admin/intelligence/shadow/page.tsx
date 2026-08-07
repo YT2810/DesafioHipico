@@ -7,7 +7,7 @@ interface YouTubeSource { _id: string; name: string; handle: string | null; link
 type DiffStatus = 'match' | 'similar' | 'missing' | 'extra';
 interface DiffMark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label?: string; rawLabel?: string; status: DiffStatus; matchedWith?: string; confidence: number; }
 interface RaceDiff { raceNumber: number; raceId: string | null; dbMarks: DiffMark[]; extractedMarks: DiffMark[]; matchScore: number; hasDbData: boolean; }
-interface VideoResult { videoId: string; title: string; videoUrl: string; publishedAt: string; transcriptAvailable: boolean; expertNames: string[]; diffs: RaceDiff[]; globalMatchScore: number; racesExtracted: number; }
+interface VideoResult { videoId: string; title: string; videoUrl: string; publishedAt: string; transcriptAvailable: boolean; expertNames: string[]; diffs: RaceDiff[]; globalMatchScore: number; racesExtracted: number; llmError?: string; }
 interface ShadowResult { success: boolean; channelId?: string; meetingLabel: string; videos: VideoResult[]; overallMatchScore: number | null; message?: string; }
 interface AccumEntry { sourceId: string; channelLabel: string; channelUrl: string; result: ShadowResult; }
 
@@ -90,10 +90,11 @@ function VideoCard({ video }: { video: VideoResult }) {
             {new Date(video.publishedAt).toLocaleDateString('es-VE', { weekday:'short', day:'numeric', month:'short' })}
             {video.expertNames.length > 0 && <span className="ml-2 text-blue-400">· {video.expertNames.join(', ')}</span>}
           </p>
+          {video.llmError && <p className="text-[10px] text-red-400 mt-1 break-all">{video.llmError}</p>}
         </div>
         <div className="shrink-0 text-center min-w-[56px]">
           {!video.transcriptAvailable
-            ? <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-lg block">Sin transcripción</span>
+            ? <span className="text-xs text-red-500/80 bg-gray-800 px-2 py-1 rounded-lg block text-center">{video.llmError ? 'Error LLM' : 'Sin transcripción'}</span>
             : <>
                 <p className={`text-xl font-bold ${scoreColor(video.globalMatchScore)}`}>{video.globalMatchScore}%</p>
                 <p className="text-[10px] text-gray-600">{video.racesExtracted} carreras</p>
