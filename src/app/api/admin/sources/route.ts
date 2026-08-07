@@ -84,3 +84,38 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ sources: result });
 }
+
+export async function PATCH(req: NextRequest) {
+  const secure = req.nextUrl.protocol === 'https:';
+  const cookieName = secure ? '__Secure-authjs.session-token' : 'authjs.session-token';
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, cookieName });
+  const roles: string[] = (token?.roles as string[]) ?? [];
+  if (!token || !roles.some(r => ['admin', 'staff'].includes(r))) {
+    return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => null);
+  if (!body?._id) return NextResponse.json({ error: '_id requerido.' }, { status: 400 });
+
+  await dbConnect();
+
+  const { _id, name, platform, handle, link } = body;
+  const update: Record<string, string | null> = {};
+  if (name !== undefined) update.name = name.trim();
+  if (platform !== undefined) update.platform = platform;
+  if (handle !== undefined) update.handle = handle.trim() || null;
+  if (link !== undefined) update.link = link.trim() || null;
+
+  const updated = await ExpertSource.findByIdAndUpdate(_id, { $set: update }, { new: true }).lean() as any;
+  if (!updated) return NextResponse.json({ error: 'Fuente no encontrada.' }, { status: 404 });
+
+  return NextResponse.json({
+    source: {
+      _id: updated._id.toString(),
+      name: updated.name,
+      platform: updated.platform,
+      handle: updated.handle ?? null,
+      link: updated.link ?? null,
+    },
+  });
+}

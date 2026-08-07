@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { KNOWN_SOURCES } from '@/lib/knownSources';
 
 const GOLD = '#D4AF37';
+const PLATFORMS = ['YouTube', 'X', 'Instagram', 'Telegram', 'Revista', 'Otro'];
 
 interface SourceStatus {
   _id: string;
@@ -33,12 +34,103 @@ const PRIORITY_COLORS: Record<string, string> = {
   baja: 'bg-gray-800 text-gray-400 border-gray-700',
 };
 
+interface EditState { name: string; platform: string; handle: string; link: string; }
+
+interface SourceCardProps {
+  s: SourceStatus;
+  editing: boolean;
+  editState: EditState;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onChange: (s: EditState) => void;
+  saving: boolean;
+  saveError: string;
+  rightSlot: React.ReactNode;
+}
+
+function SourceCard({ s, editing, editState, onEdit, onCancel, onSave, onChange, saving, saveError, rightSlot }: SourceCardProps) {
+  const borderCls = s.hasForecastForMeeting ? 'bg-green-950/25 border-green-700/50' : 'bg-yellow-950/10 border-yellow-800/30';
+  const icon = s.hasForecastForMeeting ? '✅' : '🟡';
+
+  if (editing) {
+    return (
+      <div className="rounded-xl px-4 py-3 border border-yellow-600/60 bg-yellow-950/20 space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-500 uppercase">Nombre</label>
+            <input value={editState.name} onChange={e => onChange({ ...editState, name: e.target.value })}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-yellow-600" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-500 uppercase">Plataforma</label>
+            <select value={editState.platform} onChange={e => onChange({ ...editState, platform: e.target.value })}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-yellow-600">
+              {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-500 uppercase">Handle (sin @)</label>
+            <input value={editState.handle} onChange={e => onChange({ ...editState, handle: e.target.value })}
+              placeholder="nombredelcanal"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-500 uppercase">URL del canal</label>
+            <input value={editState.link} onChange={e => onChange({ ...editState, link: e.target.value })}
+              placeholder="https://www.youtube.com/@canal"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
+          </div>
+        </div>
+        {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+        <div className="flex gap-2">
+          <button onClick={onSave} disabled={saving}
+            className="text-xs font-bold text-black px-4 py-1.5 rounded-lg disabled:opacity-50"
+            style={{ backgroundColor: GOLD }}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </button>
+          <button onClick={onCancel} className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg border border-gray-700">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-center justify-between rounded-xl px-4 py-3 border ${borderCls}`}>
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-base shrink-0">{icon}</span>
+        <div className="min-w-0">
+          <span className="text-sm font-semibold text-white">{s.name}</span>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-xs text-gray-500">{s.platform}</span>
+            {s.handle && <span className="text-xs text-sky-400">@{s.handle}</span>}
+            {s.link && <a href={s.link} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-600 hover:text-sky-400 truncate max-w-[140px]">{s.link.replace('https://www.youtube.com/', '')}</a>}
+            {!s.hasForecastForMeeting && s.totalForecasts > 0 && <span className="text-xs text-gray-600">{s.totalForecasts} pronóst. totales</span>}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={onEdit} className="text-xs text-gray-500 hover:text-yellow-400 transition-colors px-2 py-1 rounded-lg border border-gray-700/50 hover:border-yellow-700/50">
+          ✏️
+        </button>
+        {rightSlot}
+      </div>
+    </div>
+  );
+}
+
 export default function SourcesPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedMeetingId, setSelectedMeetingId] = useState('');
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState>({ name: '', platform: '', handle: '', link: '' });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     // Fetch recent meetings (past + upcoming) sorted newest first
@@ -74,6 +166,32 @@ export default function SourcesPage() {
     return false;
   }
   const neverIngestedKnown = KNOWN_SOURCES.filter(k => !sources.some(s => matchesKnown(s, k)));
+
+  function startEdit(s: SourceStatus) {
+    setEditingId(s._id);
+    setEditState({ name: s.name, platform: s.platform, handle: s.handle ?? '', link: s.link ?? '' });
+    setSaveError('');
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await fetch('/api/admin/sources', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ _id: id, ...editState }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSaveError(data.error ?? 'Error al guardar'); return; }
+      setSources(prev => prev.map(s => s._id === id
+        ? { ...s, name: data.source.name, platform: data.source.platform, handle: data.source.handle, link: data.source.link }
+        : s
+      ));
+      setEditingId(null);
+    } catch { setSaveError('Error de red'); }
+    finally { setSaving(false); }
+  }
 
   const selectedMeeting = meetings.find(m => m._id === selectedMeetingId);
 
@@ -134,20 +252,16 @@ export default function SourcesPage() {
       {!loading && uploadedSources.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xs font-bold text-green-500 uppercase tracking-wide">✅ Con pronósticos esta reunión ({uploadedSources.length})</h2>
-          {uploadedSources.map((s, i) => (
-            <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-green-950/25 border-green-700/50">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-lg">✅</span>
-                <div className="min-w-0">
-                  <span className="text-sm font-semibold text-white">{s.name}</span>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-xs text-gray-500">{s.platform}</span>
-                    {s.handle && <span className="text-xs text-sky-400">@{s.handle}</span>}
-                  </div>
-                </div>
-              </div>
-              <span className="text-sm font-bold text-green-400 shrink-0">{s.forecastCountForMeeting} C</span>
-            </div>
+          {uploadedSources.map((s) => (
+            <SourceCard key={s._id} s={s}
+              editing={editingId === s._id} editState={editState}
+              onEdit={() => startEdit(s)}
+              onCancel={() => setEditingId(null)}
+              onSave={() => saveEdit(s._id)}
+              onChange={setEditState}
+              saving={saving} saveError={saveError}
+              rightSlot={<span className="text-sm font-bold text-green-400 shrink-0">{s.forecastCountForMeeting} C</span>}
+            />
           ))}
         </div>
       )}
@@ -156,23 +270,18 @@ export default function SourcesPage() {
       {!loading && pendingSources.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xs font-bold text-yellow-600 uppercase tracking-wide mt-2">🟡 En DB — sin pronóstico esta reunión ({pendingSources.length})</h2>
-          {pendingSources.map((s, i) => (
-            <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border bg-yellow-950/10 border-yellow-800/30">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-base">🟡</span>
-                <div className="min-w-0">
-                  <span className="text-sm font-medium text-white">{s.name}</span>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-xs text-gray-500">{s.platform}</span>
-                    {s.handle && <span className="text-xs text-sky-400">@{s.handle}</span>}
-                    <span className="text-xs text-gray-600">{s.totalForecasts} pronóst. totales</span>
-                  </div>
-                </div>
-              </div>
-              <Link href="/admin/intelligence" className="text-xs font-bold text-black px-3 py-1.5 rounded-lg shrink-0" style={{ backgroundColor: GOLD }}>
-                Subir
-              </Link>
-            </div>
+          {pendingSources.map((s) => (
+            <SourceCard key={s._id} s={s}
+              editing={editingId === s._id} editState={editState}
+              onEdit={() => startEdit(s)}
+              onCancel={() => setEditingId(null)}
+              onSave={() => saveEdit(s._id)}
+              onChange={setEditState}
+              saving={saving} saveError={saveError}
+              rightSlot={
+                <Link href="/admin/intelligence" className="text-xs font-bold text-black px-3 py-1.5 rounded-lg shrink-0" style={{ backgroundColor: GOLD }}>Subir</Link>
+              }
+            />
           ))}
         </div>
       )}
