@@ -30,7 +30,7 @@ async function callGeminiVideoShadow(prompt: string, youtubeUrl: string): Promis
       'X-Title': 'Desafío Hípico Shadow',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-001',
+      model: 'google/gemini-2.5-flash-lite',
       messages: [{
         role: 'user',
         content: [
