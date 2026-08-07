@@ -13,44 +13,23 @@ import Forecast from '@/models/Forecast';
 import HandicapperProfile from '@/models/HandicapperProfile';
 import '@/models/Horse';
 import { callLLM, findBestMatch, RaceEntryItem } from '@/services/ai/geminiProcessor';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
-// ── Shadow LLM call: OpenRouter with gemini-2.0-flash (cheaper than 2.5-flash) ──
-async function callGeminiVideoShadow(prompt: string, youtubeUrl: string): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY no configurado.');
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://desafiohipico.com',
-      'X-Title': 'Desafío Hípico Shadow',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash-lite',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'video_url', video_url: { url: youtubeUrl } },
-        ],
-      }],
-      temperature: 0.1,
-      max_tokens: 8192,
-    }),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`OpenRouter error ${res.status}: ${text.slice(0, 300)}`);
-  let data: any;
-  try { data = JSON.parse(text); } catch { throw new Error(`Respuesta no-JSON de OpenRouter: ${text.slice(0, 200)}`); }
-  const choice = data?.choices?.[0];
-  const content = choice?.message?.content ?? '';
-  if (!content) throw new Error(`Sin contenido del modelo. finish_reason: ${choice?.finish_reason}`);
-  if (choice?.finish_reason === 'length') return content + '__TRUNCATED__';
-  return content;
+// ── Fetch YouTube transcript via youtube-transcript (free, no API key needed) ──
+async function fetchYouTubeTranscript(videoId: string): Promise<string | null> {
+  try {
+    const items = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
+      .catch(() => YoutubeTranscript.fetchTranscript(videoId));
+    if (!items || items.length === 0) return null;
+    const text = items.map((i: any) => i.text).join(' ').replace(/\s+/g, ' ').trim();
+    return text.length > 100 ? text : null;
+  } catch (e) {
+    console.warn(`[shadow] transcript fetch failed for ${videoId}:`, e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 // ── Master prompt with enrolled entries as context ────────────────────────────
@@ -61,28 +40,38 @@ function buildMasterPrompt(
     .map(r => `C${r.raceNumber}: ${r.entries.map(e => `${e.dorsal} ${e.horseName}`).join(', ')}`)
     .join('\n');
 
-  return `Eres un extractor de pronósticos hípicos venezolanos. Puede haber UNO O VARIOS pronosticadores en el mismo programa.
+  return `Eres un extractor de pronósticos hípicos venezolanos. Analiza la TRANSCRIPCIÓN de un video y extrae los pronósticos. Puede haber UNO O VARIOS pronosticadores en el mismo programa.
 
-INSCRITOS DE LA JORNADA (úsalos para corregir nombres mal pronunciados o transcritos):
+INSCRITOS DE LA JORNADA (úsalos para corregir nombres mal pronunciados o mal transcritos):
 ${entriesContext}
 
-REGLAS:
-- Extrae SOLO caballos recomendados: "me gusta", "fijo", "línea", "lo acompaño", "mi selección", "trilogía"
-- Excluye: "no me gusta", "descarto", "difícil", "rival", "enemigo"
-- MÚLTIPLES pronosticadores: usa expertName con el alias mencionado. Si no se presenta, "Invitado 1", "Invitado 2"
-- UN SOLO pronosticador: expertName puede ser null
-- Corrige nombres con los inscritos: si dicen "Karibel" e inscrito es "Caribean Gold" → usa "Caribean Gold"
-- Dorsales: "el tres" → dorsalNumber:3. Si no sabes con certeza, omítelo
-- Emojis, @menciones, hashtags → ignorar
+REGLAS DE INCLUSIÓN:
+- Extrae SOLO caballos recomendados por el pronosticador: "me gusta", "fijo", "línea", "lo acompaño", "mi selección", "trilogía", "la morocha", "lo juego"
+- Excluye menciones negativas: "no me gusta", "descarto", "difícil", "rival", "enemigo", "hay que eliminar"
+- Si un pronosticador menciona "hay más opciones" o "otros con oportunidad" sin darlos como selección propia → NO los incluyas
+
+REGLA DE ENTREVISTAS:
+- Si en la transcripción hay una entrevista a un jinete, entrenador, propietario o agente hablando de sus conducidos del día: sus declaraciones SON pronósticos separados con su propio expertName (el nombre/alias de quien habla)
+- NO mezcles las marcas del entrevistado con las del conductor/pronosticador principal del canal
+
+MÚCTIPLES PRONOSTICADORES:
+- Si hay varios pronosticadores, usa expertName con el alias/nombre como se presentan
+- Si solo hay uno y no se presenta: expertName = null
+
+CORRECCIÓN DE NOMBRES:
+- Usa la lista de inscritos para corregir nombres mal transcritos
+- Ejemplo: "Karibel" + inscrito "Caribean Gold" → rawName:"CARIBEAN GOLD"
+- Dorsales: "el tres", "el número 5" → dorsalNumber:3/5. Si no estás seguro, omítelo
 
 FORMATOS DE CARRERA:
-- "C1","1C","1ra carrera","primera" → raceType:"carrera", raceNumber:1
-- "1V","primera válida","1ra válida" → raceType:"valida", raceNumber:1 (hasta 6V)
-- Bloque "VÁLIDAS","5y6" → raceType:"valida"
+- "C1","1C","1ra carrera","primera carrera" → raceType:"carrera", raceNumber:1
+- "1V","primera válida","1ra válida","1ra valida" → raceType:"valida", raceNumber:1 (hasta 6V)
+- Sección "VÁLIDAS" o "5y6" → todo lo siguiente es raceType:"valida"
+- "NO VÁLIDAS" → todo lo siguiente es raceType:"carrera"
 
-ETIQUETAS (rawLabel verbatim): Fijo, Línea, SF, SSF, Martillazo, Garrotazo, Encapillao, Casi Fijo
+ETIQUETAS (rawLabel, verbatim): Fijo, Línea, SF, SSF, Martillazo, Garrotazo, Encapillao, Casi Fijo
 
-JSON PURO sin markdown:
+JSON PURO sin markdown ni bloques de código:
 {"forecasts":[{"expertName":null,"raceNumber":1,"raceType":"carrera","hasOrder":true,"marks":[{"preferenceOrder":1,"dorsalNumber":3,"rawName":"CARIBEAN GOLD","rawLabel":"Fijo"}]}]}`;
 }
 
@@ -395,15 +384,22 @@ export async function POST(req: NextRequest) {
     const videoResults: VideoResult[] = [];
 
     for (const video of videos.slice(0, 3)) {
-      const prompt = buildMasterPrompt(enrolledEntries);
+      const transcript = await fetchYouTubeTranscript(video.videoId);
+      if (!transcript) {
+        console.warn(`[shadow] no transcript for ${video.videoId} — ${video.title}`);
+        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: 'Sin transcripción disponible para este video.' });
+        continue;
+      }
+
+      const prompt = buildMasterPrompt(enrolledEntries) + `\n\nTRANSCRIPCIÓN:\n${transcript.slice(0, 14000)}`;
       let rawLLM = '';
       try {
-        rawLLM = await callGeminiVideoShadow(prompt, video.videoUrl);
+        rawLLM = await callLLM(prompt);
         console.log(`[shadow] video processed: ${video.videoId} — ${video.title}`);
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
-        console.error(`[shadow] callLLMVideo failed for ${video.videoId}:`, errMsg);
-        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: false, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
+        console.error(`[shadow] callLLM failed for ${video.videoId}:`, errMsg);
+        videoResults.push({ videoId: video.videoId, title: video.title, videoUrl: video.videoUrl, publishedAt: video.publishedAt.toISOString(), transcriptAvailable: true, expertNames: [], diffs: [], globalMatchScore: 0, racesExtracted: 0, llmError: errMsg.slice(0, 200) });
         continue;
       }
 
