@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import SocialProofToast from '@/components/SocialProofToast';
 
 const GOLD = '#D4AF37';
 const REFRESH_MS = 60_000;
@@ -210,6 +211,7 @@ export default function EnVivoClient() {
   const dateStr = dt ? dt.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
   return (
+    <>
     <div className="min-h-screen bg-gray-950 text-gray-100">
 
       {/* ── Header ── */}
@@ -379,5 +381,7 @@ export default function EnVivoClient() {
 
       </div>
     </div>
+    <SocialProofToast />
+    </>
   );
 }
