@@ -954,7 +954,7 @@ export default function PronosticosPage() {
         )}
       </main>
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
-      {!isPrivileged && <SocialProofToast onTopUp={() => setShowTopUp(true)} />}
+      {!isPrivileged && !(user as any)?.hasPurchasedThisWeek && <SocialProofToast onTopUp={() => setShowTopUp(true)} />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import MagicToken from '@/models/MagicToken';
 import SiteConfig, { getSiteConfig } from '@/models/SiteConfig';
+import GoldTransaction from '@/models/GoldTransaction';
 import type { NextAuthConfig } from 'next-auth';
 
 const ADMIN_EMAILS = ['yolfry@gmail.com'];
@@ -176,8 +177,16 @@ export const authConfig: NextAuthConfig = {
       if (!user && token.userId) {
         try {
           await dbConnect();
-          const fresh = await User.findById(token.userId).select('balance').lean() as any;
+          const [fresh, recentPurchase] = await Promise.all([
+            User.findById(token.userId).select('balance').lean() as any,
+            GoldTransaction.findOne({
+              userId: token.userId,
+              type: 'purchase',
+              createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+            }).select('_id').lean(),
+          ]);
           if (fresh?.balance) token.balance = fresh.balance;
+          token.hasPurchasedThisWeek = !!recentPurchase;
         } catch {
           // silent — keep existing token value
         }
@@ -196,7 +205,8 @@ export const authConfig: NextAuthConfig = {
       session.user.fullName         = token.fullName as string | undefined;
       session.user.identityDocument = token.identityDocument as string | undefined;
       session.user.phoneNumber      = token.phoneNumber as string | undefined;
-      session.user.billingComplete  = token.billingComplete as boolean | undefined;
+      session.user.billingComplete      = token.billingComplete as boolean | undefined;
+      session.user.hasPurchasedThisWeek = token.hasPurchasedThisWeek as boolean | undefined;
       return session;
     },
   },
