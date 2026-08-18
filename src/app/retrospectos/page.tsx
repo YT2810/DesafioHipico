@@ -217,7 +217,7 @@ export default async function RetrospectosPage() {
                   📊 El Factor de Victoria acierta Top 3 en ~80% de las carreras
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Consenso de +30 handicappers · Ver pronósticos de hoy desde 2G · <a href="/faq" className="text-yellow-600 underline" onClick={e => e.stopPropagation()}>¿Cómo funciona?</a>
+                  Consenso de +30 handicappers · Ver pronósticos de hoy desde 2G
                 </p>
               </div>
               <span className="shrink-0 text-xs font-black px-3 py-2 rounded-xl text-black whitespace-nowrap" style={{ backgroundColor: '#D4AF37' }}>
