@@ -312,7 +312,7 @@ export default function ResultadosClient() {
         )}
       </main>
     </div>
-    <SocialProofToast />
+    <SocialProofToast firstDelay={15000} repeatInterval={20000} />
     </>
   );
 }

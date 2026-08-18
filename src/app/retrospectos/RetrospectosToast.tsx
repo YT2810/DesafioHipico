@@ -3,5 +3,5 @@
 import SocialProofToast from '@/components/SocialProofToast';
 
 export default function RetrospectosToast() {
-  return <SocialProofToast />;
+  return <SocialProofToast firstDelay={15000} repeatInterval={20000} />;
 }

@@ -402,7 +402,7 @@ export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackI
 
       </div>
     </div>
-    <SocialProofToast />
+    <SocialProofToast firstDelay={15000} repeatInterval={20000} />
     </>
   );
 }

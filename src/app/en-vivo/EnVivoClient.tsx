@@ -381,7 +381,7 @@ export default function EnVivoClient() {
 
       </div>
     </div>
-    <SocialProofToast />
+    <SocialProofToast firstDelay={15000} repeatInterval={20000} pronosticosLink />
     </>
   );
 }
