@@ -8,6 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 import ExpertTickerBar from '@/components/ExpertTickerBar';
 import TopUpModal from '@/components/TopUpModal';
 import BackToHome from '@/components/BackToHome';
+import SocialProofToast from '@/components/SocialProofToast';
 
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; e1?: number | null; eGeneral?: number; }
@@ -953,6 +954,7 @@ export default function PronosticosPage() {
         )}
       </main>
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
+      {!isPrivileged && goldBalance === 0 && <SocialProofToast onTopUp={() => setShowTopUp(true)} />}
     </div>
   );
 }
