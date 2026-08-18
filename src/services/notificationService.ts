@@ -13,6 +13,7 @@ import dbConnect from '@/lib/mongodb';
 import Notification, { NotificationType } from '@/models/Notification';
 import User from '@/models/User';
 import { Types } from 'mongoose';
+import { sendTelegramMessage } from './telegramService';
 
 interface NotifPayload {
   type: NotificationType;
@@ -95,6 +96,20 @@ export async function notifyTopUpPending(
     link: '/admin/topup',
     data: { userId, ref, goldAmount: String(goldAmount) },
   });
+
+  // Push Telegram al admin — fire-and-forget
+  const lines = [
+    '💰 <b>Nueva recarga pendiente</b>',
+    '',
+    `📦 Plan: <b>${extras?.packageLabel ?? '—'}</b> · ${goldAmount} Gold`,
+    extras?.amountBs ? `💵 Monto: <b>Bs ${extras.amountBs.toLocaleString('es-VE')}</b>` : '',
+    extras?.bank ? `🏦 Banco: ${extras.bank}` : '',
+    extras?.phone ? `📞 Tel: ${extras.phone}` : '',
+    `🔖 Ref: <code>${ref}</code>`,
+    '',
+    '👉 <a href="https://desafiohipico.com/admin/topup">Aprobar en el panel →</a>',
+  ].filter(Boolean).join('\n');
+  sendTelegramMessage(lines).catch(() => {});
 }
 
 export async function notifyTopUpApproved(userId: string, goldAmount: number) {
