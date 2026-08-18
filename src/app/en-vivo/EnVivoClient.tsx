@@ -295,7 +295,7 @@ export default function EnVivoClient() {
                 📊 El Factor de Victoria acierta Top 3 en ~80% de las carreras
               </p>
               <p className="text-xs text-gray-300 mt-0.5 leading-snug">
-                Mientras ves la carrera, el consenso de +30 handicappers ya está publicado.
+                Mientras ves la carrera, el consenso ya está publicado. <a href="/faq" className="text-yellow-500 underline" onClick={e => e.stopPropagation()}>¿Cómo funciona?</a>
               </p>
             </div>
             <span

@@ -174,6 +174,16 @@ export default function ConfigTab({ bcv }: { bcv: BcvStatus | null }) {
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Precios de paquetes Gold</p>
+        <p className="text-xs text-gray-500 mb-3">Edita el precio en Bs de los 3 paquetes. El cambio se refleja inmediatamente en el modal de recarga.</p>
+        <Link href="/admin/gold-packages"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-black transition-colors"
+          style={{ backgroundColor: GOLD }}>
+          💰 Editar precios →
+        </Link>
+      </div>
+
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
         <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Tasa de Cambio BCV</p>
         <div className="flex items-center justify-between">
           <div>

@@ -177,7 +177,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
                 <p>📌 Realiza un <strong className="text-white">Pago Móvil</strong> al número de la plataforma.</p>
                 <p>📋 Luego completa el formulario con el número de referencia.</p>
                 <p>⏱ Tu saldo se acredita en menos de 24 horas hábiles.</p>
-                <p>📩 ¿Dudas? <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-500 underline">desafiohipicoapp@gmail.com</a></p>
+                <p>📩 ¿Dudas? <a href="/faq" className="text-yellow-500 underline">Ver FAQ</a> · <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-500 underline">desafiohipicoapp@gmail.com</a></p>
               </div>
 
               <button onClick={() => setStep('destination')}

@@ -426,6 +426,7 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
             )}
             {meetingPassError && <p className="text-xs text-red-400 text-center">{meetingPassError}</p>}
           </div>
+          <p className="text-[11px] text-gray-600 text-center">¿Dudas sobre cómo funciona? <a href="/faq" className="text-yellow-700 hover:text-yellow-500 underline">Ver FAQ →</a></p>
         </div>
       )}
 
