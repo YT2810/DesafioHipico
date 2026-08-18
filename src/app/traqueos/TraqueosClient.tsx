@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import SocialProofToast from '@/components/SocialProofToast';
 
 const GOLD = '#D4AF37';
 
@@ -160,6 +161,7 @@ export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackI
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gray-950 text-gray-100">
 
       {/* ── Header ── */}
@@ -400,5 +402,7 @@ export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackI
 
       </div>
     </div>
+    <SocialProofToast />
+    </>
   );
 }

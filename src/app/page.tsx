@@ -4,6 +4,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import TopUpModal from '@/components/TopUpModal';
+import SocialProofToast from '@/components/SocialProofToast';
 import NotificationBell from '@/components/NotificationBell';
 import GoldToast from '@/components/GoldToast';
 import ContextualBanner from '@/components/ContextualBanner';
@@ -479,6 +480,7 @@ export default function HomePage() {
       </main>
 
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
+      {!isPrivileged && <SocialProofToast onTopUp={() => setShowTopUp(true)} />}
 
       {/* Sticky bottom CTA — non-logged users OR logged users with 0 gold */}
       {previewForecasts.length > 1 && status !== 'loading' && (

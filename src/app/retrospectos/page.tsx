@@ -3,6 +3,7 @@ import Link from 'next/link';
 import connectMongo from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
 import '@/models/Track';
+import RetrospectosToast from './RetrospectosToast';
 
 const BASE = 'https://www.desafiohipico.com';
 
@@ -169,6 +170,7 @@ export default async function RetrospectosPage() {
 
   return (
     <>
+      <RetrospectosToast />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
 

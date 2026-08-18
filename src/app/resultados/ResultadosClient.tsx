@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import SocialProofToast from '@/components/SocialProofToast';
 
 const ChevronDown  = ({ className }: { className?: string }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>;
 const ChevronRight = ({ className }: { className?: string }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>;
@@ -230,6 +231,7 @@ export default function ResultadosClient() {
   }, [page]);
 
   return (
+    <>
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Sticky header */}
       <header className="sticky top-0 z-20 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
@@ -310,5 +312,7 @@ export default function ResultadosClient() {
         )}
       </main>
     </div>
+    <SocialProofToast />
+    </>
   );
 }
