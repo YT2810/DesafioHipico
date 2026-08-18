@@ -480,7 +480,7 @@ export default function HomePage() {
       </main>
 
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} />}
-      {!isPrivileged && <SocialProofToast onTopUp={() => setShowTopUp(true)} />}
+      {!isPrivileged && <SocialProofToast onTopUp={() => setShowTopUp(true)} isGuest={!isLoggedIn} />}
 
       {/* Sticky bottom CTA — non-logged users OR logged users with 0 gold */}
       {previewForecasts.length > 1 && status !== 'loading' && (

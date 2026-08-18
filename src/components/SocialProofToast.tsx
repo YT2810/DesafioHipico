@@ -19,12 +19,30 @@ function timeLabel(minutes: number): string {
   return 'esta semana';
 }
 
-export default function SocialProofToast({ onTopUp }: { onTopUp?: () => void }) {
+function Avatar({ alias }: { alias: string }) {
+  const initial = alias.replace(/\*/g, '').trim()[0]?.toUpperCase() ?? '?';
+  return (
+    <div
+      className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-extrabold text-black"
+      style={{ background: 'linear-gradient(135deg, #D4AF37 0%, #F5D76E 100%)' }}
+    >
+      {initial}
+    </div>
+  );
+}
+
+export default function SocialProofToast({
+  onTopUp,
+  isGuest,
+}: {
+  onTopUp?: () => void;
+  isGuest?: boolean;
+}) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const indexRef = useRef(0);
 
   useEffect(() => {
     fetch('/api/activity/recent')
@@ -33,72 +51,99 @@ export default function SocialProofToast({ onTopUp }: { onTopUp?: () => void }) 
       .catch(() => {});
   }, []);
 
-  const showToast = useCallback((idx: number) => {
+  const showNext = useCallback((evts: ActivityEvent[]) => {
+    if (!evts.length) return;
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    setIndex(idx);
+    const next = (indexRef.current + 1) % evts.length;
+    indexRef.current = next;
+    setIndex(next);
     setVisible(true);
-    hideTimer.current = setTimeout(() => setVisible(false), 6000);
+    hideTimer.current = setTimeout(() => setVisible(false), 5000);
   }, []);
 
   useEffect(() => {
-    if (!events.length || dismissed) return;
-    // First show after 10s
-    const first = setTimeout(() => showToast(0), 10000);
-    // Repeat every 30s
-    const interval = setInterval(() => {
-      setIndex(prev => {
-        const next = (prev + 1) % events.length;
-        showToast(next);
-        return next;
-      });
-    }, 30000);
-    return () => { clearTimeout(first); clearInterval(interval); if (hideTimer.current) clearTimeout(hideTimer.current); };
-  }, [events, dismissed, showToast]);
+    if (!events.length) return;
+    // First show after 12s
+    const first = setTimeout(() => {
+      indexRef.current = -1;
+      showNext(events);
+    }, 12000);
+    // Repeat every 20s indefinitely
+    const interval = setInterval(() => showNext(events), 20000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [events, showNext]);
 
-  if (!events.length || dismissed || !visible) return null;
+  if (!events.length || !visible) return null;
   const ev = events[index];
   const isPurchase = ev.type === 'purchase' || ev.type === 'meeting_pass';
 
   return (
     <div
-      className="fixed bottom-24 left-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 pointer-events-auto"
-      style={{ animation: 'spFadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both' }}
+      className="fixed top-20 left-1/2 z-[60] w-[calc(100vw-24px)] max-w-[420px] -translate-x-1/2 pointer-events-auto"
+      style={{ animation: 'spSlideDown 0.45s cubic-bezier(0.16,1,0.3,1) both' }}
     >
       <style>{`
-        @keyframes spFadeUp {
-          from { opacity: 0; transform: translateX(-50%) translateY(16px); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        @keyframes spSlideDown {
+          from { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.96); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0)      scale(1);    }
         }
       `}</style>
-      <div className={`rounded-2xl px-4 py-3 shadow-2xl flex items-start gap-3 border ${isPurchase ? 'bg-gray-900 border-yellow-600/50' : 'bg-gray-900 border-gray-700/60'}`}>
-        {/* Emoji icon */}
-        <span className="text-xl shrink-0 mt-0.5">{ev.emoji}</span>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-100 leading-snug">
-            <span className="font-bold text-yellow-300">{ev.alias}</span>{' '}
-            <span>{ev.action}</span>
-          </p>
-          <p className="text-[10px] text-gray-500 mt-0.5">{timeLabel(ev.minutesAgo)}</p>
-        </div>
+      <div
+        className="rounded-2xl overflow-hidden shadow-2xl"
+        style={{
+          background: '#0f0f0f',
+          border: '1px solid rgba(212,175,55,0.35)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(212,175,55,0.15)',
+        }}
+      >
+        {/* Gold accent bar top */}
+        <div className="h-[3px] w-full" style={{ background: 'linear-gradient(90deg, #D4AF37, #F5D76E, #D4AF37)' }} />
 
-        {/* CTA only for purchase-type events */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {isPurchase && onTopUp && (
-            <button
-              onClick={() => { setVisible(false); onTopUp(); }}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg text-black whitespace-nowrap"
-              style={{ backgroundColor: '#D4AF37' }}
-            >
-              Ver planes
-            </button>
+        <div className="flex items-center gap-3 px-4 py-3">
+          {/* Avatar */}
+          <Avatar alias={ev.alias} />
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white leading-tight">
+              {ev.alias}
+            </p>
+            <p className="text-sm text-gray-300 leading-snug mt-0.5">
+              {ev.emoji} {ev.action}
+            </p>
+            <p className="text-xs text-yellow-500/80 mt-1 font-medium">
+              {timeLabel(ev.minutesAgo)}
+            </p>
+          </div>
+
+          {/* CTA */}
+          {(isPurchase || isGuest) && (
+            <div className="shrink-0">
+              {isGuest ? (
+                <a
+                  href="/api/auth/signin"
+                  className="block text-xs font-extrabold px-3 py-2 rounded-xl text-black whitespace-nowrap text-center"
+                  style={{ background: 'linear-gradient(135deg,#D4AF37,#F5D76E)' }}
+                >
+                  Entrar gratis
+                  <span className="block text-[9px] font-normal opacity-70">es gratis →</span>
+                </a>
+              ) : onTopUp ? (
+                <button
+                  onClick={() => { setVisible(false); onTopUp(); }}
+                  className="text-xs font-extrabold px-3 py-2 rounded-xl text-black whitespace-nowrap"
+                  style={{ background: 'linear-gradient(135deg,#D4AF37,#F5D76E)' }}
+                >
+                  Ver planes →
+                </button>
+              ) : null}
+            </div>
           )}
-          <button
-            onClick={() => { setVisible(false); setDismissed(true); }}
-            className="text-gray-600 hover:text-gray-400 text-xs leading-none px-1"
-            aria-label="Cerrar"
-          >✕</button>
         </div>
       </div>
     </div>
