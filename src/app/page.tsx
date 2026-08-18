@@ -306,6 +306,36 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* ── FV accuracy charts ── */}
+        {(fvStats.rinconada?.totalRaces || fvStats.valencia?.totalRaces) ? (
+          <div className="w-full space-y-4">
+            <div className="text-left">
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">📊 Efectividad del Factor de Victoria</p>
+              <p className="text-[11px] text-gray-600 mt-0.5">% de carreras donde el ganador estuvo en las 3 primeras marcas del consenso</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {fvStats.rinconada?.totalRaces ? (
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center">
+                  <p className="text-sm font-bold text-white mb-0.5">La Rinconada</p>
+                  <p className="text-xs text-gray-500 mb-3">{fvStats.rinconada.totalRaces} carreras evaluadas</p>
+                  <FvDonut data={fvStats.rinconada} />
+                </div>
+              ) : null}
+              {fvStats.valencia?.totalRaces ? (
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center">
+                  <p className="text-sm font-bold text-white mb-0.5">Valencia</p>
+                  <p className="text-xs text-gray-500 mb-3">{fvStats.valencia.totalRaces} carreras evaluadas</p>
+                  <FvDonut data={fvStats.valencia} />
+                </div>
+              ) : null}
+            </div>
+            <Link href="/pronosticos"
+              className="block rounded-2xl border border-yellow-700/50 bg-gradient-to-r from-yellow-950/40 to-yellow-900/10 p-3 hover:border-yellow-600/70 transition-colors group text-center">
+              <span className="text-sm font-black text-yellow-300 group-hover:text-yellow-200">Ver el Factor de Victoria de hoy →</span>
+            </Link>
+          </div>
+        ) : null}
+
         {/* ── Top 3 ranking ── */}
         {topRanking.length > 0 && (
           <div className="w-full space-y-2">
@@ -335,31 +365,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── FV accuracy charts ── */}
-        {(fvStats.rinconada?.totalRaces || fvStats.valencia?.totalRaces) ? (
-          <div className="w-full space-y-4">
-            <div className="text-left">
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Efectividad del Factor de Victoria</p>
-              <p className="text-[10px] text-gray-700">Historial con resultados oficiales</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {fvStats.rinconada?.totalRaces ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center">
-                  <p className="text-sm font-bold text-white mb-0.5">La Rinconada</p>
-                  <p className="text-xs text-gray-500 mb-3">{fvStats.rinconada.totalRaces} carreras evaluadas</p>
-                  <FvDonut data={fvStats.rinconada} />
-                </div>
-              ) : null}
-              {fvStats.valencia?.totalRaces ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center">
-                  <p className="text-sm font-bold text-white mb-0.5">Valencia</p>
-                  <p className="text-xs text-gray-500 mb-3">{fvStats.valencia.totalRaces} carreras evaluadas</p>
-                  <FvDonut data={fvStats.valencia} />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
 
         {/* ── Forecast preview ── */}
         {status !== 'loading' && (

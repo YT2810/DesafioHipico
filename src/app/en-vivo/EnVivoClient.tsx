@@ -292,10 +292,10 @@ export default function EnVivoClient() {
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm font-black text-yellow-300 group-hover:text-yellow-100 leading-tight">
-                🎯 ¿Ya tienes los fijos de los expertos?
+                📊 El Factor de Victoria acierta Top 3 en ~80% de las carreras
               </p>
               <p className="text-xs text-gray-300 mt-0.5 leading-snug">
-                Mientras ves la carrera, los handicappers ya marcaron sus favoritos. Única forma de ganar con criterio.
+                Mientras ves la carrera, el consenso de +30 handicappers ya está publicado.
               </p>
             </div>
             <span

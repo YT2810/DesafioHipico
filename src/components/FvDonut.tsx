@@ -26,7 +26,11 @@ function buildSlices(data: FvAccuracy): Slice[] {
 export default function FvDonut({ data, size = 140 }: { data: FvAccuracy; size?: number }) {
   const slices = buildSlices(data);
   const total = data.totalRaces;
-  const pct1 = total > 0 ? ((data.byPosition[0]?.wins ?? 0) / total) * 100 : 0;
+  const wins1 = data.byPosition[0]?.wins ?? 0;
+  const wins2 = data.byPosition[1]?.wins ?? 0;
+  const wins3 = data.byPosition[2]?.wins ?? 0;
+  const pctTop3 = total > 0 ? ((wins1 + wins2 + wins3) / total) * 100 : 0;
+  const pct1 = total > 0 ? (wins1 / total) * 100 : 0;
   if (slices.length === 0) return null;
 
   let acc = 0;
@@ -43,8 +47,8 @@ export default function FvDonut({ data, size = 140 }: { data: FvAccuracy; size?:
     <div className="flex flex-col items-center gap-3">
       <div className="relative" style={style}>
         <div className="absolute inset-0 m-auto rounded-full bg-gray-950 flex flex-col items-center justify-center" style={{ width: '58%', height: '58%' }}>
-          <span className="text-2xl font-extrabold" style={{ color: GOLD }}>{pct1.toFixed(1)}%</span>
-          <span className="text-[10px] text-gray-500">1º FV</span>
+          <span className="text-2xl font-extrabold" style={{ color: GOLD }}>{pctTop3.toFixed(1)}%</span>
+          <span className="text-[10px] text-gray-500">Top 3</span>
         </div>
       </div>
       <div className="flex flex-wrap justify-center gap-2">

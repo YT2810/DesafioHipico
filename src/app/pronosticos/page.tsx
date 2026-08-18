@@ -387,8 +387,8 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
       ) : (
         <div className="mx-4 my-3 rounded-xl border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex flex-col gap-2.5">
           <div>
-            <p className="text-sm font-extrabold text-white mb-0.5">🔒 Pronósticos + Factor de Victoria bloqueados</p>
-            <p className="text-xs text-gray-400">Desbloquea esta carrera para ver todo</p>
+            <p className="text-sm font-extrabold text-white mb-0.5">🔒 Factor de Victoria bloqueado</p>
+            <p className="text-xs text-gray-400">El consenso de +30 handicappers acierta el ganador en <span className="text-yellow-400 font-bold">Top 3 en ~80%</span> de las carreras</p>
           </div>
           <div className="flex flex-col gap-2">
             {goldBalance < GOLD_COST_PER_RACE ? (

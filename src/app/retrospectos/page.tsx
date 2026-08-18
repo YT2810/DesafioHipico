@@ -214,14 +214,14 @@ export default async function RetrospectosPage() {
             <div className="flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-yellow-300 group-hover:text-yellow-200">
-                  🎯 ¿Ya tienes los pronósticos de los expertos?
+                  📊 El Factor de Victoria acierta Top 3 en ~80% de las carreras
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Los handicappers ya publicaron sus fijos — accede desde 2G
+                  Consenso de +30 handicappers · Ver pronósticos de hoy desde 2G
                 </p>
               </div>
               <span className="shrink-0 text-xs font-black px-3 py-2 rounded-xl text-black whitespace-nowrap" style={{ backgroundColor: '#D4AF37' }}>
-                Ver pronósticos →
+                Ver ahora →
               </span>
             </div>
           </Link>
