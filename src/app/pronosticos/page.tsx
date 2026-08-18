@@ -872,6 +872,33 @@ export default function PronosticosPage() {
             </div>
           )
         )}
+        {/* Urgency banner — only for today's meeting with locked races */}
+        {!isPrivileged && !passUnlocked && meeting && (() => {
+          const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
+          const meetingDateStr = meeting.date?.slice(0, 10);
+          if (todayStr !== meetingDateStr) return null;
+          const nowMinutes = (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); })();
+          const toMin = (t: string) => { const [h, m] = (t ?? '').split(':').map(Number); return isNaN(h) ? Infinity : h * 60 + (m ?? 0); };
+          const ran = races.filter(r => toMin(r.scheduledTime) < nowMinutes).length;
+          const remaining = races.length - ran;
+          if (ran === 0 || remaining === 0) return null;
+          return (
+            <div className="rounded-xl border border-orange-700/40 bg-orange-950/20 px-4 py-2.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-orange-300">⏱ {remaining} carrera{remaining !== 1 ? 's' : ''} por correr hoy</p>
+                <p className="text-xs text-gray-500">{ran} ya corrieron · El Factor de Victoria expira con cada carrera</p>
+              </div>
+              {goldBalance === 0 && (
+                <button onClick={() => setShowTopUp(true)}
+                  className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold text-black whitespace-nowrap animate-pulse"
+                  style={{ backgroundColor: GOLD }}>
+                  Recargar →
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Race buttons */}
         <div>
           <p className="text-xs text-gray-600 mb-2 font-medium uppercase tracking-wide">Selecciona una carrera</p>
