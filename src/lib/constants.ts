@@ -39,7 +39,7 @@ export const TOPUP_PACKAGES = [
   {
     id: 'arranque',
     label: 'Arranque',
-    description: 'Cubre 1 jornada completa de hasta 10 carreras',
+    description: 'Para empezar a probar el sistema · Gold sin vencimiento',
     priceBs: 2500,
     golds: 10,
     bsPerGold: 250,
@@ -49,7 +49,7 @@ export const TOPUP_PACKAGES = [
   {
     id: 'jinete',
     label: 'Jinete',
-    description: '2 jornadas completas — te queda saldo para el siguiente domingo',
+    description: 'El más elegido · te alcanza para 2 jornadas pequeñas',
     priceBs: 4500,
     golds: 20,
     bsPerGold: 225,
@@ -59,7 +59,7 @@ export const TOPUP_PACKAGES = [
   {
     id: 'padrillo',
     label: 'Padrillo',
-    description: '6 jornadas — para el aficionado que no se pierde ninguna reunión',
+    description: 'Para el que juega en serio · múltiples jornadas sin preocuparte',
     priceBs: 10000,
     golds: 50,
     bsPerGold: 200,

@@ -55,7 +55,7 @@ export default function FvDonut({ data, size = 140 }: { data: FvAccuracy; size?:
         {slices.map(s => (
           <div key={s.label} className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-            <span className="text-[10px] text-gray-400">{s.label} {s.value}</span>
+            <span className="text-[10px] text-gray-400">{s.label} {total > 0 ? ((s.value / total) * 100).toFixed(1) : 0}%</span>
           </div>
         ))}
       </div>

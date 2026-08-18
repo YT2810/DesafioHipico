@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { VENEZUELAN_BANKS, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/constants';
 
+type LivePackage = { id: string; label: string; description: string; priceBs: number; golds: number; bsPerGold: number; badge: string | null; saving: string | null; };
+
 const GOLD = '#D4AF37';
 
 interface TopUpModalProps { onClose: () => void; }
@@ -15,6 +17,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
   const [step, setStep] = useState<'package' | 'destination' | 'form' | 'success'>('package');
   const [selectedPkgId, setSelectedPkgId] = useState<TopUpPackageId>('jinete');
+  const [livePackages, setLivePackages] = useState<LivePackage[]>([...TOPUP_PACKAGES]);
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState('');
@@ -23,16 +26,20 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [successData, setSuccessData] = useState<{ goldAmount: number; requestId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Prefetch bank data immediately when modal opens — no spinner on destination step
+  // Prefetch bank data + live package prices when modal opens
   useEffect(() => {
     fetch('/api/topup/payment-info')
       .then(r => r.json())
       .then(d => { if (d.banks?.length) setPaymentBanks(d.banks); })
       .catch(() => {});
+    fetch('/api/topup/packages')
+      .then(r => r.json())
+      .then(d => { if (d.packages?.length) setLivePackages(d.packages); })
+      .catch(() => {});
   }, []);
 
-  const selectedPkg = TOPUP_PACKAGES.find(p => p.id === selectedPkgId) ?? TOPUP_PACKAGES[1];
-  const goldAmount = selectedPkg.golds;
+  const selectedPkg = livePackages.find(p => p.id === selectedPkgId) ?? livePackages[1] ?? livePackages[0];
+  const goldAmount = selectedPkg?.golds ?? 20;
 
   const [form, setForm] = useState({
     referenceNumber: '',
@@ -149,7 +156,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               </div>
 
               <div className="grid grid-cols-3 gap-2.5">
-                {TOPUP_PACKAGES.map(pkg => (
+                {livePackages.map(pkg => (
                   <button key={pkg.id} onClick={() => setSelectedPkgId(pkg.id as TopUpPackageId)}
                     className={`relative flex flex-col items-center gap-1 p-3.5 rounded-2xl border-2 transition-all ${selectedPkgId === pkg.id ? 'border-yellow-600 bg-yellow-950/30' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
                     {pkg.badge && (

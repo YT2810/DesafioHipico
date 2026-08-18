@@ -156,6 +156,10 @@ export default function HomePage() {
                         className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
                         🚫 Retirados
                       </Link>
+                      <Link href="/faq" onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
+                        ❓ Preguntas frecuentes
+                      </Link>
                       <Link href="/en-vivo" onClick={() => setMenuOpen(false)}
                         className="flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-gray-800 transition-colors">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -459,10 +463,10 @@ export default function HomePage() {
 
         {/* Support contact */}
         <p className="text-xs text-gray-600 text-center">
-          ¿Necesitas ayuda?{' '}
-          <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">
-            desafiohipicoapp@gmail.com
-          </a>
+          ¿Tienes dudas?{' '}
+          <Link href="/faq" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">Ver preguntas frecuentes</Link>
+          {' '}·{' '}
+          <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">desafiohipicoapp@gmail.com</a>
         </p>
 
         {/* SEO footer text — visible but subtle, helps Google index key terms */}
