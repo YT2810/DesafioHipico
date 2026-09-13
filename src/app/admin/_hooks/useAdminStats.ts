@@ -32,6 +32,24 @@ export interface AdminStats {
   dailyStats: DayStats[];
   recentUsers: { _id: string; email?: string; alias?: string; roles: string[]; balance: { golds: number }; createdAt: string; lastLoginDate?: string }[];
   tokenomics: Tokenomics;
+  audience: {
+    withEmail: number;
+    noEmail: number;
+    withGoogle: number;
+    withTelegram: number;
+    newLast30d: number;
+    newLast90d: number;
+  };
+  retention: {
+    active7d: number;
+    active30d: number;
+    active90d: number;
+  };
+  conversion: {
+    uniqueBuyers: number;
+    zeroBuyers: number;
+    conversionRate: number;
+  };
 }
 
 export function useAdminStats() {
