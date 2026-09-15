@@ -72,6 +72,7 @@ export const authConfig: NextAuthConfig = {
             $set: {
               telegramId: String(telegramUser.id),
               alias: telegramUser.username ?? telegramUser.first_name ?? `tg_${telegramUser.id}`,
+              lastLoginDate: new Date().toISOString().slice(0, 10),
             },
             $setOnInsert: {
               roles: ['customer'],
@@ -112,6 +113,7 @@ export const authConfig: NextAuthConfig = {
             $set: {
               email,
               ...(account.provider === 'google' && { googleId: account.providerAccountId }),
+              lastLoginDate: new Date().toISOString().slice(0, 10),
             },
             $setOnInsert: {
               alias: user.name ?? email.split('@')[0],

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     await User.findOneAndUpdate(
       { email },
       {
-        $set:         { email, alias: email.split('@')[0] },
+        $set:         { email, alias: email.split('@')[0], lastLoginDate: new Date().toISOString().slice(0, 10) },
         $setOnInsert: {
           roles: isAdmin ? ['admin', 'customer'] : ['customer'],
           balance: { golds: 0, diamonds: 0 },
