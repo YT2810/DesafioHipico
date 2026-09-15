@@ -19,13 +19,14 @@
 import React from 'react';
 
 // ─── Brand colors ─────────────────────────────────────────────────────────────
-const RED    = '#C0392B';
-const YELLOW = '#FFE000';
-const BLUE   = '#4169E1';
-const CYAN   = '#00b4e4';
-const BLACK  = '#000000';
-const WHITE  = '#FFFFFF';
-const LGRAY  = '#f5f5f5';
+const RED        = '#C0392B';
+const YELLOW     = '#FFE000';
+const BLUE       = '#4169E1';
+const CYAN       = '#00b4e4';   // pick highlight (Panel 1)
+const CYAN_LIGHT = '#4DD8F0';   // race header background — lighter/airy
+const BLACK      = '#000000';
+const WHITE      = '#FFFFFF';
+const LGRAY      = '#f5f5f5';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ export interface GacetaPrintConfig {
 interface Props {
   meeting: MeetingData;
   races: RaceItem[];
-  tipster: { id: string; name: string } | null;
+  tipster: { id: string; name: string; youtubeUrl?: string | null } | null;
   picksByRace: Record<string, PicksForRace>;
   config: GacetaPrintConfig;
 }
@@ -149,19 +150,50 @@ function posDisplay(h: RaceHistoryItem): string {
   return `${h.finishPosition}°`;
 }
 
-/** Jinete: Apellido, Inicial. (sin truncar apellido) */
+/**
+ * Jinete: muestra el primer apellido + inicial del nombre.
+ * Formato DB asumido: "APELLIDO1 [APELLIDO2] NOMBRE"
+ * Ej: "LUGO FRANKLIN" → "LUGO,F."
+ *     "PEREZ GARCIA JUAN" → "PEREZ,J."
+ */
 function jockeyFmt(name: string): string {
   if (!name) return '—';
   const p = name.trim().split(/\s+/);
   if (p.length === 1) return p[0];
-  return `${p.slice(1).join(' ')}, ${p[0][0]}.`;
+  const surname  = p[0];                  // primer apellido
+  const initial  = p[p.length - 1]?.[0];  // inicial del nombre (última palabra)
+  return initial ? `${surname},${initial}.` : surname;
 }
 
-/** Entrenador: últimas 2 palabras */
+/** Entrenador: primer apellido */
 function trainerFmt(name: string): string {
   if (!name) return '—';
-  const p = name.trim().split(/\s+/);
-  return p.slice(-2).join(' ');
+  return name.trim().split(/\s+/)[0];
+}
+
+/**
+ * Abreviaciones de cuerpos/distancias venezolanas.
+ * "Pescuezo"→"Pzo" · "Cabeza"→"Cza" · "Nariz"→"Nrz"
+ * "Medio cuerpo"→"½c" · "N cuerpos"→"Nc" · fracciones "3 1/2"→"3½"
+ */
+function cposAbbr(val: string | null | undefined): string {
+  if (!val) return '—';
+  const v = val.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (v === '—' || v === '-' || v === '') return '—';
+  if (v.includes('PESC'))  return 'Pzo';
+  if (v.includes('CABEZ')) return 'Cza';
+  if (v.includes('NARIZ') || v.includes('NAR')) return 'Nrz';
+  if (v.includes('MEDIO') || v.match(/^1\/2|^½/)) return '½c';
+  if (v.includes('LARGO') || v.includes('LARG')) {
+    const n = val.match(/(\d+)/);
+    return n ? `${n[1]}Lg` : 'Lg';
+  }
+  // fracciones: "3 1/2" → "3½", "1 3/4" → "1¾", "1 1/4" → "1¼"
+  let result = val.trim()
+    .replace(/\s*1\/4/g, '¼').replace(/\s*1\/2/g, '½').replace(/\s*3\/4/g, '¾');
+  // "N cuerpos" / "N c." → "Nc"
+  result = result.replace(/\s*(cuerpos?|c\.)/gi, 'c');
+  return result.trim().slice(0, 6) || '—';
 }
 
 /** Medicación abreviada: BUT→B, LAX→L, BUT-LAX→B-L */
@@ -299,7 +331,7 @@ function DHLogo({ size = 36 }: { size?: number }) {
 // (both use padding: '1px 0 1px 2px') so tables align across rows.
 
 const COLS: { key: string; w: number; align: 'center'|'left'|'right' }[] = [
-  { key:'Fec',          w:22,  align:'center' },
+  { key:'Fec',          w:28,  align:'center' }, // wider: "16-09/26" needs 8 chars
   { key:'Carr',         w:20,  align:'center' },
   { key:'Dist',         w:16,  align:'center' },
   { key:'PP',           w:13,  align:'center' }, // cyan tint — PP histórico
@@ -307,15 +339,15 @@ const COLS: { key: string; w: number; align: 'center'|'left'|'right' }[] = [
   { key:'800m',         w:10,  align:'center' },
   { key:'Lleg',         w:13,  align:'center' },
   { key:'Kg.Jin',       w:14,  align:'center' },
-  { key:'Jinete',       w:35,  align:'left'   },
+  { key:'Jinete',       w:55,  align:'left'   }, // wider: apellido+inicial must fit
   { key:'Div',          w:10,  align:'center' },
   { key:'Ganador / 2°', w:88,  align:'left'   }, // wider — names need space
-  { key:'Cpos',         w:18,  align:'center' },
+  { key:'Cpos',         w:22,  align:'center' }, // Pzo/Cza/½c — slightly wider
   { key:'Serie',        w:32,  align:'left'   },
   { key:'Rat',          w:8,   align:'center' },
   { key:'T.G.',         w:22,  align:'center' },
   { key:'T.Ej.',        w:22,  align:'center' },
-  { key:'Cont.',        w:0,   align:'left'   }, // flex remainder
+  { key:'Cont.',        w:0,   align:'left'   }, // flex remainder — narrows as others grow
 ];
 
 // ─── Shared cell styles ───────────────────────────────────────────────────────
@@ -429,7 +461,8 @@ function HistoryRow({ h, isOdd }: { h: RaceHistoryItem; isOdd: boolean }) {
   const isWin = h.finishPosition === 1 && !h.isScratched;
   const isScr = h.isScratched;
   const bg    = isOdd ? LGRAY : WHITE;
-  const cpos  = isWin ? '—' : (h.distanceMargin || h.diffVsFirst || '—');
+  const cposRaw = isWin ? null : (h.distanceMargin || h.diffVsFirst || null);
+  const cpos    = cposAbbr(cposRaw);
   const ref   = isWin ? (h.secondName ?? '—') : (h.winnerName ?? '—');
   const serie = seriesAbbr(h.conditions ?? '');
 
@@ -735,7 +768,7 @@ function RaceHeader({ race, trackName }: { race: RaceItem; trackName: string }) 
     <div style={{
       display:'flex', alignItems:'stretch',
       borderBottom:`2px solid ${BLACK}`, borderTop:`2px solid ${BLACK}`,
-      background: CYAN,
+      background: CYAN_LIGHT,
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
       <div style={{ flexShrink:0, minWidth:48,
@@ -819,10 +852,11 @@ function CompactBrandBar({ meeting }: { meeting: MeetingData }) {
 
 // ─── Favorites block ──────────────────────────────────────────────────────────
 
-function FavoritesBlock({ raceId, picksByRace, tipsterName }: {
+function FavoritesBlock({ raceId, picksByRace, tipsterName, tipsterYoutubeUrl }: {
   raceId: string;
   picksByRace: Record<string, PicksForRace>;
   tipsterName: string;
+  tipsterYoutubeUrl?: string | null;
 }) {
   const picks = picksByRace[raceId];
   if (!picks || picks.marks.length === 0) return null;
@@ -832,23 +866,30 @@ function FavoritesBlock({ raceId, picksByRace, tipsterName }: {
 
   return (
     <div style={{
-      background: RED, borderTop:`1.5px solid ${BLACK}`,
-      padding:'1px 5px', display:'flex', alignItems:'baseline',
-      flexWrap:'wrap', gap:'0 5px',
+      background: RED, borderTop:`2px solid ${BLACK}`,
+      padding:'2px 5px',
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
-      <span style={{ fontSize:7.5, fontWeight:900, color:YELLOW,
-        fontFamily:'Arial Narrow,Arial,sans-serif' }}>Nuestros Favoritos:</span>
-      <span style={{ fontSize:7.5, fontWeight:900, fontFamily:'monospace', color:YELLOW }}>
-        {dorsals}
-      </span>
-      <span style={{ fontSize:7, fontStyle:'italic', fontWeight:600, color:'rgba(255,224,0,0.9)' }}>{names}</span>
-      <span style={{ fontSize:6, color:'rgba(255,224,0,0.65)', marginLeft:4 }}>· Por {tipsterName}</span>
-      {picks.hasAiSource && (
-        <span style={{ fontSize:5.5, color:'rgba(255,224,0,0.55)', display:'block', width:'100%' }}>
-          * Picks extraídos por IA · pueden contener discrepancias con la fuente oficial INH/HINAVA
+      {/* Fila principal: título + dorsales + nombres */}
+      <div style={{ display:'flex', alignItems:'baseline', flexWrap:'wrap', gap:'0 5px' }}>
+        <span style={{ fontSize:8, fontWeight:900, color:YELLOW,
+          fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.03em' }}>
+          Pronóstico de {tipsterName}:
         </span>
-      )}
+        <span style={{ fontSize:8, fontWeight:900, fontFamily:'monospace', color:YELLOW }}>
+          {dorsals}
+        </span>
+        <span style={{ fontSize:7.5, fontStyle:'italic', fontWeight:700, color:YELLOW }}>
+          {names}
+        </span>
+      </div>
+      {/* Fila disclaimer */}
+      <div style={{ fontSize:5.5, color:'rgba(255,255,255,0.75)', marginTop:1, lineHeight:1.2 }}>
+        {picks.hasAiSource
+          ? `* Transcritos con IA desde canal público de YouTube${tipsterYoutubeUrl ? ` (${tipsterYoutubeUrl})` : ''} · Pueden existir errores de transcripción · Verifica con la fuente original`
+          : `* Pronóstico personal de ${tipsterName}`
+        }
+      </div>
     </div>
   );
 }
@@ -858,13 +899,51 @@ function FavoritesBlock({ raceId, picksByRace, tipsterName }: {
 function AdBlock({ entryCount }: { entryCount: number }) {
   const h = adHeight(entryCount);
   if (h <= 0) return null;
-  return (
-    <div style={{ height:h, margin:'2px 0', border:'1px dashed #ccc',
+
+  // Large ad (≥90px): full CTA
+  if (h >= 90) return (
+    <div style={{ height:h, margin:'2px 0', border:`1px solid ${RED}`,
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      background:LGRAY }}>
-      <div style={{ fontSize:8, fontWeight:700, color:'#bbb',
-        textTransform:'uppercase', letterSpacing:'0.1em' }}>Espacio Publicitario</div>
-      <div style={{ fontSize:6.5, color:'#ccc', marginTop:1 }}>desafiohipico.com</div>
+      gap:3, background:'#fff8f8', padding:'4px 8px' }}>
+      <div style={{ fontSize:10, fontWeight:900, color:RED,
+        fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.04em',
+        textTransform:'uppercase', textAlign:'center' }}>
+        🏇 Pronósticos · Estadísticas · Factor de Victoria
+      </div>
+      <div style={{ fontSize:8, color:'#444', textAlign:'center', lineHeight:1.3 }}>
+        Accede gratis a los análisis de los mejores expertos hípicos de Venezuela.
+        <br/>Regístrate en <strong style={{ color:RED }}>desafiohipico.com</strong> y sube tu nivel.
+      </div>
+      <div style={{ fontSize:7, color:'#888', fontStyle:'italic' }}>
+        Picks verificados · Estadísticas de eficacia · Picks históricos
+      </div>
+    </div>
+  );
+
+  // Medium ad (≥45px): compact CTA
+  if (h >= 45) return (
+    <div style={{ height:h, margin:'2px 0', border:`1px solid ${RED}`,
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      gap:2, background:'#fff8f8', padding:'3px 8px' }}>
+      <div style={{ fontSize:9, fontWeight:900, color:RED,
+        fontFamily:'Arial Narrow,Arial,sans-serif', textAlign:'center' }}>
+        Pronósticos de expertos · <span style={{ color:'#111' }}>desafiohipico.com</span>
+      </div>
+      <div style={{ fontSize:7, color:'#555', textAlign:'center' }}>
+        Regístrate gratis · Estadísticas · Factor de Victoria
+      </div>
+    </div>
+  );
+
+  // Small ad: tagline only
+  return (
+    <div style={{ height:h, margin:'2px 0', border:`1px solid #ddd`,
+      display:'flex', alignItems:'center', justifyContent:'center',
+      background:'#fafafa' }}>
+      <div style={{ fontSize:7, fontWeight:700, color:RED,
+        fontFamily:'Arial Narrow,Arial,sans-serif' }}>
+        desafiohipico.com · Pronósticos · Estadísticas · Factor de Victoria
+      </div>
     </div>
   );
 }
@@ -958,33 +1037,57 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
                 );
               })}
             </div>
-            <FavoritesBlock raceId={race.raceId} picksByRace={picksByRace} tipsterName={tipsterName} />
+            <FavoritesBlock
+              raceId={race.raceId}
+              picksByRace={picksByRace}
+              tipsterName={tipsterName}
+              tipsterYoutubeUrl={tipster?.youtubeUrl}
+            />
             <AdBlock entryCount={ec} />
-            <div style={{ borderTop:`1px solid #ccc`, padding:'1px 6px',
+            {/* Per-race footer — red band */}
+            <div style={{
+              background:RED, padding:'1px 6px',
               display:'flex', justifyContent:'space-between', alignItems:'center',
-              background:LGRAY }}>
-              <span style={{ fontSize:6, color:'#888', fontStyle:'italic' }}>
-                Datos INH/HINAVA · desafiohipico.com · Distribución gratuita
+              printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
+            } as React.CSSProperties}>
+              <span style={{ fontSize:6, color:'rgba(255,224,0,0.75)', fontStyle:'italic' }}>
+                desafiohipico.com · Datos INH/HINAVA · Distribución gratuita
               </span>
-              <span style={{ fontSize:7, fontWeight:900, color:RED,
-                fontFamily:'Arial Narrow,Arial,sans-serif' }}>
-                ¡Suerte! y DESAFÍO HÍPICO
+              <span style={{ fontSize:7, fontWeight:900, color:YELLOW,
+                fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.03em' }}>
+                Ya corrió · ya ganó · ya cobró
               </span>
             </div>
           </div>
         );
       })}
 
-      {/* Final footer */}
-      <div style={{ borderTop:`2px solid ${BLACK}`, marginTop:6, padding:'3px 6px',
-        display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <span style={{ fontSize:6.5, color:'#555' }}>
-          Generado por desafiohipico.com · Datos oficiales INH/HINAVA · Distribución gratuita
-        </span>
-        <span style={{ fontSize:9, fontWeight:900, color:RED,
-          fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.04em' }}>
-          ¡Suerte! y DESAFÍO HÍPICO
-        </span>
+      {/* Final footer — red band + disclaimer */}
+      <div style={{
+        background:RED, marginTop:4, padding:'3px 6px',
+        printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
+      } as React.CSSProperties}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
+          <span style={{ fontSize:8, fontWeight:900, color:YELLOW,
+            fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.04em' }}>
+            Ya corrió · ya ganó · ya cobró
+          </span>
+          <span style={{ fontSize:8, fontWeight:900, color:YELLOW,
+            fontFamily:'Arial Narrow,Arial,sans-serif' }}>
+            desafiohipico.com
+          </span>
+        </div>
+        {/* 3-layer disclaimer */}
+        <div style={{ fontSize:5.5, color:'rgba(255,255,255,0.75)', lineHeight:1.35, borderTop:'1px solid rgba(255,255,255,0.2)', paddingTop:2 }}>
+          <span style={{ fontWeight:700, color:'rgba(255,255,255,0.9)' }}>Datos: </span>
+          Tomados de publicaciones públicas del INH/HINAVA y procesados automáticamente con IA. Pueden existir discrepancias con la fuente oficial.
+          {'  '}
+          <span style={{ fontWeight:700, color:'rgba(255,255,255,0.9)' }}>Pronósticos: </span>
+          Transcritos con IA desde canales públicos de YouTube de sus autores. Desafío Hípico no garantiza su exactitud ni se responsabiliza por errores de transcripción.
+          {'  '}
+          <span style={{ fontWeight:700, color:'rgba(255,255,255,0.9)' }}>Apuestas: </span>
+          Esta publicación es informativa. Las decisiones de apuesta son responsabilidad exclusiva del apostador.
+        </div>
       </div>
     </div>
   );

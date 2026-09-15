@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectMongo from '@/lib/mongodb';
 import Forecast from '@/models/Forecast';
 import HandicapperProfile from '@/models/HandicapperProfile';
+import ExpertSource from '@/models/ExpertSource';
 import { Types } from 'mongoose';
 
 export const dynamic = 'force-dynamic';
@@ -45,7 +46,8 @@ export async function GET(
     const chosenId = handicapperIds[Math.floor(Math.random() * handicapperIds.length)];
 
     const profile = await HandicapperProfile.findById(chosenId)
-      .select('pseudonym')
+      .select('pseudonym expertSourceId')
+      .populate({ path: 'expertSourceId', model: ExpertSource, select: 'youtubeChannelUrl' })
       .lean() as any;
 
     // Organise chosen tipster's picks by raceId
@@ -66,7 +68,11 @@ export async function GET(
     }
 
     return NextResponse.json({
-      tipster: { id: chosenId, name: profile?.pseudonym ?? 'Experto' },
+      tipster: {
+        id: chosenId,
+        name: profile?.pseudonym ?? 'Experto',
+        youtubeUrl: (profile?.expertSourceId as any)?.youtubeChannelUrl ?? null,
+      },
       picksByRace,
     });
   } catch (e) {

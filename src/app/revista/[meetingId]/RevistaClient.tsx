@@ -376,7 +376,7 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
   const [error, setError] = useState('');
 
   // Gaceta PDF — picks for the random tipster
-  const [gacetaTipster, setGacetaTipster] = useState<{ id: string; name: string } | null>(null);
+  const [gacetaTipster, setGacetaTipster] = useState<{ id: string; name: string; youtubeUrl?: string | null } | null>(null);
   const [gacetaPicks, setGacetaPicks] = useState<Record<string, PicksForRace>>({});
 
   function handlePrint() {

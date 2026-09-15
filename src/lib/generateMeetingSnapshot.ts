@@ -70,6 +70,7 @@ export async function generateMeetingSnapshot(meetingId: string): Promise<any> {
     'result.finishPosition': { $exists: true },
   })
     .populate({ path: 'raceId', model: Race, match: { status: { $ne: 'cancelled' } } })
+    .populate({ path: 'jockeyId', model: Person, select: 'name' })
     .lean() as any[];
 
   const pastRaceIds = [...new Set(pastEntries.map((pe: any) => pe.raceId?._id?.toString()).filter(Boolean))];
