@@ -177,69 +177,92 @@ function medAbbr(med: string | null): string | null {
 }
 
 /**
- * Series abbreviation — Venezuelan horse racing:
- * Clásicos/Copas/GP → nombre del clásico
- * Normales → tipo + edad + calificación (Ptr2a, Per3+, G1, etc.)
+ * Series abbreviation — Venezuelan horse racing (turf VEN).
+ *
+ * Format: <tipo><calificación>/<edad>   e.g. g1/4a · per/3a · g1y2/5a
+ *
+ * Tipos de calificación:
+ *   per · g1 · g1y2 · g2 · g2y3 · g3 · g3-4 · g4 · g4y5
+ *   g5 · g5+ · g6 · g6+
+ *
+ * Clásicos / Copa / GP: iniciales del nombre (+ /GI,/GII,/GIII si aplica)
+ *   — clásico pendiente de lista oficial; por ahora genera iniciales automáticas
  */
 function seriesAbbr(conditions: string): string {
   if (!conditions) return '';
   const raw = conditions.trim();
+  const c = raw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // ── Named races ──────────────────────────────────────────────────────────
+  // ── Clásico / Copa / Gran Premio ─────────────────────────────────────────
   const clsM = raw.match(/cl[aá]sico\s+(.+)/i);
   if (clsM) {
-    const name = clsM[1].replace(/\s+/g,' ').trim().split(/\s+/).slice(0,4).join(' ');
-    return name.slice(0, 20);
+    // Extract initials of significant words (skip articles/prepositions)
+    const skip = new Set(['DE','DEL','LA','EL','LOS','LAS','Y','A','EN','CON','AL']);
+    const words = clsM[1].trim().replace(/\./g,'').split(/\s+/);
+    const initials = words
+      .filter(w => !skip.has(w.toUpperCase()) && w.length > 0)
+      .map(w => w[0].toUpperCase())
+      .join('');
+    // Grade detection
+    const gradeM = c.match(/GRADO\s+(I{1,3}|[123])/);
+    const grade = gradeM
+      ? `/G${{ '1':'I','2':'II','3':'III','I':'I','II':'II','III':'III' }[gradeM[1]] ?? gradeM[1]}`
+      : '';
+    return `${initials}${grade}`.slice(0, 14);
   }
   const copaM = raw.match(/copa\s+(.+)/i);
-  if (copaM) return `Copa ${copaM[1].trim().split(/\s+/).slice(0,3).join(' ')}`.slice(0,18);
-
+  if (copaM) {
+    const skip = new Set(['DE','DEL','LA','EL','LOS','LAS','Y']);
+    const words = copaM[1].trim().replace(/\./g,'').split(/\s+/);
+    const initials = words.filter(w => !skip.has(w.toUpperCase())).map(w => w[0].toUpperCase()).join('');
+    return `Copa${initials}`.slice(0, 12);
+  }
   const gpM = raw.match(/gran\s+premio\s+(.+)/i);
-  if (gpM) return `GP ${gpM[1].trim().split(/\s+/).slice(0,3).join(' ')}`.slice(0,16);
-
-  // ── Build code from parts ─────────────────────────────────────────────────
-  const c = raw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-
-  const parts: string[] = [];
-
-  // Animal type
-  if (c.includes('POTR'))       parts.push('Ptr');
-  else if (c.includes('YEGU'))  parts.push('Yeg');
-  else if (c.includes('CABALLO') || c.includes('CABALL')) parts.push('Cab');
-
-  // Age
-  const ageYmas = c.match(/(\d)\s*AN[NO]S?\s+Y\s+MA/);      // "3 años y más"
-  const ageDe   = c.match(/DE\s+(\d)\s*AN[NO]S?(?!\s+Y\s+M)/); // "de 3 años" (no "y más")
-  if (ageYmas)    parts.push(`${ageYmas[1]}a+`);
-  else if (ageDe) parts.push(`${ageDe[1]}a`);
-
-  // Qualification — ganadoras
-  const g12 = c.match(/GANAD\w+\s+DE\s+1\s+Y\s+2/);
-  const gN  = c.match(/GANAD\w+\s+DE\s+([1-9])/);
-  if (g12)         parts.push('G1y2');
-  else if (gN)     parts.push(`G${gN[1]}`);
-
-  // Perdedoras
-  if (c.includes('PERDED')) {
-    const pAge = c.match(/PERDED\w+\s+DE\s+(\d)/);
-    if (pAge) {
-      const plus = c.includes('Y MAS') || c.includes('Y MA');
-      parts.push(`Per${pAge[1]}${plus ? '+' : ''}`);
-    } else {
-      parts.push('Per');
-    }
+  if (gpM) {
+    const words = gpM[1].trim().split(/\s+/);
+    const initials = words.map(w => w[0].toUpperCase()).join('');
+    return `GP${initials}`.slice(0, 10);
   }
 
-  // Debutantes / No ganadoras
-  if (c.includes('DEBUT'))                         parts.push('Deb');
-  if (c.includes('NO GANAD') && !gN && !g12)      parts.push('NoG');
+  // ── Age suffix (/Xa or /Xa+) ─────────────────────────────────────────────
+  const ageYmas = c.match(/(\d)\s*AN[NO]S?\s+Y\s+MA/);
+  const ageDe   = c.match(/DE\s+(\d)\s*AN[NO]S?/);
+  let ageSuffix = '';
+  if (ageYmas)    ageSuffix = `/${ageYmas[1]}a+`;
+  else if (ageDe) ageSuffix = `/${ageDe[1]}a`;
 
-  // Special categories
-  if (c.includes('HANDICAP'))                      parts.push('Hcp');
-  if (c.includes('RECLAM'))                        parts.push('Rcl');
-  if (c.includes('ALLOWANCE') || c.includes('ALW')) parts.push('Alw');
+  // ── Qualification code ───────────────────────────────────────────────────
+  let qual = '';
 
-  return parts.join(' ').slice(0, 20) || raw.slice(0, 14);
+  // Ganadoras de N y M (ranges and pairs)
+  if      (c.match(/GANAD\w+\s+DE\s+1\s+Y\s+2/))  qual = 'g1y2';
+  else if (c.match(/GANAD\w+\s+DE\s+2\s+Y\s+3/))  qual = 'g2y3';
+  else if (c.match(/GANAD\w+\s+DE\s+3\s+Y\s+4/))  qual = 'g3-4';
+  else if (c.match(/GANAD\w+\s+DE\s+4\s+Y\s+5/))  qual = 'g4y5';
+  else if (c.match(/GANAD\w+\s+DE\s+[56]\s+[OA]\s+M/)) qual = 'g5+'; // "6 o más" / "5 y más"
+  else if (c.match(/GANAD\w+\s+DE\s+6\s+Y\s+M/)
+        || c.match(/GANAD\w+\s+DE\s+6\s+O\s+M/))  qual = 'g6+';
+  else if (c.match(/GANAD\w+\s+DE\s+5\s+Y\s+M/)
+        || c.match(/GANAD\w+\s+DE\s+5\s+O\s+M/))  qual = 'g5+';
+  else {
+    const gN = c.match(/GANAD\w+\s+DE\s+([1-9])/);
+    if (gN) qual = `g${gN[1]}`;
+  }
+
+  // Perdedoras (no ganadoras)
+  if (!qual && c.includes('PERDED')) qual = 'per';
+  if (!qual && c.includes('NO GANAD')) qual = 'per';
+  if (!qual && (c.includes('DEBUT') || c.includes('NO GANAD'))) qual = 'deb';
+
+  // Handicap / Reclamo / Allowance
+  if (!qual && c.includes('HANDICAP')) qual = 'hcp';
+  if (!qual && c.includes('RECLAM'))   qual = 'rcl';
+  if (!qual && (c.includes('ALLOWANCE') || c.includes('ALW'))) qual = 'alw';
+
+  if (qual) return `${qual}${ageSuffix}`.slice(0, 14);
+
+  // Fallback: first meaningful word truncated
+  return raw.replace(/^PARA\s+/i,'').slice(0, 12);
 }
 
 /** maxHistory dinámico según cantidad de caballos */
@@ -279,17 +302,17 @@ const COLS: { key: string; w: number; align: 'center'|'left'|'right' }[] = [
   { key:'Fec',          w:22,  align:'center' },
   { key:'Carr',         w:20,  align:'center' },
   { key:'Dist',         w:16,  align:'center' },
-  { key:'PP',           w:13,  align:'center' }, // cyan tint — post position in hist race
-  { key:'400m',         w:12,  align:'center' },
-  { key:'800m',         w:12,  align:'center' },
+  { key:'PP',           w:13,  align:'center' }, // cyan tint — PP histórico
+  { key:'400m',         w:10,  align:'center' },
+  { key:'800m',         w:10,  align:'center' },
   { key:'Lleg',         w:13,  align:'center' },
   { key:'Kg.Jin',       w:14,  align:'center' },
   { key:'Jinete',       w:35,  align:'left'   },
-  { key:'Div',          w:13,  align:'center' },
-  { key:'Ganador / 2°', w:68,  align:'left'   },
+  { key:'Div',          w:10,  align:'center' },
+  { key:'Ganador / 2°', w:88,  align:'left'   }, // wider — names need space
   { key:'Cpos',         w:18,  align:'center' },
   { key:'Serie',        w:32,  align:'left'   },
-  { key:'Rat',          w:11,  align:'center' },
+  { key:'Rat',          w:8,   align:'center' },
   { key:'T.G.',         w:22,  align:'center' },
   { key:'T.Ej.',        w:22,  align:'center' },
   { key:'Cont.',        w:0,   align:'left'   }, // flex remainder
@@ -329,6 +352,12 @@ const P4_PADDING = '1px 0 1px 2px';
 // ─── Column header bar (ONE per race, outside horse rows) ─────────────────────
 
 function ColumnHeaderBar() {
+  // boxSizing:'border-box' on every panel ensures borders are included in declared widths,
+  // matching EntryBlock panels exactly → perfect column alignment.
+  const hPanelBase: React.CSSProperties = {
+    boxSizing: 'border-box',
+    flexShrink: 0,
+  };
   return (
     <div style={{
       display:'flex', alignItems:'stretch',
@@ -336,29 +365,31 @@ function ColumnHeaderBar() {
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
       {/* N° */}
-      <div style={{ flexShrink:0, width:32, display:'flex', alignItems:'center',
+      <div style={{ ...hPanelBase, width:32, display:'flex', alignItems:'center',
         justifyContent:'center', borderRight:`1px solid #444` }}>
         <span style={{ fontSize:6, fontWeight:700, color:YELLOW }}>N°</span>
       </div>
       {/* Caballo */}
-      <div style={{ flexShrink:0, width:'22%', borderRight:`1px solid #444`,
+      <div style={{ ...hPanelBase, width:'22%', borderRight:`1px solid #444`,
         padding:'1px 3px', display:'flex', alignItems:'center' }}>
         <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase',
           letterSpacing:'0.05em' }}>Ejemplar / Stud</span>
       </div>
-      {/* Yunta */}
-      <div style={{ flexShrink:0, width:'10%', borderRight:`1px solid #444`,
-        padding:'1px 2px', display:'flex', alignItems:'center' }}>
-        <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase',
-          letterSpacing:'0.05em' }}>Yunta / Kg</span>
-      </div>
-      {/* PP del día */}
-      <div style={{ flexShrink:0, width:'5%', borderRight:`1px solid #444`,
+      {/* Yunta — 8% */}
+      <div style={{ ...hPanelBase, width:'8%', borderRight:`1px solid #444`,
         padding:'1px 2px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-        <span style={{ fontSize:6, fontWeight:700, color:CYAN }}>PP</span>
+        <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase',
+          letterSpacing:'0.05em' }}>Yunta</span>
+      </div>
+      {/* PP del día — 3%, red bg */}
+      <div style={{ ...hPanelBase, width:'3%', borderRight:`1px solid #444`,
+        padding:'1px 1px', display:'flex', alignItems:'center', justifyContent:'center',
+        background: RED,
+        printColorAdjust:'exact', WebkitPrintColorAdjust:'exact' } as React.CSSProperties}>
+        <span style={{ fontSize:5.5, fontWeight:700, color:YELLOW }}>PP</span>
       </div>
       {/* Retrospecto columns */}
-      <div style={{ flex:1, overflow:'hidden', padding: P4_PADDING }}>
+      <div style={{ ...hPanelBase, flex:1, overflow:'hidden', padding: P4_PADDING }}>
         <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
           <thead>
             <tr>
@@ -479,7 +510,7 @@ function Panel4({ entry, maxH }: { entry: EntryItem; maxH: number }) {
 
   return (
     // NOTE: padding MUST match P4_PADDING in ColumnHeaderBar for column alignment
-    <div style={{ flex:1, minWidth:0, padding: P4_PADDING, display:'flex', flexDirection:'column' }}>
+    <div style={{ boxSizing:'border-box', flex:1, minWidth:0, padding: P4_PADDING, display:'flex', flexDirection:'column' }}>
       {rows.length === 0 ? (
         <span style={{ fontSize:6.5, color:'#888', fontStyle:'italic', padding:'1px 2px' }}>
           Sin historial
@@ -532,7 +563,7 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
 
         {/* ── PANEL 1: N° gualdrapa ── */}
         <div style={{
-          flexShrink:0, width:32,
+          boxSizing:'border-box', flexShrink:0, width:32,
           display:'flex', flexDirection:'column',
           alignItems:'center', justifyContent:'center',
           borderRight:`2px solid ${BLACK}`,
@@ -561,7 +592,7 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
 
         {/* ── PANEL 2: Datos del caballo ── */}
         <div style={{
-          flexShrink:0, width:'22%',
+          boxSizing:'border-box', flexShrink:0, width:'22%',
           borderRight:`1px solid ${BLACK}`,
           padding:'1px 3px',
           display:'flex', flexDirection:'column',
@@ -610,15 +641,17 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
           )}
         </div>
 
-        {/* ── PANEL 3: Yunta ── */}
+        {/* ── PANEL 3: Yunta — 8%, centrada ── */}
         <div style={{
-          flexShrink:0, width:'10%',
+          boxSizing:'border-box', flexShrink:0, width:'8%',
           borderRight:`1px solid ${BLACK}`,
           padding:'1px 2px',
-          display:'flex', flexDirection:'column', justifyContent:'center',
+          display:'flex', flexDirection:'column',
+          justifyContent:'center', alignItems:'center',
+          textAlign:'center',
         }}>
           <div style={{ fontSize:6.5, fontWeight:700, color:BLACK, lineHeight:1.2,
-            wordBreak:'break-word' }}>
+            wordBreak:'break-word', textAlign:'center' }}>
             {jockeyFmt(entry.jockeyName)}
           </div>
           {entry.weightDeclared && (
@@ -640,20 +673,22 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
           )}
         </div>
 
-        {/* ── PANEL 3b: PP del día ── */}
+        {/* ── PANEL 3b: PP del día — 3%, rojo/dorado ── */}
         <div style={{
-          flexShrink:0, width:'5%',
+          boxSizing:'border-box', flexShrink:0, width:'3%',
           borderRight:`1px solid ${BLACK}`,
           display:'flex', flexDirection:'column',
           alignItems:'center', justifyContent:'center',
-          padding:'1px 1px',
-        }}>
-          <div style={{ fontSize:13, fontWeight:900,
+          padding:'1px 0',
+          background: RED,
+          printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
+        } as React.CSSProperties}>
+          <div style={{ fontSize:11, fontWeight:900,
             fontFamily:'Arial Black, Arial Narrow, Arial, sans-serif',
-            lineHeight:1, color:BLACK }}>
+            lineHeight:1, color:YELLOW }}>
             {entry.postPosition}
           </div>
-          <div style={{ fontSize:5, color:'#888', lineHeight:1 }}>pp</div>
+          <div style={{ fontSize:5, color:'rgba(255,224,0,0.65)', lineHeight:1 }}>pp</div>
         </div>
 
         {/* ── PANEL 4: Retrospecto ── */}
@@ -776,20 +811,20 @@ function FavoritesBlock({ raceId, picksByRace, tipsterName }: {
 
   return (
     <div style={{
-      background:YELLOW, borderTop:`1.5px solid ${BLACK}`,
+      background: RED, borderTop:`1.5px solid ${BLACK}`,
       padding:'1px 5px', display:'flex', alignItems:'baseline',
       flexWrap:'wrap', gap:'0 5px',
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
-      <span style={{ fontSize:7.5, fontWeight:900, color:BLACK,
+      <span style={{ fontSize:7.5, fontWeight:900, color:YELLOW,
         fontFamily:'Arial Narrow,Arial,sans-serif' }}>Nuestros Favoritos:</span>
-      <span style={{ fontSize:7.5, fontWeight:900, fontFamily:'monospace', color:RED }}>
+      <span style={{ fontSize:7.5, fontWeight:900, fontFamily:'monospace', color:YELLOW }}>
         {dorsals}
       </span>
-      <span style={{ fontSize:7, fontStyle:'italic', fontWeight:600, color:'#111' }}>{names}</span>
-      <span style={{ fontSize:6, color:'#555', marginLeft:4 }}>· Por {tipsterName}</span>
+      <span style={{ fontSize:7, fontStyle:'italic', fontWeight:600, color:'rgba(255,224,0,0.9)' }}>{names}</span>
+      <span style={{ fontSize:6, color:'rgba(255,224,0,0.65)', marginLeft:4 }}>· Por {tipsterName}</span>
       {picks.hasAiSource && (
-        <span style={{ fontSize:5.5, color:'#666', display:'block', width:'100%' }}>
+        <span style={{ fontSize:5.5, color:'rgba(255,224,0,0.55)', display:'block', width:'100%' }}>
           * Picks extraídos por IA · pueden contener discrepancias con la fuente oficial INH/HINAVA
         </span>
       )}
