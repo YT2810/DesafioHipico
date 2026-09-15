@@ -5,15 +5,15 @@
  *
  * Invisible en pantalla (hidden), visible solo al imprimir (print:block).
  *
- * Arquitectura por caballo: 4 paneles verticales (flex):
- *   Panel 1 (~5%)  : PP/Dorsal gigante — rojo con número dorado; ★ si es pick
- *   Panel 2 (~22%) : Datos del caballo (stud, nombre, pedigree, color, stats)
- *   Panel 3 (~13%) : Yunta — jinete, kg, implementos, entrenador
- *   Panel 4 (~60%) : Retrospecto — micro-tabla con últimas carreras + traqueos
+ * Arquitectura por caballo — 5 paneles verticales (flex):
+ *   Panel 1 (~4%)  : N° gualdrapa — rojo/dorado, ★ si es pick del tipster
+ *   Panel 2 (~22%) : Caballo (nombre, pedigree, color, stats, medicación)
+ *   Panel 3 (~10%) : Yunta (jinete, kg, implementos, entrenador)
+ *   Panel 3b (~5%) : PP del día (puesto de pista en la carrera actual)
+ *   Panel 4 (~59%) : Retrospecto — micro-tabla + traqueos
  *
- * Un solo header de columnas por carrera (fuera de los horse rows → alineación perfecta).
+ * ColumnHeaderBar separado (fuera de los horse rows) → alineación perfecta.
  * Densidad: hasta 14 caballos por hoja A4.
- * Publicidad dinámica cuando hay < 14 caballos en la carrera.
  */
 
 import React from 'react';
@@ -148,33 +148,113 @@ function posDisplay(h: RaceHistoryItem): string {
   if (!h.finishPosition) return '?';
   return `${h.finishPosition}°`;
 }
-/** Jinete: Apellido(s), Inicial. — sin truncar apellido */
+
+/** Jinete: Apellido, Inicial. (sin truncar apellido) */
 function jockeyFmt(name: string): string {
   if (!name) return '—';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  const first = parts[0];
-  const last  = parts.slice(1).join(' ');
-  return `${last}, ${first[0]}.`;
+  const p = name.trim().split(/\s+/);
+  if (p.length === 1) return p[0];
+  return `${p.slice(1).join(' ')}, ${p[0][0]}.`;
 }
-/** Entrenador: las dos últimas palabras del nombre */
+
+/** Entrenador: últimas 2 palabras */
 function trainerFmt(name: string): string {
   if (!name) return '—';
   const p = name.trim().split(/\s+/);
   return p.slice(-2).join(' ');
 }
+
+/** Medicación abreviada: BUT→B, LAX→L, BUT-LAX→B-L */
+function medAbbr(med: string | null): string | null {
+  if (!med) return null;
+  const m = med.toUpperCase().replace(/\s/g,'').replace(/-/g,'');
+  const hasBut = m.includes('BUT') || m.includes('BUTA');
+  const hasLax = m.includes('LAX') || m.includes('LAS') || m.includes('FURO');
+  if (hasBut && hasLax) return 'B-L';
+  if (hasBut) return 'B';
+  if (hasLax) return 'L';
+  return med.trim().slice(0,4);
+}
+
+/**
+ * Series abbreviation — Venezuelan horse racing:
+ * Clásicos/Copas/GP → nombre del clásico
+ * Normales → tipo + edad + calificación (Ptr2a, Per3+, G1, etc.)
+ */
+function seriesAbbr(conditions: string): string {
+  if (!conditions) return '';
+  const raw = conditions.trim();
+
+  // ── Named races ──────────────────────────────────────────────────────────
+  const clsM = raw.match(/cl[aá]sico\s+(.+)/i);
+  if (clsM) {
+    const name = clsM[1].replace(/\s+/g,' ').trim().split(/\s+/).slice(0,4).join(' ');
+    return name.slice(0, 20);
+  }
+  const copaM = raw.match(/copa\s+(.+)/i);
+  if (copaM) return `Copa ${copaM[1].trim().split(/\s+/).slice(0,3).join(' ')}`.slice(0,18);
+
+  const gpM = raw.match(/gran\s+premio\s+(.+)/i);
+  if (gpM) return `GP ${gpM[1].trim().split(/\s+/).slice(0,3).join(' ')}`.slice(0,16);
+
+  // ── Build code from parts ─────────────────────────────────────────────────
+  const c = raw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  const parts: string[] = [];
+
+  // Animal type
+  if (c.includes('POTR'))       parts.push('Ptr');
+  else if (c.includes('YEGU'))  parts.push('Yeg');
+  else if (c.includes('CABALLO') || c.includes('CABALL')) parts.push('Cab');
+
+  // Age
+  const ageYmas = c.match(/(\d)\s*AN[NO]S?\s+Y\s+MA/);      // "3 años y más"
+  const ageDe   = c.match(/DE\s+(\d)\s*AN[NO]S?(?!\s+Y\s+M)/); // "de 3 años" (no "y más")
+  if (ageYmas)    parts.push(`${ageYmas[1]}a+`);
+  else if (ageDe) parts.push(`${ageDe[1]}a`);
+
+  // Qualification — ganadoras
+  const g12 = c.match(/GANAD\w+\s+DE\s+1\s+Y\s+2/);
+  const gN  = c.match(/GANAD\w+\s+DE\s+([1-9])/);
+  if (g12)         parts.push('G1y2');
+  else if (gN)     parts.push(`G${gN[1]}`);
+
+  // Perdedoras
+  if (c.includes('PERDED')) {
+    const pAge = c.match(/PERDED\w+\s+DE\s+(\d)/);
+    if (pAge) {
+      const plus = c.includes('Y MAS') || c.includes('Y MA');
+      parts.push(`Per${pAge[1]}${plus ? '+' : ''}`);
+    } else {
+      parts.push('Per');
+    }
+  }
+
+  // Debutantes / No ganadoras
+  if (c.includes('DEBUT'))                         parts.push('Deb');
+  if (c.includes('NO GANAD') && !gN && !g12)      parts.push('NoG');
+
+  // Special categories
+  if (c.includes('HANDICAP'))                      parts.push('Hcp');
+  if (c.includes('RECLAM'))                        parts.push('Rcl');
+  if (c.includes('ALLOWANCE') || c.includes('ALW')) parts.push('Alw');
+
+  return parts.join(' ').slice(0, 20) || raw.slice(0, 14);
+}
+
 /** maxHistory dinámico según cantidad de caballos */
-function maxHist(n: number): number {
+function maxHistRows(n: number): number {
   if (n >= 13) return 3;
   if (n >= 9)  return 4;
   return 5;
 }
-/** Slot publicitario según caballos */
-function adSlot(n: number): number {
-  if (n <= 4)  return 110;
-  if (n <= 6)  return 75;
-  if (n <= 9)  return 42;
-  if (n <= 11) return 20;
+
+/** Slot publicitario en px según caballos en carrera */
+function adHeight(n: number): number {
+  if (n <= 4)  return 105;
+  if (n <= 6)  return 72;
+  if (n <= 9)  return 40;
+  if (n <= 11) return 18;
   return 0;
 }
 
@@ -191,29 +271,32 @@ function DHLogo({ size = 36 }: { size?: number }) {
 }
 
 // ─── History column definitions ───────────────────────────────────────────────
+//
+// IMPORTANT: the Panel 4 padding in EntryBlock/ColumnHeaderBar MUST match
+// (both use padding: '1px 0 1px 2px') so tables align across rows.
 
 const COLS: { key: string; w: number; align: 'center'|'left'|'right' }[] = [
-  { key:'Fec',         w:22,  align:'center' },
-  { key:'Carr',        w:20,  align:'center' },
-  { key:'Dist',        w:16,  align:'center' },
-  { key:'PP',          w:13,  align:'center' }, // cyan bg
-  { key:'800m',        w:12,  align:'center' },
-  { key:'Lleg',        w:13,  align:'center' },
-  { key:'Kg.Jin',      w:14,  align:'center' },
-  { key:'Jinete',      w:38,  align:'left'   },
-  { key:'Div',         w:13,  align:'center' },
-  { key:'Ganador / 2°',w:54,  align:'left'   },
-  { key:'Cpos',        w:18,  align:'center' },
-  { key:'Serie',       w:30,  align:'left'   },
-  { key:'Rat',         w:11,  align:'center' },
-  { key:'T.G.',        w:22,  align:'center' },
-  { key:'T.Ej.',       w:22,  align:'center' },
-  { key:'Cont.',       w:0,   align:'left'   }, // flex remainder
+  { key:'Fec',          w:22,  align:'center' },
+  { key:'Carr',         w:20,  align:'center' },
+  { key:'Dist',         w:16,  align:'center' },
+  { key:'PP',           w:13,  align:'center' }, // cyan tint — post position in hist race
+  { key:'400m',         w:12,  align:'center' },
+  { key:'800m',         w:12,  align:'center' },
+  { key:'Lleg',         w:13,  align:'center' },
+  { key:'Kg.Jin',       w:14,  align:'center' },
+  { key:'Jinete',       w:35,  align:'left'   },
+  { key:'Div',          w:13,  align:'center' },
+  { key:'Ganador / 2°', w:68,  align:'left'   },
+  { key:'Cpos',         w:18,  align:'center' },
+  { key:'Serie',        w:32,  align:'left'   },
+  { key:'Rat',          w:11,  align:'center' },
+  { key:'T.G.',         w:22,  align:'center' },
+  { key:'T.Ej.',        w:22,  align:'center' },
+  { key:'Cont.',        w:0,   align:'left'   }, // flex remainder
 ];
 
 // ─── Shared cell styles ───────────────────────────────────────────────────────
 
-/** Base data cell — dark text, medium weight */
 const DC: React.CSSProperties = {
   fontSize: 6.5,
   fontFamily: 'Arial Narrow, Arial, sans-serif',
@@ -226,8 +309,6 @@ const DC: React.CSSProperties = {
   borderRight: '0.5px solid #bbb',
   verticalAlign: 'middle',
 };
-
-/** Header cell */
 const HC: React.CSSProperties = {
   ...DC,
   fontWeight: 700,
@@ -242,38 +323,42 @@ const HC: React.CSSProperties = {
   WebkitPrintColorAdjust: 'exact',
 } as React.CSSProperties;
 
-// ─── Column header bar (rendered ONCE per race, outside horse rows) ───────────
+// Shared padding that MUST be identical in ColumnHeaderBar Panel4 and EntryBlock Panel4
+const P4_PADDING = '1px 0 1px 2px';
+
+// ─── Column header bar (ONE per race, outside horse rows) ─────────────────────
 
 function ColumnHeaderBar() {
   return (
     <div style={{
-      display: 'flex',
-      alignItems: 'stretch',
+      display:'flex', alignItems:'stretch',
       background: BLACK,
-      printColorAdjust: 'exact',
-      WebkitPrintColorAdjust: 'exact',
+      printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
-      {/* Panel 1 header */}
-      <div style={{ flexShrink:0, width:32, display:'flex', alignItems:'center', justifyContent:'center',
-        borderRight:`1px solid #444` }}>
-        <span style={{ fontSize:6, fontWeight:700, color:YELLOW, letterSpacing:'0.05em' }}>PP</span>
+      {/* N° */}
+      <div style={{ flexShrink:0, width:32, display:'flex', alignItems:'center',
+        justifyContent:'center', borderRight:`1px solid #444` }}>
+        <span style={{ fontSize:6, fontWeight:700, color:YELLOW }}>N°</span>
       </div>
-      {/* Panel 2 header */}
+      {/* Caballo */}
       <div style={{ flexShrink:0, width:'22%', borderRight:`1px solid #444`,
         padding:'1px 3px', display:'flex', alignItems:'center' }}>
-        <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-          Ejemplar / Stud
-        </span>
+        <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase',
+          letterSpacing:'0.05em' }}>Ejemplar / Stud</span>
       </div>
-      {/* Panel 3 header */}
-      <div style={{ flexShrink:0, width:'13%', borderRight:`1px solid #444`,
+      {/* Yunta */}
+      <div style={{ flexShrink:0, width:'10%', borderRight:`1px solid #444`,
         padding:'1px 2px', display:'flex', alignItems:'center' }}>
-        <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-          Yunta / Kg
-        </span>
+        <span style={{ fontSize:6, fontWeight:700, color:WHITE, textTransform:'uppercase',
+          letterSpacing:'0.05em' }}>Yunta / Kg</span>
       </div>
-      {/* Panel 4 header — micro columns */}
-      <div style={{ flex:1, overflow:'hidden' }}>
+      {/* PP del día */}
+      <div style={{ flexShrink:0, width:'5%', borderRight:`1px solid #444`,
+        padding:'1px 2px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <span style={{ fontSize:6, fontWeight:700, color:CYAN }}>PP</span>
+      </div>
+      {/* Retrospecto columns */}
+      <div style={{ flex:1, overflow:'hidden', padding: P4_PADDING }}>
         <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
           <thead>
             <tr>
@@ -292,20 +377,15 @@ function ColumnHeaderBar() {
   );
 }
 
-// ─── Single history data row ──────────────────────────────────────────────────
+// ─── History data row ─────────────────────────────────────────────────────────
 
 function HistoryRow({ h, isOdd }: { h: RaceHistoryItem; isOdd: boolean }) {
   const isWin = h.finishPosition === 1 && !h.isScratched;
   const isScr = h.isScratched;
   const bg    = isOdd ? LGRAY : WHITE;
-  const cpos  = isWin
-    ? '—'
-    : (h.distanceMargin || h.diffVsFirst || '—');
-  const ref   = isWin
-    ? (h.secondName ?? '—')
-    : (h.winnerName ?? '—');
-  const refLabel = isWin ? '2°' : '';
-  const serie = (h.conditions ?? '').slice(0, 14);
+  const cpos  = isWin ? '—' : (h.distanceMargin || h.diffVsFirst || '—');
+  const ref   = isWin ? (h.secondName ?? '—') : (h.winnerName ?? '—');
+  const serie = seriesAbbr(h.conditions ?? '');
 
   return (
     <tr style={{ background: bg }}>
@@ -319,45 +399,51 @@ function HistoryRow({ h, isOdd }: { h: RaceHistoryItem; isOdd: boolean }) {
       </td>
       {/* Dist */}
       <td style={{ ...DC, textAlign:'center' }}>{h.distance}</td>
-      {/* PP — cyan tint background */}
+      {/* PP — cyan tint */}
       <td style={{
         ...DC, textAlign:'center', fontWeight:700,
         background:`${CYAN}40`,
         printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
       } as React.CSSProperties}>
-        {isScr ? 'R' : h.dorsalNumber}
+        {isScr ? 'R' : (h.dorsalNumber || '—')}
       </td>
+      {/* 400m */}
+      <td style={{ ...DC, textAlign:'center', color:'#777' }}>—</td>
       {/* 800m */}
       <td style={{ ...DC, textAlign:'center', color:'#777' }}>—</td>
       {/* Lleg */}
       <td style={{
-        ...DC, textAlign:'center', fontWeight: isWin ? 900 : 700,
+        ...DC, textAlign:'center',
+        fontWeight: isWin ? 900 : 700,
         color: isWin ? '#6a4500' : (isScr ? '#999' : BLACK),
         textDecoration: isScr ? 'line-through' : 'none',
       }}>
         {posDisplay(h)}
       </td>
-      {/* Kg.Jin — use h.weight from snapshot */}
+      {/* Kg.Jin — h.weight from snapshot */}
       <td style={{ ...DC, textAlign:'center' }}>
         {h.weight || '—'}
       </td>
       {/* Jinete */}
       <td style={{ ...DC, textAlign:'left', color:'#111' }}>
-        {jockeyFmt(h.jockeyName)}
+        {h.jockeyName ? jockeyFmt(h.jockeyName) : '—'}
       </td>
       {/* Div */}
       <td style={{ ...DC, textAlign:'center', color:'#777' }}>—</td>
       {/* Ganador / 2° */}
-      <td style={{ ...DC, textAlign:'left',
+      <td style={{
+        ...DC, textAlign:'left',
         fontWeight: isWin ? 700 : 600,
         color: isWin ? '#6a4500' : BLACK,
         overflow:'hidden',
       }}>
-        {refLabel && <span style={{ fontSize:5.5, color:'#777', marginRight:1 }}>{refLabel}:</span>}
-        {ref.slice(0, 20)}
+        {isWin
+          ? <><span style={{ fontSize:5.5, color:'#888' }}>2°: </span>{ref.slice(0,22)}</>
+          : ref.slice(0,22)
+        }
       </td>
       {/* Cpos */}
-      <td style={{ ...DC, textAlign:'center', color:'#222' }}>{cpos}</td>
+      <td style={{ ...DC, textAlign:'center' }}>{cpos}</td>
       {/* Serie */}
       <td style={{ ...DC, textAlign:'left', fontSize:5.5, color:'#333' }}>{serie}</td>
       {/* Rat */}
@@ -379,12 +465,11 @@ function HistoryRow({ h, isOdd }: { h: RaceHistoryItem; isOdd: boolean }) {
   );
 }
 
-// ─── Panel 4: Retrospecto + Traqueos (self-contained) ────────────────────────
+// ─── Panel 4: Retrospecto + Traqueos ─────────────────────────────────────────
 
 function Panel4({ entry, maxH }: { entry: EntryItem; maxH: number }) {
   const rows = entry.raceHistory.slice(0, maxH);
 
-  // Workouts inline string — lives here, below the history table
   const workoutLine = entry.workouts.length > 0
     ? entry.workouts.slice(0, 5).map(w => {
         const t = ({ EP:'EP', ES:'ES', AP:'AP', galopo:'Gal', trote:'Trot' } as Record<string,string>)[w.workoutType] ?? w.workoutType ?? '';
@@ -393,28 +478,24 @@ function Panel4({ entry, maxH }: { entry: EntryItem; maxH: number }) {
     : null;
 
   return (
-    <div style={{ flex:1, minWidth:0, padding:'1px 0 1px 2px', display:'flex', flexDirection:'column' }}>
+    // NOTE: padding MUST match P4_PADDING in ColumnHeaderBar for column alignment
+    <div style={{ flex:1, minWidth:0, padding: P4_PADDING, display:'flex', flexDirection:'column' }}>
       {rows.length === 0 ? (
-        <span style={{ fontSize:6.5, color:'#888', fontStyle:'italic', padding:'2px' }}>Sin historial</span>
+        <span style={{ fontSize:6.5, color:'#888', fontStyle:'italic', padding:'1px 2px' }}>
+          Sin historial
+        </span>
       ) : (
         <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
           <tbody>
-            {rows.map((h, i) => (
-              <HistoryRow key={i} h={h} isOdd={i % 2 === 0} />
-            ))}
+            {rows.map((h, i) => <HistoryRow key={i} h={h} isOdd={i % 2 === 0} />)}
           </tbody>
         </table>
       )}
       {workoutLine && (
         <div style={{
-          fontSize: 6,
-          fontStyle: 'italic',
-          fontWeight: 600,
-          color: '#222',
-          lineHeight: 1.15,
-          borderTop: '0.5px dashed #ccc',
-          padding: '0.5px 0 0 2px',
-          marginTop: 1,
+          fontSize:6, fontStyle:'italic', fontWeight:600, color:'#222',
+          lineHeight:1.15, borderTop:'0.5px dashed #ccc',
+          padding:'0.5px 0 0 2px', marginTop:1,
         }}>
           <span style={{ fontWeight:700, fontStyle:'normal', color:BLUE, marginRight:3 }}>Traq:</span>
           {workoutLine}
@@ -424,11 +505,9 @@ function Panel4({ entry, maxH }: { entry: EntryItem; maxH: number }) {
   );
 }
 
-// ─── Full entry (horse) block ─────────────────────────────────────────────────
+// ─── Full entry block ─────────────────────────────────────────────────────────
 
-function EntryBlock({
-  entry, maxH, isPick, pickOrder,
-}: {
+function EntryBlock({ entry, maxH, isPick, pickOrder }: {
   entry: EntryItem;
   maxH: number;
   isPick: boolean;
@@ -436,98 +515,73 @@ function EntryBlock({
 }) {
   const scratched = entry.isScratched;
   const pedigree  = [entry.sire, entry.dam].filter(Boolean).join(' x ');
+  const med       = medAbbr(entry.medication);
+
+  // Nationality parenthesised at same size as name
+  const natStr = entry.nationality && entry.nationality !== 'VEN'
+    ? ` (${entry.nationality})`
+    : '';
 
   return (
     <div style={{
-      borderTop: '0.5px solid #aaa',
-      breakInside: 'avoid',
-      pageBreakInside: 'avoid',
+      borderTop:'0.5px solid #aaa',
+      breakInside:'avoid', pageBreakInside:'avoid',
       opacity: scratched ? 0.6 : 1,
     }}>
       <div style={{ display:'flex', alignItems:'stretch', minHeight:26 }}>
 
-        {/* ── PANEL 1: PP number ── */}
+        {/* ── PANEL 1: N° gualdrapa ── */}
         <div style={{
-          flexShrink: 0,
-          width: 32,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRight: `2px solid ${BLACK}`,
-          // All PP boxes: RED bg + YELLOW text
+          flexShrink:0, width:32,
+          display:'flex', flexDirection:'column',
+          alignItems:'center', justifyContent:'center',
+          borderRight:`2px solid ${BLACK}`,
           background: RED,
-          printColorAdjust: 'exact',
-          WebkitPrintColorAdjust: 'exact',
-          padding: '1px 0',
-          position: 'relative',
+          printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
+          padding:'1px 0', position:'relative',
         } as React.CSSProperties}>
-          {/* Star indicator for picks */}
           {isPick && pickOrder !== undefined && (
             <div style={{
-              position: 'absolute', top: 1, right: 1,
-              fontSize: 6, fontWeight: 900,
-              color: YELLOW,
-              lineHeight: 1,
+              position:'absolute', top:1, right:1,
+              fontSize:6, fontWeight:900, color:YELLOW, lineHeight:1,
             }}>★{pickOrder}</div>
           )}
           <div style={{
-            fontSize: 20,
-            fontWeight: 900,
-            fontFamily: 'Arial Black, Arial Narrow, Arial, sans-serif',
-            lineHeight: 1,
-            color: YELLOW,
+            fontSize:20, fontWeight:900,
+            fontFamily:'Arial Black, Arial Narrow, Arial, sans-serif',
+            lineHeight:1, color:YELLOW,
             textDecoration: scratched ? 'line-through' : 'none',
           }}>
-            {entry.postPosition}
+            {entry.dorsalNumber}
           </div>
-          <div style={{ fontSize: 5.5, color: 'rgba(255,224,0,0.75)', lineHeight:1 }}>
-            #{entry.dorsalNumber}
-          </div>
+          {scratched && (
+            <div style={{ fontSize:5, fontWeight:700, color:'rgba(255,224,0,0.75)', lineHeight:1 }}>RET</div>
+          )}
         </div>
 
         {/* ── PANEL 2: Datos del caballo ── */}
         <div style={{
-          flexShrink: 0,
-          width: '22%',
-          borderRight: `1px solid ${BLACK}`,
-          padding: '1px 3px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center', // centers vertically when stud is missing
+          flexShrink:0, width:'22%',
+          borderRight:`1px solid ${BLACK}`,
+          padding:'1px 3px',
+          display:'flex', flexDirection:'column',
+          justifyContent:'center', position:'relative',
         }}>
-          {/* Stud — only if present */}
+          {/* Stud */}
           {entry.studName && (
             <div style={{ fontSize:5.5, color:'#444', lineHeight:1.1, fontStyle:'italic' }}>
               {entry.studName}
             </div>
           )}
-          {/* Horse name */}
+          {/* Horse name + nationality (SAME size) */}
           <div style={{
-            fontSize: 8.5,
-            fontWeight: 900,
-            fontFamily: 'Arial Narrow, Arial, sans-serif',
-            textTransform: 'uppercase',
-            letterSpacing: '0.01em',
-            lineHeight: 1.1,
-            color: scratched ? '#777' : BLACK,
+            fontSize:8.5, fontWeight:900,
+            fontFamily:'Arial Narrow, Arial, sans-serif',
+            textTransform:'uppercase', letterSpacing:'0.01em',
+            lineHeight:1.1, color: scratched ? '#777' : BLACK,
             textDecoration: scratched ? 'line-through' : 'none',
           }}>
-            {entry.horseName}
-            {entry.nationality && entry.nationality !== 'VEN' && (
-              <span style={{ fontSize:6, color:'#555', fontWeight:500 }}> ({entry.nationality})</span>
-            )}
-            {/* Badges inline with name */}
-            {entry.medication && (
-              <span style={{ fontSize:5.5, fontWeight:700, color:BLUE,
-                border:`0.5px solid ${BLUE}`, borderRadius:2, padding:'0 1px', marginLeft:2 }}>
-                {entry.medication}
-              </span>
-            )}
-            {scratched && (
-              <span style={{ fontSize:5.5, fontWeight:700, color:'#c00',
-                border:'0.5px solid #c00', borderRadius:2, padding:'0 1px', marginLeft:2 }}>RET</span>
-            )}
+            {entry.horseName}{natStr}
           </div>
           {/* Pedigree */}
           {pedigree && (
@@ -535,76 +589,74 @@ function EntryBlock({
               {pedigree}
             </div>
           )}
-          {/* Color / gender */}
-          {(entry.color || entry.gender) && (
-            <div style={{ fontSize:5.5, color:'#444', lineHeight:1.1 }}>
-              {[entry.color, entry.gender].filter(Boolean).join(' · ')}
-            </div>
-          )}
-          {/* Year stats */}
-          {entry.yearStats && entry.yearStats.starts > 0 && (
-            <div style={{ fontSize:5.5, fontWeight:700, color:'#222', lineHeight:1.1 }}>
-              2026: {entry.yearStats.starts}c-{entry.yearStats.wins}g
-              {entry.yearStats.winless > 0 ? `-${entry.yearStats.winless}sg` : ''}
+          {/* Color / gender / year stats */}
+          <div style={{ fontSize:5.5, color:'#444', lineHeight:1.1 }}>
+            {[entry.color, entry.gender].filter(Boolean).join(' · ')}
+            {entry.yearStats && entry.yearStats.starts > 0 && (
+              <span style={{ marginLeft:4, fontWeight:700, color:'#222' }}>
+                2026: {entry.yearStats.starts}c-{entry.yearStats.wins}g
+                {entry.yearStats.winless > 0 ? `-${entry.yearStats.winless}sg` : ''}
+              </span>
+            )}
+          </div>
+          {/* Medication — bottom-right corner, tiny */}
+          {med && (
+            <div style={{
+              position:'absolute', bottom:1, right:2,
+              fontSize:5.5, fontWeight:700, color:BLUE, lineHeight:1,
+            }}>
+              {med}
             </div>
           )}
         </div>
 
         {/* ── PANEL 3: Yunta ── */}
         <div style={{
-          flexShrink: 0,
-          width: '13%',
-          borderRight: `1px solid ${BLACK}`,
-          padding: '1px 2px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
+          flexShrink:0, width:'10%',
+          borderRight:`1px solid ${BLACK}`,
+          padding:'1px 2px',
+          display:'flex', flexDirection:'column', justifyContent:'center',
         }}>
-          {/* Jockey name */}
-          <div style={{
-            fontSize: 6.5,
-            fontWeight: 700,
-            color: BLACK,
-            lineHeight: 1.2,
-            wordBreak: 'break-word',
-          }}>
+          <div style={{ fontSize:6.5, fontWeight:700, color:BLACK, lineHeight:1.2,
+            wordBreak:'break-word' }}>
             {jockeyFmt(entry.jockeyName)}
           </div>
-          {/* Weight — large */}
           {entry.weightDeclared && (
-            <div style={{
-              fontSize: 9,
-              fontWeight: 900,
-              fontFamily: 'Arial Narrow, Arial, sans-serif',
-              lineHeight: 1,
-              color: BLACK,
-            }}>
+            <div style={{ fontSize:9, fontWeight:900,
+              fontFamily:'Arial Narrow, Arial, sans-serif', lineHeight:1, color:BLACK }}>
               {entry.weightDeclared}
             </div>
           )}
-          {/* Implements */}
           {entry.implements && (
             <div style={{ fontSize:5.5, color:'#333', fontWeight:600, lineHeight:1.1 }}>
               {entry.implements}
             </div>
           )}
-          {/* Trainer */}
           {entry.trainerName && (
-            <div style={{
-              fontSize: 6,
-              fontWeight: 700,
-              color: '#111',
-              lineHeight: 1.1,
-              borderTop: '0.5px dotted #bbb',
-              marginTop: 1,
-              paddingTop: 1,
-            }}>
+            <div style={{ fontSize:6, fontWeight:700, color:'#111', lineHeight:1.1,
+              borderTop:'0.5px dotted #bbb', marginTop:1, paddingTop:1 }}>
               {trainerFmt(entry.trainerName)}
             </div>
           )}
         </div>
 
-        {/* ── PANEL 4: Retrospecto + Traqueos ── */}
+        {/* ── PANEL 3b: PP del día ── */}
+        <div style={{
+          flexShrink:0, width:'5%',
+          borderRight:`1px solid ${BLACK}`,
+          display:'flex', flexDirection:'column',
+          alignItems:'center', justifyContent:'center',
+          padding:'1px 1px',
+        }}>
+          <div style={{ fontSize:13, fontWeight:900,
+            fontFamily:'Arial Black, Arial Narrow, Arial, sans-serif',
+            lineHeight:1, color:BLACK }}>
+            {entry.postPosition}
+          </div>
+          <div style={{ fontSize:5, color:'#888', lineHeight:1 }}>pp</div>
+        </div>
+
+        {/* ── PANEL 4: Retrospecto ── */}
         <Panel4 entry={entry} maxH={maxH} />
 
       </div>
@@ -630,49 +682,33 @@ function RaceHeader({ race, trackName }: { race: RaceItem; trackName: string }) 
       background: CYAN,
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
-
-      {/* Race number + time */}
-      <div style={{
-        flexShrink:0, minWidth:48,
-        display:'flex', flexDirection:'column',
-        alignItems:'center', justifyContent:'center',
-        padding:'2px 6px',
-        borderRight:`1.5px solid rgba(0,0,0,0.3)`,
-      }}>
+      <div style={{ flexShrink:0, minWidth:48,
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        padding:'2px 6px', borderRight:`1.5px solid rgba(0,0,0,0.3)` }}>
         <div style={{ fontSize:20, fontWeight:900, fontFamily:'Arial Black,Arial,sans-serif',
           lineHeight:1, color:BLACK }}>
           {race.raceNumber}<span style={{ fontSize:10 }}>ª</span>
         </div>
         <div style={{ fontSize:6, fontWeight:700, color:'rgba(0,0,0,0.65)',
           letterSpacing:'0.05em', textTransform:'uppercase' }}>Carrera</div>
-        {annualLabel && (
-          <div style={{ fontSize:5.5, color:'rgba(0,0,0,0.55)', fontFamily:'monospace' }}>{annualLabel}</div>
-        )}
-        {race.scheduledTime && (
-          <div style={{ fontSize:6.5, color:'rgba(0,0,0,0.75)', fontWeight:700 }}>{race.scheduledTime}</div>
-        )}
+        {annualLabel && <div style={{ fontSize:5.5, color:'rgba(0,0,0,0.55)', fontFamily:'monospace' }}>{annualLabel}</div>}
+        {race.scheduledTime && <div style={{ fontSize:6.5, color:'rgba(0,0,0,0.75)', fontWeight:700 }}>{race.scheduledTime}</div>}
       </div>
 
-      {/* Distance — dominant center */}
-      <div style={{
-        flexShrink:0,
-        display:'flex', flexDirection:'column',
-        alignItems:'center', justifyContent:'center',
-        padding:'2px 10px',
-        borderRight:`1.5px solid rgba(0,0,0,0.3)`,
-      }}>
+      <div style={{ flexShrink:0,
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        padding:'2px 10px', borderRight:`1.5px solid rgba(0,0,0,0.3)` }}>
         <div style={{ fontSize:26, fontWeight:900, fontFamily:'Arial Black,Arial,sans-serif',
           lineHeight:1, color:BLACK }}>{race.distance}</div>
         <div style={{ fontSize:7, fontWeight:700, color:'rgba(0,0,0,0.65)',
           textTransform:'uppercase', letterSpacing:'0.08em' }}>MTS</div>
       </div>
 
-      {/* Prize + conditions */}
       <div style={{ flex:1, padding:'2px 5px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
         {(prize || games) && (
           <div style={{ fontSize:7.5, fontWeight:900, color:BLACK, lineHeight:1.2 }}>
             {prize && <span>Premio: {prize}</span>}
-            {prize && games && <span style={{ fontWeight:400, color:'rgba(0,0,0,0.6)', margin:'0 5px' }}>·</span>}
+            {prize && games && <span style={{ fontWeight:400, color:'rgba(0,0,0,0.6)', margin:'0 4px' }}>·</span>}
             {games && <span style={{ fontWeight:600, color:'rgba(0,0,0,0.8)' }}>{games}</span>}
           </div>
         )}
@@ -683,14 +719,10 @@ function RaceHeader({ race, trackName }: { race: RaceItem; trackName: string }) 
         )}
       </div>
 
-      {/* DH brand box */}
-      <div style={{
-        flexShrink:0, width:72,
-        display:'flex', flexDirection:'column',
-        alignItems:'center', justifyContent:'center',
+      <div style={{ flexShrink:0, width:72,
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         background:RED, padding:'3px 4px',
-        printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
-      } as React.CSSProperties}>
+        printColorAdjust:'exact', WebkitPrintColorAdjust:'exact' } as React.CSSProperties}>
         <DHLogo size={26} />
         <div style={{ fontSize:6, fontWeight:900, color:YELLOW,
           letterSpacing:'0.05em', textTransform:'uppercase',
@@ -706,13 +738,12 @@ function RaceHeader({ race, trackName }: { race: RaceItem; trackName: string }) 
   );
 }
 
-// ─── Compact page header (for races on page 2+) ───────────────────────────────
+// ─── Compact brand bar (pages 2+) ─────────────────────────────────────────────
 
 function CompactBrandBar({ meeting }: { meeting: MeetingData }) {
   return (
     <div style={{
-      background: RED,
-      display:'flex', alignItems:'center', justifyContent:'space-between',
+      background:RED, display:'flex', alignItems:'center', justifyContent:'space-between',
       padding:'2px 8px', marginBottom:2,
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
@@ -739,32 +770,26 @@ function FavoritesBlock({ raceId, picksByRace, tipsterName }: {
 }) {
   const picks = picksByRace[raceId];
   if (!picks || picks.marks.length === 0) return null;
-
   const sorted  = [...picks.marks].sort((a,b) => a.preferenceOrder - b.preferenceOrder);
   const dorsals = sorted.map(m => m.dorsalNumber ?? '?').join(' - ');
   const names   = sorted.map(m => m.horseName).join(' · ');
 
   return (
     <div style={{
-      background: YELLOW,
-      borderTop:`1.5px solid ${BLACK}`,
-      padding:'1px 5px',
-      display:'flex', alignItems:'baseline', flexWrap:'wrap', gap:'0 5px',
+      background:YELLOW, borderTop:`1.5px solid ${BLACK}`,
+      padding:'1px 5px', display:'flex', alignItems:'baseline',
+      flexWrap:'wrap', gap:'0 5px',
       printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
     } as React.CSSProperties}>
       <span style={{ fontSize:7.5, fontWeight:900, color:BLACK,
-        fontFamily:'Arial Narrow,Arial,sans-serif' }}>
-        Nuestros Favoritos:
-      </span>
+        fontFamily:'Arial Narrow,Arial,sans-serif' }}>Nuestros Favoritos:</span>
       <span style={{ fontSize:7.5, fontWeight:900, fontFamily:'monospace', color:RED }}>
         {dorsals}
       </span>
-      <span style={{ fontSize:7, fontStyle:'italic', fontWeight:600, color:'#111' }}>
-        {names}
-      </span>
+      <span style={{ fontSize:7, fontStyle:'italic', fontWeight:600, color:'#111' }}>{names}</span>
       <span style={{ fontSize:6, color:'#555', marginLeft:4 }}>· Por {tipsterName}</span>
       {picks.hasAiSource && (
-        <span style={{ fontSize:5.5, color:'#666', display:'block', width:'100%', marginTop:0 }}>
+        <span style={{ fontSize:5.5, color:'#666', display:'block', width:'100%' }}>
           * Picks extraídos por IA · pueden contener discrepancias con la fuente oficial INH/HINAVA
         </span>
       )}
@@ -775,22 +800,15 @@ function FavoritesBlock({ raceId, picksByRace, tipsterName }: {
 // ─── Ad placeholder ───────────────────────────────────────────────────────────
 
 function AdBlock({ entryCount }: { entryCount: number }) {
-  const h = adSlot(entryCount);
+  const h = adHeight(entryCount);
   if (h <= 0) return null;
   return (
-    <div style={{
-      height: h, margin:'2px 0',
-      border:'1px dashed #ccc',
-      display:'flex', flexDirection:'column',
-      alignItems:'center', justifyContent:'center',
-      background: LGRAY,
-    }}>
-      <div style={{ fontSize:8, fontWeight:700, color:'#bbb', textTransform:'uppercase', letterSpacing:'0.1em' }}>
-        Espacio Publicitario
-      </div>
-      <div style={{ fontSize:6.5, color:'#ccc', marginTop:1 }}>
-        desafiohipico.com
-      </div>
+    <div style={{ height:h, margin:'2px 0', border:'1px dashed #ccc',
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      background:LGRAY }}>
+      <div style={{ fontSize:8, fontWeight:700, color:'#bbb',
+        textTransform:'uppercase', letterSpacing:'0.1em' }}>Espacio Publicitario</div>
+      <div style={{ fontSize:6.5, color:'#ccc', marginTop:1 }}>desafiohipico.com</div>
     </div>
   );
 }
@@ -806,17 +824,13 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
 
   return (
     <div className="hidden print:block" style={{
-      fontFamily: 'Arial Narrow, Arial, sans-serif',
-      color: BLACK,
-      background: WHITE,
-      fontSize: 8,
-      lineHeight: 1.2,
+      fontFamily:'Arial Narrow, Arial, sans-serif',
+      color:BLACK, background:WHITE, fontSize:8, lineHeight:1.2,
     }}>
 
-      {/* ── Full page header (first page only) ── */}
+      {/* Full page header — first page */}
       <div style={{
-        background: RED,
-        display:'flex', alignItems:'center', justifyContent:'space-between',
+        background:RED, display:'flex', alignItems:'center', justifyContent:'space-between',
         padding:'5px 8px', marginBottom:4,
         printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
       } as React.CSSProperties}>
@@ -840,9 +854,7 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
             {meeting.trackName} · Reunión {meeting.meetingNumber}
           </div>
           <div style={{ fontSize:7.5, color:'rgba(255,224,0,0.75)',
-            textTransform:'capitalize', marginTop:1 }}>
-            {meetingDateStr}
-          </div>
+            textTransform:'capitalize', marginTop:1 }}>{meetingDateStr}</div>
           {config.mode !== 'public' && (
             <div style={{ fontSize:7, color:'rgba(255,224,0,0.85)', fontStyle:'italic', marginTop:1 }}>
               Cortesía de: <strong>{tipsterName}</strong>
@@ -851,31 +863,24 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
         </div>
       </div>
 
-      {/* ── Races ── */}
+      {/* Races */}
       {races.map((race, raceIdx) => {
-        const isLastRace  = raceIdx === races.length - 1;
-        const entryCount  = race.entries.length;
-        const mH          = maxHist(entryCount);
-        const picks       = picksByRace[race.raceId];
+        const isLastRace = raceIdx === races.length - 1;
+        const ec  = race.entries.length;
+        const mH  = maxHistRows(ec);
+        const picks = picksByRace[race.raceId];
 
         return (
           <div key={race.raceId} style={{
             breakAfter: isLastRace ? 'auto' : 'page',
             pageBreakAfter: isLastRace ? 'auto' : 'always',
-            border:`1px solid #888`,
-            marginBottom: 4,
+            border:`1px solid #888`, marginBottom:4,
           }}>
-            {/* Compact brand bar for pages 2+ */}
             {raceIdx > 0 && <CompactBrandBar meeting={meeting} />}
-
             <RaceHeader race={race} trackName={meeting.trackName} />
-
-            {/* Column header bar — ONE per race, outside horse rows */}
             <ColumnHeaderBar />
-
-            {/* Horse entries */}
             <div>
-              {race.entries.map((entry) => {
+              {race.entries.map(entry => {
                 const pickMark = picks?.marks.find(m =>
                   m.dorsalNumber === entry.dorsalNumber ||
                   m.horseName.toUpperCase().trim() === entry.horseName.toUpperCase().trim()
@@ -891,19 +896,11 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
                 );
               })}
             </div>
-
-            {/* Favorites */}
             <FavoritesBlock raceId={race.raceId} picksByRace={picksByRace} tipsterName={tipsterName} />
-
-            {/* Advertising slot */}
-            <AdBlock entryCount={entryCount} />
-
-            {/* Race footer */}
-            <div style={{
-              borderTop:`1px solid #ccc`, padding:'1px 6px',
+            <AdBlock entryCount={ec} />
+            <div style={{ borderTop:`1px solid #ccc`, padding:'1px 6px',
               display:'flex', justifyContent:'space-between', alignItems:'center',
-              background: LGRAY,
-            }}>
+              background:LGRAY }}>
               <span style={{ fontSize:6, color:'#888', fontStyle:'italic' }}>
                 Datos INH/HINAVA · desafiohipico.com · Distribución gratuita
               </span>
@@ -916,11 +913,9 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
         );
       })}
 
-      {/* ── Final footer ── */}
-      <div style={{
-        borderTop:`2px solid ${BLACK}`, marginTop:6, padding:'3px 6px',
-        display:'flex', justifyContent:'space-between', alignItems:'center',
-      }}>
+      {/* Final footer */}
+      <div style={{ borderTop:`2px solid ${BLACK}`, marginTop:6, padding:'3px 6px',
+        display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span style={{ fontSize:6.5, color:'#555' }}>
           Generado por desafiohipico.com · Datos oficiales INH/HINAVA · Distribución gratuita
         </span>
@@ -929,7 +924,6 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
           ¡Suerte! y DESAFÍO HÍPICO
         </span>
       </div>
-
     </div>
   );
 }
