@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import BackToHome from '@/components/BackToHome';
+import GacetaPrintTemplate, { type PicksForRace } from './GacetaPrintTemplate';
 
 const GOLD = '#D4AF37';
 const SITE = 'desafiohipico.com';
@@ -53,6 +54,10 @@ interface EntryItem {
   postPosition: number;
   horseName: string;
   nationality: string | null;
+  color: string | null;
+  sire: string | null;
+  dam: string | null;
+  gender: string | null;
   horseId: string;
   jockeyName: string;
   trainerName: string;
@@ -370,6 +375,10 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState('');
 
+  // Gaceta PDF — picks for the random tipster
+  const [gacetaTipster, setGacetaTipster] = useState<{ id: string; name: string } | null>(null);
+  const [gacetaPicks, setGacetaPicks] = useState<Record<string, PicksForRace>>({});
+
   function handlePrint() {
     window.print();
   }
@@ -387,6 +396,17 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
       })
       .catch(() => setError('Error al cargar la revista'))
       .finally(() => setLoading(false));
+  }, [meetingId]);
+
+  // Fetch picks for Gaceta PDF (runs once data is available)
+  useEffect(() => {
+    fetch(`/api/revista/${meetingId}/picks`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.tipster) setGacetaTipster(d.tipster);
+        if (d.picksByRace) setGacetaPicks(d.picksByRace);
+      })
+      .catch(() => { /* picks are optional — fail silently */ });
   }, [meetingId]);
 
   if (loading) {
@@ -572,8 +592,19 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
         </p>
       </main>
 
-      {/* ── BLOQUE IMPRESIÓN: todas las carreras, diseño blanco/negro con marca ── */}
-      <div className="print-races-full hidden">
+      {/* ── BLOQUE IMPRESIÓN: Gaceta Hípica style ── */}
+      {meeting && (
+        <GacetaPrintTemplate
+          meeting={meeting}
+          races={races}
+          tipster={gacetaTipster}
+          picksByRace={gacetaPicks}
+          config={{ mode: 'public', tipsterName: gacetaTipster?.name ?? '' }}
+        />
+      )}
+
+      {/* ── BLOQUE IMPRESIÓN LEGACY: mantenido por compatibilidad, se oculta con CSS ── */}
+      <div className="print-races-full hidden" style={{ display: 'none' }}>
 
         {/* Cabecera de la revista impresa */}
         <div className="print-header">
