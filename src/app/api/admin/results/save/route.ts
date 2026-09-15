@@ -8,10 +8,15 @@ import Meeting from '@/models/Meeting';
 import Track from '@/models/Track';
 import { recalcHandicapperStats } from '@/services/handicapperStatsService';
 
+export type FinishVerdict = 'normal' | 'DST' | 'DQ' | 'INV' | 'SUB';
+
 export interface ResultFinishEntry {
   dorsalNumber: number;
   finishPosition: number;
   distanceMargin?: string;
+  verdict?: FinishVerdict;
+  physicalFinishPosition?: number;
+  officialRuling?: string;
   isDistanced?: boolean;
   isScratched?: boolean;
   scratchReason?: string;
@@ -120,12 +125,20 @@ export async function POST(req: NextRequest) {
       const entry = await Entry.findOne({ raceId: race._id, dorsalNumber: result.dorsalNumber });
       if (!entry) continue;
 
+      const v = result.verdict ?? 'normal';
       entry.result = {
         finishPosition: result.isScratched ? undefined : result.finishPosition,
         officialTime: result.officialTime,
         distanceMargin: result.distanceMargin,
         isScratched: result.isScratched ?? false,
         scratchReason: result.scratchReason,
+        // Verdict-derived flags
+        isDistanced: v === 'DST' || v === 'DQ' || undefined,
+        isDisqualified: v === 'DQ' || undefined,
+        isInvalidated: v === 'INV' || undefined,
+        isPromoted: v === 'SUB' || undefined,
+        physicalFinishPosition: result.physicalFinishPosition || undefined,
+        officialRuling: result.officialRuling || undefined,
       };
       entry.status = result.isScratched ? 'scratched' : 'finished';
       await entry.save();
@@ -133,10 +146,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Evaluate forecasts for this race
-    // Build dorsal → finishPosition map (only non-scratched)
+    // Build dorsal → finishPosition map (only valid entries — exclude scratched and invalidated)
+    // INV horses physically ran but their result is void for prizes and FV stats.
     const posMap: Record<number, number> = {};
     for (const r of finishOrder) {
-      if (!r.isScratched && r.finishPosition) posMap[r.dorsalNumber] = r.finishPosition;
+      const v = r.verdict ?? 'normal';
+      const isVoid = r.isScratched || v === 'INV' || v === 'DQ';
+      if (!isVoid && r.finishPosition) posMap[r.dorsalNumber] = r.finishPosition;
     }
     const winner1st = Object.entries(posMap).find(([, p]) => p === 1)?.[0]; // dorsal string
     const winner2nd = Object.entries(posMap).find(([, p]) => p === 2)?.[0];

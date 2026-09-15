@@ -8,6 +8,16 @@ export interface IFinishResult {
   distanceMargin?: string;
   isScratched: boolean;
   scratchReason?: string;
+  // ── Post-race verdicts ──────────────────────────────────────────────────
+  isDistanced?: boolean;          // DST — bajado de posición (cualquier severidad)
+  isDisqualified?: boolean;       // DQ  — descalificado (bajado a último; subconjunto de DST)
+  isPromoted?: boolean;           // SUB — subió posición por DST/DQ de otro caballo
+  physicalFinishPosition?: number;// posición física real antes del veredicto de jueces
+  promotedFromPosition?: number;  // posición física original del caballo SUB
+  officialRuling?: string;        // texto libre: "Interferencia en curva", "Pérdida de peso"
+  // ── Pre-race invalidation ───────────────────────────────────────────────
+  isInvalidated?: boolean;        // INV — corrió pero no es elegible para premios/FV
+  invalidationReason?: string;    // texto libre: "Fuera de programa", "No inscrito"
 }
 
 export interface IEntry extends Document {
@@ -57,6 +67,16 @@ const EntrySchema = new Schema<IEntry>(
       distanceMargin: { type: String },
       isScratched: { type: Boolean, default: false },
       scratchReason: { type: String },
+      // Post-race verdicts
+      isDistanced: { type: Boolean },
+      isDisqualified: { type: Boolean },
+      isPromoted: { type: Boolean },
+      physicalFinishPosition: { type: Number },
+      promotedFromPosition: { type: Number },
+      officialRuling: { type: String, trim: true },
+      // Pre-race invalidation
+      isInvalidated: { type: Boolean },
+      invalidationReason: { type: String, trim: true },
     },
     metadata: { type: Schema.Types.Mixed, default: {} },
   },

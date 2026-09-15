@@ -331,9 +331,18 @@ function RacePreviewCard({ rb, annualOverride, onAnnualChange }: {
   );
 }
 
+type RowVerdict = 'normal' | 'DST' | 'DQ' | 'INV' | 'SUB';
+
 interface FinishRow {
   dorsalNumber: number; horseName: string; finishPosition: number;
-  distanceMargin: string; isDistanced: boolean; isScratched: boolean; scratchReason: string;
+  distanceMargin: string;
+  // ── Veredicto ───────────────────────────────────────────────────────────
+  verdict: RowVerdict;           // Normal / DST / DQ / INV / SUB
+  physicalFinishPosition: number;// posición física antes del veredicto (0 = no aplica)
+  officialRuling: string;        // texto del veredicto
+  // ── Legacy ───────────────────────────────────────────────────────────────
+  isDistanced: boolean;          // derivado de verdict === 'DST' || 'DQ' (mantenido por compatibilidad)
+  isScratched: boolean; scratchReason: string;
   estimatedTime: string;
   accumulatedBodies: string; // total bodies from 1st place, formatted
 }
@@ -547,6 +556,9 @@ function ResultsTab() {
         finishPosition: e.finishPosition ?? 0,
         // Winner's distanceMargin from Gemini = gap over 2nd place, not relevant for time calc
         distanceMargin: (e.finishPosition === 1) ? '' : (e.distanceMargin ?? ''),
+        verdict: 'normal' as RowVerdict,
+        physicalFinishPosition: 0,
+        officialRuling: '',
         isDistanced: e.isDistanced ?? false, isScratched: e.isScratched ?? false,
         scratchReason: '', estimatedTime: '', accumulatedBodies: '',
       }));
@@ -568,7 +580,17 @@ function ResultsTab() {
 
   function updateRow(idx: number, field: keyof FinishRow, value: string | boolean | number) {
     setFinishOrder(prev => {
-      const updated = prev.map((r, i) => i === idx ? { ...r, [field]: value } : r);
+      const updated = prev.map((r, i) => {
+        if (i !== idx) return r;
+        const next = { ...r, [field]: value };
+        // Sync derived fields when verdict changes
+        if (field === 'verdict') {
+          const v = value as RowVerdict;
+          next.isDistanced = v === 'DST' || v === 'DQ';
+          next.isScratched = v === 'normal' ? r.isScratched : false; // clear scratch if verdict set
+        }
+        return next;
+      });
       return (field === 'distanceMargin' || field === 'isScratched') ? computeEntryTimes(updated, officialTime) : updated;
     });
   }
@@ -613,7 +635,11 @@ function ResultsTab() {
           officialTime: officialTime || undefined,
           finishOrder: finishOrder.map(r => ({
             dorsalNumber: r.dorsalNumber, finishPosition: r.finishPosition,
-            distanceMargin: r.distanceMargin || undefined, isDistanced: r.isDistanced,
+            distanceMargin: r.distanceMargin || undefined,
+            verdict: r.verdict,
+            physicalFinishPosition: r.physicalFinishPosition || undefined,
+            officialRuling: r.officialRuling || undefined,
+            isDistanced: r.isDistanced,
             isScratched: r.isScratched, scratchReason: r.scratchReason || undefined,
             officialTime: r.estimatedTime && r.estimatedTime !== 'S/T' ? r.estimatedTime : undefined,
           })),
@@ -809,54 +835,97 @@ function ResultsTab() {
                   <th className="px-3 py-2 text-left">Ejemplar</th>
                   <th className="px-3 py-2 text-center">Cuerpos</th>
                   <th className="px-3 py-2 text-center" title="Cuerpos acumulados desde el 1er lugar">Total cpos.</th>
-                  <th className="px-3 py-2 text-center" title="Distanciado">Dist.</th>
-                  <th className="px-3 py-2 text-center" title="Retirado post-carrera">Ret.</th>
-                  <th className="px-3 py-2 text-left">Motivo retiro</th>
+                  <th className="px-3 py-2 text-center">Veredicto</th>
+                  <th className="px-3 py-2 text-center" title="Posición física antes del veredicto">Pos. física</th>
+                  <th className="px-3 py-2 text-left">Motivo / Razón</th>
+                  <th className="px-3 py-2 text-center" title="Retirado pre-carrera">Ret.</th>
                   <th className="px-3 py-2 text-center" title="Tiempo estimado">Tiempo</th>
                 </tr>
               </thead>
               <tbody>
-                {finishOrder.map((row, idx) => (
-                  <tr key={idx} className={`border-b border-gray-800/40 ${row.isScratched ? 'opacity-50 bg-red-950/10' : row.isDistanced ? 'bg-orange-950/10' : ''}`}>
-                    <td className="px-3 py-2 text-center">
-                      <input type="number" min="1" value={row.finishPosition}
-                        onChange={e => updateRow(idx, 'finishPosition', parseInt(e.target.value) || 0)}
-                        className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-white focus:outline-none focus:border-amber-500" />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <input type="number" min="1" value={row.dorsalNumber}
-                        onChange={e => updateRow(idx, 'dorsalNumber', parseInt(e.target.value) || 0)}
-                        className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-gray-300 focus:outline-none" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input value={row.horseName} onChange={e => updateRow(idx, 'horseName', e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-amber-500" />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <input value={row.distanceMargin} onChange={e => updateRow(idx, 'distanceMargin', e.target.value)}
-                        className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 focus:outline-none" placeholder="1 cpo" />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <span className="text-xs font-mono text-gray-400">{row.accumulatedBodies}</span>
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <input type="checkbox" checked={row.isDistanced} onChange={e => updateRow(idx, 'isDistanced', e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <input type="checkbox" checked={row.isScratched} onChange={e => updateRow(idx, 'isScratched', e.target.checked)} className="w-4 h-4 accent-red-500" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input value={row.scratchReason} onChange={e => updateRow(idx, 'scratchReason', e.target.value)} disabled={!row.isScratched}
-                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-400 focus:outline-none disabled:opacity-30" placeholder="peso, aparato..." />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <span className={`text-xs font-mono ${
-                        row.estimatedTime === 'S/T' ? 'text-red-400' :
-                        row.finishPosition === 1 ? 'text-amber-400 font-bold' : 'text-gray-300'
-                      }`}>{row.estimatedTime || (officialTime ? '—' : '')}</span>
-                    </td>
-                  </tr>
-                ))}
+                {finishOrder.map((row, idx) => {
+                  const verdictColors: Record<RowVerdict, string> = {
+                    normal: '', DST: 'bg-orange-950/20', DQ: 'bg-red-950/20',
+                    INV: 'bg-purple-950/20', SUB: 'bg-green-950/10',
+                  };
+                  const needsPhysical = row.verdict === 'DST' || row.verdict === 'DQ' || row.verdict === 'SUB';
+                  return (
+                    <tr key={idx} className={`border-b border-gray-800/40 ${row.isScratched ? 'opacity-50 bg-red-950/10' : verdictColors[row.verdict]}`}>
+                      <td className="px-3 py-2 text-center">
+                        <input type="number" min="1" value={row.finishPosition}
+                          onChange={e => updateRow(idx, 'finishPosition', parseInt(e.target.value) || 0)}
+                          className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-white focus:outline-none focus:border-amber-500" />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <input type="number" min="1" value={row.dorsalNumber}
+                          onChange={e => updateRow(idx, 'dorsalNumber', parseInt(e.target.value) || 0)}
+                          className="w-12 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-gray-300 focus:outline-none" />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input value={row.horseName} onChange={e => updateRow(idx, 'horseName', e.target.value)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-amber-500" />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <input value={row.distanceMargin} onChange={e => updateRow(idx, 'distanceMargin', e.target.value)}
+                          className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-300 focus:outline-none" placeholder="1 cpo" />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs font-mono text-gray-400">{row.accumulatedBodies}</span>
+                      </td>
+                      {/* Veredicto dropdown */}
+                      <td className="px-3 py-2 text-center">
+                        <select
+                          value={row.verdict}
+                          onChange={e => updateRow(idx, 'verdict', e.target.value as RowVerdict)}
+                          className={`bg-gray-800 border rounded px-1 py-0.5 text-xs focus:outline-none ${
+                            row.verdict === 'DST' ? 'border-orange-500 text-orange-300' :
+                            row.verdict === 'DQ'  ? 'border-red-500 text-red-300' :
+                            row.verdict === 'INV' ? 'border-purple-500 text-purple-300' :
+                            row.verdict === 'SUB' ? 'border-green-500 text-green-300' :
+                            'border-gray-700 text-gray-300'
+                          }`}
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="DST">DST</option>
+                          <option value="DQ">DQ</option>
+                          <option value="INV">INV</option>
+                          <option value="SUB">SUB</option>
+                        </select>
+                      </td>
+                      {/* Posición física — solo visible cuando aplica */}
+                      <td className="px-3 py-2 text-center">
+                        <input
+                          type="number" min="1"
+                          value={needsPhysical ? (row.physicalFinishPosition || '') : ''}
+                          disabled={!needsPhysical}
+                          onChange={e => updateRow(idx, 'physicalFinishPosition', parseInt(e.target.value) || 0)}
+                          className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center text-amber-300 focus:outline-none disabled:opacity-20"
+                          placeholder={needsPhysical ? 'física' : '—'}
+                        />
+                      </td>
+                      {/* Motivo veredicto / motivo retiro */}
+                      <td className="px-3 py-2">
+                        {row.verdict === 'normal' || row.isScratched ? (
+                          <input value={row.scratchReason} onChange={e => updateRow(idx, 'scratchReason', e.target.value)} disabled={!row.isScratched}
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-400 focus:outline-none disabled:opacity-20" placeholder="motivo retiro..." />
+                        ) : (
+                          <input value={row.officialRuling} onChange={e => updateRow(idx, 'officialRuling', e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-300 focus:outline-none" placeholder="interferencia, peso..." />
+                        )}
+                      </td>
+                      {/* Retirado pre-carrera */}
+                      <td className="px-3 py-2 text-center">
+                        <input type="checkbox" checked={row.isScratched} onChange={e => updateRow(idx, 'isScratched', e.target.checked)} className="w-4 h-4 accent-red-500" />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`text-xs font-mono ${
+                          row.estimatedTime === 'S/T' ? 'text-red-400' :
+                          row.finishPosition === 1 ? 'text-amber-400 font-bold' : 'text-gray-300'
+                        }`}>{row.estimatedTime || (officialTime ? '—' : '')}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
