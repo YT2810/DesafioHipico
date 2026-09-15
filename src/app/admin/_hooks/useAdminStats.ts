@@ -50,6 +50,13 @@ export interface AdminStats {
     zeroBuyers: number;
     conversionRate: number;
   };
+  gaceta: {
+    total: number;
+    last7d: number;
+    last30d: number;
+    uniqueUsers: number;
+    topMeetings: { meetingId: string; count: number; tipsterName?: string; meetingNumber?: number; date?: string }[];
+  };
 }
 
 export function useAdminStats() {

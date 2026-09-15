@@ -144,6 +144,50 @@ export default function DashboardTab({ stats, loading }: { stats: AdminStats | n
         </div>
       </div>
 
+      {/* 📰 Gaceta PDF — distribución y tracking */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
+        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">📰 Gaceta Hípica — Descargas PDF</p>
+        {loading ? <div className="h-16 rounded-xl bg-gray-800 animate-pulse" /> : (
+          <div className="space-y-0.5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-yellow-400">{stats?.gaceta?.total ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Total descargas</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-blue-400">{stats?.gaceta?.last7d ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Últimos 7 días</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-green-400">{stats?.gaceta?.last30d ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Últimos 30 días</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <p className="text-xl font-extrabold text-purple-400">{stats?.gaceta?.uniqueUsers ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Usuarios únicos</p>
+              </div>
+            </div>
+            {(stats?.gaceta?.topMeetings?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-[10px] text-gray-600 font-semibold uppercase tracking-wide mb-1">Reuniones más descargadas</p>
+                <div className="space-y-0.5">
+                  {stats!.gaceta.topMeetings.map((m, i) => (
+                    <div key={i} className="flex items-center justify-between py-0.5 border-b border-gray-800/50 last:border-0">
+                      <span className="text-xs text-gray-400">
+                        Reunión {m.meetingNumber ?? '—'}
+                        {m.date ? ` · ${new Date(m.date).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', timeZone: 'UTC' })}` : ''}
+                        {m.tipsterName ? <span className="text-gray-600 ml-1">· {m.tipsterName}</span> : ''}
+                      </span>
+                      <span className="text-sm font-bold text-yellow-400">{m.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Logins y Registros chart */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
         <div className="flex items-center justify-between mb-3">

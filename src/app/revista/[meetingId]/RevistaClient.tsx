@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import BackToHome from '@/components/BackToHome';
 import GacetaPrintTemplate, { type PicksForRace } from './GacetaPrintTemplate';
@@ -368,6 +370,9 @@ interface InitialData {
 }
 
 export default function RevistaClient({ meetingId, initialData }: { meetingId: string; initialData?: InitialData }) {
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
+
   const [meeting, setMeeting] = useState<MeetingData | null>(initialData?.meeting ?? null);
   const [races, setRaces] = useState<RaceItem[]>(initialData?.races ?? []);
   const [hasWorkouts, setHasWorkouts] = useState(initialData?.hasWorkouts ?? false);
@@ -379,7 +384,23 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
   const [gacetaTipster, setGacetaTipster] = useState<{ id: string; name: string; youtubeUrl?: string | null } | null>(null);
   const [gacetaPicks, setGacetaPicks] = useState<Record<string, PicksForRace>>({});
 
-  function handlePrint() {
+  async function handlePrint() {
+    // Gate: require login to download the Gaceta
+    if (sessionStatus === 'unauthenticated' || !session?.user) {
+      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+
+    // Track the download (fire-and-forget — don't block the print dialog)
+    fetch('/api/track/gaceta-download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meetingId,
+        tipsterName: gacetaTipster?.name ?? null,
+      }),
+    }).catch(() => {}); // silent fail — tracking must never block the user
+
     window.print();
   }
 

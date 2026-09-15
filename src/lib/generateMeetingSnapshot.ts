@@ -192,11 +192,13 @@ export async function generateMeetingSnapshot(meetingId: string): Promise<any> {
           winnerName: winnerNameByRace.get(race._id?.toString()) ?? null,
           secondName: secondNameByRace.get(race._id?.toString()) ?? null,
           isScratched: pe.result?.isScratched ?? false,
+          videoUrl: race.videoUrl ?? null,
         };
       })
       .filter(Boolean)
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 4);
+      .slice(0, 4)
+      .reverse(); // display oldest→newest (top→bottom) as in the Gaceta
     finalHistoryMap.set(hid, withDate as any[]);
   }
 
@@ -291,6 +293,7 @@ export async function generateMeetingSnapshot(meetingId: string): Promise<any> {
       prizePool: race.prizePool ?? { bs: 0, usd: 0 },
       games: race.games ?? [],
       status: race.status,
+      videoUrl: race.videoUrl ?? null,
       entries: entriesOut,
     };
   });

@@ -57,6 +57,7 @@ export interface IRace extends Document {
   timeSplits: ITimeSplit[];
   officialTime?: string;
   status: RaceStatus;
+  videoUrl?: string;        // YouTube URL of the race replay
   metadata: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -104,6 +105,7 @@ const RaceSchema = new Schema<IRace>(
     },
     timeSplits: [{ distance: Number, time: String }],
     officialTime: { type: String },
+    videoUrl: { type: String, trim: true },
     metadata: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

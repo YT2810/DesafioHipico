@@ -11,6 +11,7 @@ import GoldTransaction from '@/models/GoldTransaction';
 import TopUpRequest from '@/models/TopUpRequest';
 import Meeting from '@/models/Meeting';
 import Forecast from '@/models/Forecast';
+import GacetaDownload from '@/models/GacetaDownload';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,11 @@ export async function GET() {
       zeroBuyersCount,
       newUsers30d,
       newUsers90d,
+      gacetaTotal,
+      gaceta7d,
+      gaceta30d,
+      gacetaUniqueUsers,
+      gacetaTopMeetings,
     ] = await Promise.all([
       User.countDocuments(),
 
@@ -206,6 +212,22 @@ export async function GET() {
 
       // New registrations last 90d
       User.countDocuments({ createdAt: { $gte: days90 } }),
+
+      // Gaceta downloads — total, last 7d, last 30d
+      GacetaDownload.countDocuments(),
+      GacetaDownload.countDocuments({ downloadedAt: { $gte: days7 } }),
+      GacetaDownload.countDocuments({ downloadedAt: { $gte: days30 } }),
+      // Unique users who ever downloaded the Gaceta
+      GacetaDownload.distinct('userId').then((ids: any[]) => ids.length),
+      // Top 5 meetings by downloads
+      GacetaDownload.aggregate([
+        { $group: { _id: '$meetingId', count: { $sum: 1 }, tipsterName: { $last: '$tipsterName' } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+        { $lookup: { from: 'meetings', localField: '_id', foreignField: '_id', as: 'm' } },
+        { $unwind: { path: '$m', preserveNullAndEmptyArrays: true } },
+        { $project: { meetingId: '$_id', count: 1, tipsterName: 1, meetingNumber: '$m.meetingNumber', date: '$m.date' } },
+      ]),
     ]);
 
     const last365: string[] = [];
@@ -296,6 +318,13 @@ export async function GET() {
         uniqueBuyers,
         zeroBuyers,
         conversionRate,
+      },
+      gaceta: {
+        total:        gacetaTotal,
+        last7d:       gaceta7d,
+        last30d:      gaceta30d,
+        uniqueUsers:  gacetaUniqueUsers,
+        topMeetings:  gacetaTopMeetings,
       },
     });
   } catch (err) {

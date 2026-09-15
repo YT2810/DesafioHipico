@@ -48,6 +48,7 @@ interface RaceHistoryItem {
   secondName: string | null;
   isScratched: boolean;
   conditions?: string;
+  videoUrl?: string | null;
 }
 
 interface WorkoutItem {
@@ -92,6 +93,7 @@ interface RaceItem {
   prizePool: { bs: number; usd: number };
   games: string[];
   status: string;
+  videoUrl?: string | null;
   entries: EntryItem[];
 }
 
@@ -347,6 +349,7 @@ const COLS: { key: string; w: number; align: 'center'|'left'|'right' }[] = [
   { key:'Rat',          w:8,   align:'center' },
   { key:'T.G.',         w:22,  align:'center' },
   { key:'T.Ej.',        w:22,  align:'center' },
+  { key:'Vid',          w:16,  align:'center' }, // video link — ▶ when available
   { key:'Cont.',        w:0,   align:'left'   }, // flex remainder — narrows as others grow
 ];
 
@@ -537,6 +540,15 @@ function HistoryRow({ h, isOdd }: { h: RaceHistoryItem; isOdd: boolean }) {
         fontWeight: isWin ? 900 : 700,
         color: isWin ? '#6a4500' : BLACK }}>
         {isWin ? (h.winnerTime ?? '—') : (h.officialTime ?? '—')}
+      </td>
+      {/* Vid */}
+      <td style={{ ...DC, textAlign:'center' }}>
+        {h.videoUrl
+          ? <a href={`${h.videoUrl}?utm_source=gaceta&utm_medium=pdf&utm_campaign=hist`}
+              style={{ fontSize:7, color:RED, fontWeight:900, textDecoration:'none' }}
+              target="_blank" rel="noreferrer">▶</a>
+          : <span style={{ fontSize:5.5, color:'#ccc' }}>—</span>
+        }
       </td>
       {/* Cont. */}
       <td style={{ ...DC, color:'#555', fontSize:5.5 }}></td>
@@ -905,18 +917,21 @@ function AdBlock({ entryCount }: { entryCount: number }) {
     <div style={{ height:h, margin:'2px 0', border:`1px solid ${RED}`,
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
       gap:3, background:'#fff8f8', padding:'4px 8px' }}>
-      <div style={{ fontSize:10, fontWeight:900, color:RED,
-        fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.04em',
-        textTransform:'uppercase', textAlign:'center' }}>
-        🏇 Pronósticos · Estadísticas · Factor de Victoria
-      </div>
-      <div style={{ fontSize:8, color:'#444', textAlign:'center', lineHeight:1.3 }}>
-        Accede gratis a los análisis de los mejores expertos hípicos de Venezuela.
-        <br/>Regístrate en <strong style={{ color:RED }}>desafiohipico.com</strong> y sube tu nivel.
-      </div>
-      <div style={{ fontSize:7, color:'#888', fontStyle:'italic' }}>
-        Picks verificados · Estadísticas de eficacia · Picks históricos
-      </div>
+      <a href="https://desafiohipico.com?utm_source=gaceta&utm_medium=pdf&utm_campaign=ad_lg"
+        target="_blank" rel="noreferrer" style={{ textDecoration:'none', textAlign:'center' }}>
+        <div style={{ fontSize:10, fontWeight:900, color:RED,
+          fontFamily:'Arial Narrow,Arial,sans-serif', letterSpacing:'0.04em',
+          textTransform:'uppercase' }}>
+          🏇 Pronósticos · Estadísticas · Factor de Victoria
+        </div>
+        <div style={{ fontSize:8, color:'#444', lineHeight:1.3, marginTop:3 }}>
+          Accede gratis a los análisis de los mejores expertos hípicos de Venezuela.
+          <br/><strong style={{ color:RED }}>desafiohipico.com</strong> — Regístrate gratis y sube tu nivel.
+        </div>
+        <div style={{ fontSize:7, color:'#888', fontStyle:'italic', marginTop:2 }}>
+          Picks verificados · Estadísticas de eficacia · Picks históricos
+        </div>
+      </a>
     </div>
   );
 
@@ -925,13 +940,15 @@ function AdBlock({ entryCount }: { entryCount: number }) {
     <div style={{ height:h, margin:'2px 0', border:`1px solid ${RED}`,
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
       gap:2, background:'#fff8f8', padding:'3px 8px' }}>
-      <div style={{ fontSize:9, fontWeight:900, color:RED,
-        fontFamily:'Arial Narrow,Arial,sans-serif', textAlign:'center' }}>
-        Pronósticos de expertos · <span style={{ color:'#111' }}>desafiohipico.com</span>
-      </div>
-      <div style={{ fontSize:7, color:'#555', textAlign:'center' }}>
-        Regístrate gratis · Estadísticas · Factor de Victoria
-      </div>
+      <a href="https://desafiohipico.com?utm_source=gaceta&utm_medium=pdf&utm_campaign=ad_md"
+        target="_blank" rel="noreferrer" style={{ textDecoration:'none', textAlign:'center' }}>
+        <div style={{ fontSize:9, fontWeight:900, color:RED, fontFamily:'Arial Narrow,Arial,sans-serif' }}>
+          Pronósticos de expertos · <span style={{ color:'#111' }}>desafiohipico.com</span>
+        </div>
+        <div style={{ fontSize:7, color:'#555', marginTop:2 }}>
+          Regístrate gratis · Estadísticas · Factor de Victoria
+        </div>
+      </a>
     </div>
   );
 
@@ -940,10 +957,12 @@ function AdBlock({ entryCount }: { entryCount: number }) {
     <div style={{ height:h, margin:'2px 0', border:`1px solid #ddd`,
       display:'flex', alignItems:'center', justifyContent:'center',
       background:'#fafafa' }}>
-      <div style={{ fontSize:7, fontWeight:700, color:RED,
-        fontFamily:'Arial Narrow,Arial,sans-serif' }}>
+      <a href="https://desafiohipico.com?utm_source=gaceta&utm_medium=pdf&utm_campaign=ad_sm"
+        target="_blank" rel="noreferrer"
+        style={{ fontSize:7, fontWeight:700, color:RED,
+          fontFamily:'Arial Narrow,Arial,sans-serif', textDecoration:'none' }}>
         desafiohipico.com · Pronósticos · Estadísticas · Factor de Victoria
-      </div>
+      </a>
     </div>
   );
 }
@@ -966,8 +985,32 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
       <style>{`
         @media print {
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+          body { margin-bottom: 20px; }
         }
       `}</style>
+
+      {/* ── Fixed page footer: appears at bottom of EVERY printed page ── */}
+      <div style={{
+        position:'fixed', bottom:0, left:0, right:0, zIndex:9999,
+        background:RED, padding:'2px 8px',
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
+      } as React.CSSProperties}>
+        <a href={`https://desafiohipico.com?utm_source=gaceta&utm_medium=pdf&utm_campaign=footer`}
+          target="_blank" rel="noreferrer"
+          style={{ fontSize:7, fontWeight:900, color:YELLOW,
+            fontFamily:'Arial Narrow,Arial,sans-serif', textDecoration:'none', letterSpacing:'0.03em' }}>
+          desafiohipico.com
+        </a>
+        <span style={{ fontSize:6.5, color:YELLOW, fontStyle:'italic',
+          fontFamily:'Arial Narrow,Arial,sans-serif' }}>
+          Ya corrió · ya ganó · ya cobró
+        </span>
+        <span style={{ fontSize:6, color:'rgba(255,224,0,0.65)',
+          fontFamily:'Arial Narrow,Arial,sans-serif' }}>
+          Datos INH/HINAVA · Distribución gratuita
+        </span>
+      </div>
 
       {/* Full page header — first page */}
       <div style={{
