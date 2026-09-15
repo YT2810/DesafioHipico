@@ -349,6 +349,21 @@ const HC: React.CSSProperties = {
 // Shared padding that MUST be identical in ColumnHeaderBar Panel4 and EntryBlock Panel4
 const P4_PADDING = '1px 0 1px 2px';
 
+// ─── ColGroup: shared column widths for header + data tables ──────────────────
+//
+// Used in both ColumnHeaderBar and Panel4. Must reference the same COLS array.
+// With table-layout:fixed + colgroup, browsers use exactly these widths on both
+// tables, guaranteeing pixel-perfect alignment across all horse rows.
+function ColGroup() {
+  return (
+    <colgroup>
+      {COLS.map((c, i) => (
+        <col key={i} style={{ width: c.w > 0 ? c.w : 'auto' }} />
+      ))}
+    </colgroup>
+  );
+}
+
 // ─── Column header bar (ONE per race, outside horse rows) ─────────────────────
 
 function ColumnHeaderBar() {
@@ -391,12 +406,12 @@ function ColumnHeaderBar() {
       {/* Retrospecto columns */}
       <div style={{ ...hPanelBase, flex:1, overflow:'hidden', padding: P4_PADDING }}>
         <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
+          <ColGroup />
           <thead>
             <tr>
               {COLS.map(c => (
                 <th key={c.key} style={{
                   ...HC,
-                  width: c.w > 0 ? c.w : undefined,
                   textAlign: c.align,
                 }}>{c.key}</th>
               ))}
@@ -517,6 +532,7 @@ function Panel4({ entry, maxH }: { entry: EntryItem; maxH: number }) {
         </span>
       ) : (
         <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
+          <ColGroup />
           <tbody>
             {rows.map((h, i) => <HistoryRow key={i} h={h} isOdd={i % 2 === 0} />)}
           </tbody>
@@ -548,6 +564,12 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
   const pedigree  = [entry.sire, entry.dam].filter(Boolean).join(' x ');
   const med       = medAbbr(entry.medication);
 
+  // Panel 1 colors: CYAN (Gaceta style) for picks, white for regular horses
+  const panel1Bg     = isPick ? CYAN  : WHITE;
+  const panel1Num    = isPick ? BLACK : BLACK; // black on both — cyan has good contrast
+  const panel1Star   = isPick ? '#005a72' : BLACK; // darker cyan shade for the ★ on CYAN bg
+  const panel1Border = isPick ? `2px solid ${CYAN}` : `2px solid #ccc`;
+
   // Nationality parenthesised at same size as name
   const natStr = entry.nationality && entry.nationality !== 'VEN'
     ? ` (${entry.nationality})`
@@ -561,32 +583,32 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
     }}>
       <div style={{ display:'flex', alignItems:'stretch', minHeight:26 }}>
 
-        {/* ── PANEL 1: N° gualdrapa ── */}
+        {/* ── PANEL 1: N° gualdrapa — CYAN si es pick (Gaceta style), blanco si normal ── */}
         <div style={{
           boxSizing:'border-box', flexShrink:0, width:32,
           display:'flex', flexDirection:'column',
           alignItems:'center', justifyContent:'center',
-          borderRight:`2px solid ${BLACK}`,
-          background: RED,
+          borderRight: panel1Border,
+          background: panel1Bg,
           printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
           padding:'1px 0', position:'relative',
         } as React.CSSProperties}>
           {isPick && pickOrder !== undefined && (
             <div style={{
               position:'absolute', top:1, right:1,
-              fontSize:6, fontWeight:900, color:YELLOW, lineHeight:1,
+              fontSize:6, fontWeight:900, color: panel1Star, lineHeight:1,
             }}>★{pickOrder}</div>
           )}
           <div style={{
             fontSize:20, fontWeight:900,
             fontFamily:'Arial Black, Arial Narrow, Arial, sans-serif',
-            lineHeight:1, color:YELLOW,
+            lineHeight:1, color: panel1Num,
             textDecoration: scratched ? 'line-through' : 'none',
           }}>
             {entry.dorsalNumber}
           </div>
           {scratched && (
-            <div style={{ fontSize:5, fontWeight:700, color:'rgba(255,224,0,0.75)', lineHeight:1 }}>RET</div>
+            <div style={{ fontSize:5, fontWeight:700, color:'#555', lineHeight:1 }}>RET</div>
           )}
         </div>
 
@@ -673,22 +695,21 @@ function EntryBlock({ entry, maxH, isPick, pickOrder }: {
           )}
         </div>
 
-        {/* ── PANEL 3b: PP del día — 3%, rojo/dorado ── */}
+        {/* ── PANEL 3b: PP del día — 3%, gris neutro (dato puro, sin énfasis de color) ── */}
         <div style={{
           boxSizing:'border-box', flexShrink:0, width:'3%',
           borderRight:`1px solid ${BLACK}`,
           display:'flex', flexDirection:'column',
           alignItems:'center', justifyContent:'center',
           padding:'1px 0',
-          background: RED,
-          printColorAdjust:'exact', WebkitPrintColorAdjust:'exact',
-        } as React.CSSProperties}>
+          background: '#e8e8e8',
+        }}>
           <div style={{ fontSize:11, fontWeight:900,
             fontFamily:'Arial Black, Arial Narrow, Arial, sans-serif',
-            lineHeight:1, color:YELLOW }}>
+            lineHeight:1, color:'#111' }}>
             {entry.postPosition}
           </div>
-          <div style={{ fontSize:5, color:'rgba(255,224,0,0.65)', lineHeight:1 }}>pp</div>
+          <div style={{ fontSize:5, color:'#777', lineHeight:1 }}>pp</div>
         </div>
 
         {/* ── PANEL 4: Retrospecto ── */}
@@ -862,6 +883,12 @@ export default function GacetaPrintTemplate({ meeting, races, tipster, picksByRa
       fontFamily:'Arial Narrow, Arial, sans-serif',
       color:BLACK, background:WHITE, fontSize:8, lineHeight:1.2,
     }}>
+      {/* Force background color preservation in all PDF renderers */}
+      <style>{`
+        @media print {
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        }
+      `}</style>
 
       {/* Full page header — first page */}
       <div style={{

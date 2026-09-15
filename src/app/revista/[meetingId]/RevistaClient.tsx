@@ -435,11 +435,6 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
 
-      {/* Watermark siempre en DOM pero solo visible en print */}
-      <div className="print-watermark hidden">
-        Revista Hípica Oficial · {SITE} · Datos INH/HINAVA · Distribución gratuita
-      </div>
-
       {/* ── Header pantalla ── */}
       <header className="screen-only sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center justify-between gap-3">
@@ -603,8 +598,8 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
         />
       )}
 
-      {/* ── BLOQUE IMPRESIÓN LEGACY: mantenido por compatibilidad, se oculta con CSS ── */}
-      <div className="print-races-full hidden" style={{ display: 'none' }}>
+      {/* BLOQUE LEGACY ELIMINADO — reemplazado por GacetaPrintTemplate */}
+      <div style={{ display: 'none' }}>
 
         {/* Cabecera de la revista impresa */}
         <div className="print-header">
