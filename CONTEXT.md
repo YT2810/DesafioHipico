@@ -419,7 +419,7 @@ FORECAST_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', '
 
 ---
 
-## 12. Estado del proyecto (Jun 2026)
+## 12. Estado del proyecto (Sep 2026)
 
 ### ✅ Completo y en producción
 - Autenticación completa (Google + Magic Link + Telegram estructura)
@@ -441,18 +441,118 @@ FORECAST_LABELS = ['Línea', 'Casi Fijo', 'Súper Especial', 'Buen Dividendo', '
 - `/en-vivo` — resultados en tiempo real del día de carreras
 - El Melli — chatbot de IA con economía Gold integrada
 - 26+ handicappers rankeados con datos reales
+- Dashboard admin con métricas de audiencia, conversión y retención
+- Export CSV de emails desde admin (`/api/admin/users/export`)
+- Email marketing con Resend — primer broadcast enviado Sep 13 2026
 
-### 🔧 Pendiente de desarrollo
-- Manejo de retirados en stats (no penalizar si su caballo se retira)
-- Upgrade MongoDB Atlas M0 → M10+ (capacidad de conexiones)
-- Workout Gemini parser: reemplazar parser PDF/Excel por Gemini data entry
-- Batch YouTube: procesamiento automatizado de pronósticos por pronosticador
-- Automatizar ingesta: poller files.fm, parser workouts robusto
-- Factor de Victoria ponderado por calidad del pronosticador
-- Auditar economía Gold (emisión vs consumo)
-- Dashboard admin KPIs reales (visitas, Golds in/out, retención)
-- Notificaciones push (Telegram Bot o Web Push)
-- Tasa BCV automática
+### 📊 Métricas reales (Sep 2026)
+- **3.201 usuarios** totales, **3.200 con email válido** (2.902 vía Google)
+- **1.183 registros nuevos** en últimos 30 días — crecimiento fuerte
+- **2.460 con Gold activo** (77% tiene Gold)
+- **27 compradores únicos** = 0.8% conversión — margen de mejora alto
+- **Primer email broadcast:** 486 enviados, 472 entregados (97.12%), 26 clicks (5.5%)
+- Retención 7d/30d **corregida** — bug de `lastLoginDate` no se actualizaba (fix Sep 2026)
+
+### 📧 Email marketing — estado (Sep 2026)
+- **Proveedor:** Resend (ya instalado para magic links, mismo dominio)
+- **Dominio verificado:** desafiohipico.com + subdomain contacto.desafiohipico.com para tracking
+- **Lista total:** ~3.200 emails válidos
+- **Enviado:** lote 1 — Aug 28 → Sep 6 (486 contactos) — Sep 13, 2026
+- **Pendiente:** lote 2 (Sep 7-13, ~300), lote 3 (Aug 1-27, ~500), y luego hacia atrás hasta Feb
+- **Estrategia:** lotes de ~500, una reunión a la vez, evitando reputación de spam
+- **Cuándo enviar a todos:** después de 6-8 semanas de envíos consistentes con spam < 0.1%
+- **Calendario de contenido:**
+  - Martes: "Salieron los inscritos" → link a /revista
+  - Jueves/Sábado: "Los expertos ya publicaron" → link a /pronosticos
+  - Domingo: recordatorio corto pre-carreras
+
+### 🔧 Pendiente de desarrollo (priorizado)
+1. **Gaceta Hípica PDF** — `<GacetaPrintTemplate />` con 3 modos (público/tipster/premium)
+2. **Campos DST/SUB/DQ/INV en Entry** — distanciamiento, descalificación e invalidación
+3. **Admin UI resultados** — capturar tipo de veredicto (DST/DQ/INV) con posiciones
+4. **Filtros en admin de usuarios** — sin necesidad de exportar CSV y filtrar manualmente
+5. Manejo de retirados en stats (no penalizar FV si caballo se retira)
+6. Upgrade MongoDB Atlas M0 → M10+ (capacidad de conexiones)
+7. Notificaciones push (Telegram Bot o Web Push)
+8. Tasa BCV automática
+9. Batch YouTube: procesamiento automatizado de pronósticos
+
+---
+
+## 12b. Modelo de negocio Gaceta Hípica (nuevo — Sep 2026)
+
+### Concepto
+Generar un PDF estilo "Gaceta Hípica" (publicación venezolana tradicional) con la data de cada reunión. Distribución gratuita con branding de la plataforma.
+
+### Tres modos de visualización
+
+| Modo | Quién lo ve | Favoritos mostrados | Branding |
+|------|-------------|--------------------|---------| 
+| **public** | Cualquier usuario | Picks de un tipster aleatorio (teaser) | desafiohipico.com |
+| **tipster** | Handicapper autenticado | Sus propios picks con su nombre | "Cortesía de [nombre]" |
+| **premium** | Futuro — usuario de pago | Factor de Victoria calculado | desafiohipico.com |
+
+### Loop de crecimiento
+- Tipster quiere PDF con su marca → necesita tener picks en DB → sube picks → plataforma acumula data → mejor FV → más valor premium
+- Cada PDF compartido en WhatsApp/Telegram lleva watermark `desafiohipico.com` → publicidad gratuita viral
+
+### Props del componente
+```typescript
+interface PrintConfig {
+  mode: 'public' | 'tipster' | 'premium'
+  tipsterName?: string
+  tipsterProfileId?: string
+  brandName: string          // default: 'Desafío Hípico'
+  brandUrl: string           // default: 'desafiohipico.com'
+  hasAiSourced?: boolean     // activa disclaimer de IA en los picks
+  showWatermark: boolean
+}
+```
+
+### Disclaimer de IA
+Cuando `Forecast.source` ≠ `'manual'` (es `image_ocr`, `audio`, `social_text`, `youtube`), mostrar al pie del bloque de favoritos:
+> *"Picks extraídos automáticamente por IA. Pueden contener discrepancias con la fuente original (INH/HINAVA)."*
+
+---
+
+## 12c. Estados de resultado de carrera (nuevo — Sep 2026)
+
+### Los 5 estados posibles en Entry.result
+
+| Estado | Código | Cuándo | Corre | Dividendos | FV/Stats |
+|--------|--------|--------|-------|------------|---------|
+| Normal | — | Llegó sin incidentes | Sí | Sí | Sí |
+| **Retirado** | RET | Pre-carrera, no corrió | No | N/A | Excluido |
+| **Invalidado** | INV | **Pre-carrera**, corre pero no es elegible para premios | Sí | No paga, paga el siguiente válido | Excluido |
+| **Distanciado** | DST | Post-carrera, bajado de posición X a posición Y | Sí | Cobra en posición oficial (baja) | Cuenta en posición oficial |
+| **Descalificado** | DQ | Post-carrera grave, bajado a último | Sí | Excluido de premios | Excluido |
+| **Subido** | SUB | Consecuencia de DST/DQ — caballo que sube posición | Sí | Cobra en nueva posición | Cuenta en posición oficial (subida) |
+
+### Campos a agregar a Entry.result (pendiente)
+```typescript
+isDistanced: boolean              // DST o DQ — el caballo fue bajado
+isDisqualified: boolean           // DQ específicamente (bajado a último)
+isInvalidated: boolean            // INV — pre-carrera, corre pero no cuenta para premios/FV
+isPromoted: boolean               // SUB — subió por efecto de DST/DQ de otro
+physicalFinishPosition?: number   // posición física antes del veredicto de jueces
+promotedFromPosition?: number     // posición original antes de subir (para SUB)
+officialRuling?: string           // razón del veredicto en texto libre
+```
+
+### Reglas para FV y stats con estos estados
+- `isInvalidated = true` → excluir de búsqueda del ganador (`finishPosition: 1`)
+- `isDistanced = true` → contar con `finishPosition` oficial (ya corregido por jueces)
+- `isPromoted = true` → el ganador real para FV es el caballo con `finishPosition: 1 AND isDistanced: false AND isInvalidated: false`
+- Carrera donde el "ganador" era INV → el siguiente caballo no-INV en `finishPosition` es el ganador para FV
+
+### Display en historial (Gaceta y Revista)
+| Situación | Lo que muestra |
+|-----------|---------------|
+| Normal 1ro | `1°` en dorado |
+| Distanciado (1ro → 5to) | `5° DST(1°)` |
+| Descalificado | `DQ(1°)` |
+| Invalidado ganó | `1° INV` |
+| Subido (2do → 1ro) | `1° SUB` |
 
 ---
 
