@@ -351,15 +351,19 @@ export function splitIntoRaceBlocks(text: string): string[] {
 
 // ─── Source detector ──────────────────────────────────────────────────────────
 
-function detectSource(rawText: string): 'inh' | 'hinava' {
+export type DocumentSource = 'inh' | 'hinava';
+
+export function detectSource(rawText: string): DocumentSource {
   if (/HIPODROMO NACIONAL DE VALENCIA/i.test(rawText)) return 'hinava';
+  if (/^REUNION:\s*\d+/m.test(rawText)) return 'hinava';
   return 'inh';
 }
 
 // ─── Main Processor ───────────────────────────────────────────────────────────
 
-export async function processDocument(rawText: string): Promise<ProcessedDocument> {
-  if (detectSource(rawText) === 'hinava') {
+export async function processDocument(rawText: string, forcedSource?: DocumentSource): Promise<ProcessedDocument> {
+  const source = forcedSource ?? detectSource(rawText);
+  if (source === 'hinava') {
     const { parseHinavaDocument } = require('./parsers/hinava');
     return parseHinavaDocument(rawText);
   }

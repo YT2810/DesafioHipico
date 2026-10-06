@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { processDocument } from '@/services/pdfProcessor';
+import { processDocument, type DocumentSource } from '@/services/pdfProcessor';
 import { ingestDocument } from '@/services/ingestService';
 import { notifyNewMeeting } from '@/services/notificationService';
 import { generateMeetingSnapshot } from '@/lib/generateMeetingSnapshot';
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get('content-type') || '';
     let rawText = '';
     let annualOverrides: Record<string, number> = {};
+    let forcedSource: DocumentSource | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest) {
       const text = formData.get('text') as string | null;
       const annualOverridesRaw = formData.get('annualOverrides') as string | null;
       annualOverrides = annualOverridesRaw ? JSON.parse(annualOverridesRaw) : {};
+      const sourceRaw = formData.get('source') as string | null;
+      if (sourceRaw === 'hinava' || sourceRaw === 'inh') forcedSource = sourceRaw;
 
       if (file) {
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ rawText: rawText.slice(0, 5000), totalLength: rawText.length });
     }
 
-    const processed = await processDocument(rawText);
+    const processed = await processDocument(rawText, forcedSource);
 
     // Apply manual annualRaceNumber overrides (raceNumber → annualRaceNumber)
     if (Object.keys(annualOverrides).length > 0) {

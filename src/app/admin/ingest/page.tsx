@@ -60,6 +60,8 @@ function ModeBtn({ active, onClick, icon, label }: { active: boolean; onClick: (
   );
 }
 
+type TrackSource = 'inh' | 'hinava';
+
 function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (f: File | null) => void }) {
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<ProgramPreview | null>(null);
@@ -68,6 +70,7 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
   const [loadingMsg, setLoadingMsg] = useState('');
   const [error, setError] = useState('');
   const [annualOverrides, setAnnualOverrides] = useState<Record<number, number>>({});
+  const [trackSource, setTrackSource] = useState<TrackSource>('inh');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -89,6 +92,7 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
       if (previewMode) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('source', trackSource);
         const res = await fetch('/api/admin/ingest?preview=true', { method: 'POST', body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error en el servidor');
@@ -103,6 +107,7 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
         // Confirm: send rawText as JSON so we can apply overrides server-side
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('source', trackSource);
         formData.append('annualOverrides', JSON.stringify(annualOverrides));
         const res = await fetch('/api/admin/ingest', { method: 'POST', body: formData });
         const data = await res.json();
@@ -113,7 +118,7 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
     finally { setLoading(false); setLoadingMsg(''); }
   }
 
-  function reset() { onFileChange(null); setPreview(null); setResult(null); setError(''); setAnnualOverrides({}); if (inputRef.current) inputRef.current.value = ''; }
+  function reset() { onFileChange(null); setPreview(null); setResult(null); setError(''); setAnnualOverrides({}); setTrackSource('inh'); if (inputRef.current) inputRef.current.value = ''; }
   const totalEntries = preview?.races.reduce((s, r) => s + r.entries.length, 0) ?? 0;
 
   return (
@@ -121,6 +126,25 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
       <div>
         <h2 className="text-base font-bold text-white">Carga de Programa Oficial INH</h2>
         <p className="text-xs text-gray-500 mt-0.5">Sube el PDF de inscritos. El sistema extrae carreras, ejemplares, jockeys y entrenadores automáticamente.</p>
+      </div>
+
+      {/* Selector de hipódromo */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-gray-400 font-medium shrink-0">Hipódromo:</span>
+        <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
+          <button
+            onClick={() => { setTrackSource('inh'); setPreview(null); setResult(null); setError(''); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${trackSource === 'inh' ? 'bg-amber-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+          >
+            🏟️ La Rinconada
+          </button>
+          <button
+            onClick={() => { setTrackSource('hinava'); setPreview(null); setResult(null); setError(''); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${trackSource === 'hinava' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+          >
+            🏟️ Valencia
+          </button>
+        </div>
       </div>
 
       {!result && (
@@ -147,7 +171,7 @@ function ProgramTab({ file, onFileChange }: { file: File | null; onFileChange: (
             <div className="flex flex-col items-center gap-2">
               <span className="text-5xl">⬆️</span>
               <p className="text-sm font-semibold text-gray-300">Arrastra el PDF aquí o haz clic para seleccionar</p>
-              <p className="text-xs text-gray-600">Formato: Programa Oficial INH (.pdf)</p>
+              <p className="text-xs text-gray-600">Formato: Programa Oficial {trackSource === 'hinava' ? 'HINAVA (Valencia)' : 'INH (La Rinconada)'} (.pdf)</p>
             </div>
           )}
         </div>
