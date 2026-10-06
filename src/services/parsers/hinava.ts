@@ -59,8 +59,12 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   const horaMatch    = block.match(/^HORA:\s*(\d{1,2}:\d{2}\s*[aApP]\.\s*[mM]\.)/m);
   const diaMatch     = block.match(/^DIA:\s*(LUNES|MARTES|MI[EÉ]RCOLES|JUEVES|VIERNES|S[AÁ]BADO|DOMINGO)/im);
   const carreraMatch = block.match(/^CARRERA DEL DIA:\s*\n(\d+)/m);
-  const distMatch    = block.match(/^DISTANCIA:\s*\n([\d.]+)/m);
-  const premioMatch  = block.match(/^Bs\s+([\d.,]+)/m);
+  // Old: "DISTANCIA:\n1.200" — New: distance embedded in conditions "DIST 1.300MT."
+  const distMatch    = block.match(/^DISTANCIA:\s*\n([\d.]+)/m)
+                    || block.match(/[Dd][Ii][Ss][Tt][\.:\s]+(\d[\d.]+)\s*[Mm][Tt]/);
+  // Old: "Bs 1.689,60" — New: "$ 11.560,00" on its own line
+  const premioMatch  = block.match(/^Bs\s+([\d.,]+)/m)
+                    || block.match(/^\$\s*([\d.,]+)/m);
   // Conditions: from HANDICAP/PESOS/etc. up to (but not including) PREMIO BS.
   const condMatch    = block.match(/^((?:HANDICAP|PESOS|P E\.|COPA)[\s\S]+?)(?=\nPREMIO BS\.)/m);
   const anualMatch   = block.match(/^CARRERA\s+DEL\s+(?:A[ÑN]O|ANUAL)[:\s]*\n?\s*(\d+)/im);
@@ -109,9 +113,9 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   };
 
   // ─── Entry parser ─────────────────────────────────────────────────────────
-  // Find the table header line "NºEJEMPLARBsKgsJINETEENTRENADORP.P"
-  // º is char 186 (not standard °), so use /^N.EJEMPLAR/ to match any char after N
-  const tableStart = lines.findIndex(l => /^N.EJEMPLAR/i.test(l));
+  // Old format: "NºEJEMPLARBsKgsJINETEENTRENADORP.P" on a single line.
+  // New format (2026): "Nº" on its own line, "EJEMPLARBs..." on the next.
+  const tableStart = lines.findIndex(l => /^N.EJEMPLAR/i.test(l) || /^N[º°]$/.test(l));
   const tableEnd   = lines.findIndex(l => /^OBSERVACIONES/i.test(l));
   if (tableStart < 0) return { race, entries: [] };
 
@@ -147,9 +151,9 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     // Skip lines that are clearly STUD/metadata names (come after STUD: label in previous entry)
     if (i > 0 && /^(MED:|PROP:|CRIADOR:|STUD:|PESO|G:|C:|M:)/i.test(entryLines[i - 1] ?? '')) { i++; continue; }
 
-    // Layout: [i]=dorsal, [i+1]=horse, [i+2]=pedigree (may span 2 lines), [i+3]=med OR price, ...
-    // Medication line is B.L / B,L / L — optional. Price is always 0,00.
-    // Find medication and price dynamically.
+    // Layout after dorsal+horse: [pedigree] [med?] then either:
+    //   OLD format: 0,00 → weight → jockey → implements → trainer → PP → metadata → "Y C"
+    //   NEW format (2026): implements → PP → metadata → CT/CC → jockey → 0,00 → weight → trainer
     // Handle split pedigree: if pedigree line ends with " -" the next line is the dam name
     let pedigreeOffset = 3;
     const pedigreeLine = entryLines[i + 2] ? clean(entryLines[i + 2]) : '';
@@ -158,7 +162,7 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
     }
     let wi = i + pedigreeOffset;
     let medication: string | undefined;
-    // Check if i+3 is a med marker (not a number)
+    // Check if wi is a med marker (not a number or implements)
     const maybeMed = entryLines[wi]?.trim() ?? '';
     // Accept all observed HINAVA medication variants:
     //   B.L  B.L.  B,L  B,L.  .L  .L.  L  L.  B  B.
@@ -170,19 +174,49 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
       medication = (hasB && hasL) ? 'BUT-LAX' : hasB ? 'BUT' : hasL ? 'LAX' : maybeMed;
       wi++; // skip med marker
     }
-    // Now skip price (0,00)
-    if (entryLines[wi]?.trim() === '0,00') wi++;
-    // wi now points to weight
-    const weightRaw  = entryLines[wi]     ? entryLines[wi].trim()     : '';
-    const jockeyName = entryLines[wi + 1] ? clean(entryLines[wi + 1]) : '';
-    const implements_= entryLines[wi + 2] ? clean(entryLines[wi + 2]) : '';
-    const trainerName= entryLines[wi + 3] ? clean(entryLines[wi + 3]) : '';
-    const ppRaw      = entryLines[wi + 4] ? entryLines[wi + 4].trim() : '';
-    const pp         = parseInt(ppRaw);
+
+    let weightRaw = '', jockeyName = '', implements_: string | undefined, trainerName = '', pp = 0;
+    const lineAtWi = entryLines[wi]?.trim() ?? '';
+
+    if (/^L\./.test(lineAtWi)) {
+      // ── NEW FORMAT (2026): implements → PP → [metadata/colors] → CT/CC → jockey → 0,00 → weight → trainer
+      implements_ = clean(lineAtWi);
+      wi++;
+      // PP is the next standalone number (1-30)
+      const ppLine = entryLines[wi]?.trim() ?? '';
+      if (/^\d{1,2}$/.test(ppLine) && parseInt(ppLine) >= 1 && parseInt(ppLine) <= 30) {
+        pp = parseInt(ppLine);
+        wi++;
+      }
+      // Scan forward to find "0,00" price anchor (jockey is immediately before it)
+      let priceIdx = -1;
+      for (let k = wi; k < Math.min(wi + 40, entryLines.length); k++) {
+        if (entryLines[k]?.trim() === '0,00') { priceIdx = k; break; }
+        // Stop if we hit the next dorsal
+        const kl = entryLines[k]?.trim() ?? '';
+        if (/^\d{1,2}$/.test(kl) && parseInt(kl) >= 1 && parseInt(kl) <= 30) break;
+      }
+      if (priceIdx >= wi + 1) {
+        jockeyName  = clean(entryLines[priceIdx - 1] ?? '');
+        weightRaw   = entryLines[priceIdx + 1]?.trim() ?? '';
+        trainerName = clean(entryLines[priceIdx + 2] ?? '');
+        wi = priceIdx + 3;
+      }
+    } else {
+      // ── OLD FORMAT: [0,00?] → weight → jockey → implements → trainer → PP
+      if (lineAtWi === '0,00') wi++;
+      weightRaw   = entryLines[wi]?.trim()     ?? '';
+      jockeyName  = clean(entryLines[wi + 1]   ?? '');
+      implements_ = clean(entryLines[wi + 2]   ?? '') || undefined;
+      trainerName = clean(entryLines[wi + 3]   ?? '');
+      const ppRaw = entryLines[wi + 4]?.trim() ?? '';
+      pp = parseInt(ppRaw);
+      wi += 5;
+    }
 
     if (!weightRaw.match(/^\d/) || isNaN(pp) || pp < 1 || pp > 30 || !jockeyName || !trainerName) {
       const horseName2 = entryLines[i + 1] ? clean(entryLines[i + 1]) : '?';
-      failedLines.push(`#${dorsal} ${horseName2} | med=${JSON.stringify(maybeMed)} weight=${JSON.stringify(weightRaw)} pp=${ppRaw}`);
+      failedLines.push(`#${dorsal} ${horseName2} | impl=${JSON.stringify(lineAtWi)} weight=${JSON.stringify(weightRaw)} pp=${pp}`);
       i++; continue;
     }
 
@@ -203,16 +237,13 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
       trainer,
     });
 
-    // Skip the post-PP metadata block: MED:, year, PROP:, CRIADOR:, ..., STUD:, stud name, PESO, colors...
-    // Advance until we hit the next dorsal number or end of entries
-    let skip = wi + 5;
-    while (skip < entryLines.length) {
-      const sl = entryLines[skip].trim();
-      // Stop at the next standalone dorsal (1-2 digits, 1-30)
+    // Advance to the next dorsal (skip any remaining metadata in both formats)
+    while (wi < entryLines.length) {
+      const sl = entryLines[wi].trim();
       if (/^\d{1,2}$/.test(sl) && parseInt(sl) >= 1 && parseInt(sl) <= 30) break;
-      skip++;
+      wi++;
     }
-    i = skip;
+    i = wi;
   }
 
   return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
