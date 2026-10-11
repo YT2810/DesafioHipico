@@ -18,6 +18,41 @@ interface UserItem {
   createdAt: string;
 }
 
+interface GoldTx {
+  _id: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  createdAt: string;
+}
+
+const TX_ICON: Record<string, string> = {
+  race_unlock:        '🏇',
+  meeting_pass:       '📅',
+  purchase:           '💰',
+  admin_assign:       '⚙️',
+  bonus:              '🎁',
+  welcome_bonus:      '🎁',
+  refund:             '🔄',
+  audio_purchase:     '🎧',
+  handicapper_payout: '💸',
+  platform_fee:       '🏦',
+};
+
+const TX_LABEL: Record<string, string> = {
+  race_unlock:        'Carrera desbloqueada',
+  meeting_pass:       'Jornada completa',
+  purchase:           'Recarga de Golds',
+  admin_assign:       'Asignación admin',
+  bonus:              'Bono',
+  welcome_bonus:      'Bono bienvenida',
+  refund:             'Reembolso',
+  audio_purchase:     'Compra de audio',
+  handicapper_payout: 'Pago handicapper',
+  platform_fee:       'Comisión plataforma',
+};
+
 const ROLE_CFG: Record<Role, { color: string; bg: string; border: string }> = {
   customer:    { color: 'text-gray-400',   bg: 'bg-gray-800',        border: 'border-gray-700'   },
   handicapper: { color: 'text-yellow-400', bg: 'bg-yellow-950/40',   border: 'border-yellow-700/50' },
@@ -40,6 +75,10 @@ export default function AdminUsersPage() {
   const [goldMsg, setGoldMsg] = useState('');
   const [goldLoading, setGoldLoading] = useState(false);
   const [goldSort, setGoldSort] = useState<'none' | 'desc' | 'asc'>('none');
+  const [txUserId, setTxUserId] = useState<string | null>(null);
+  const [txList, setTxList] = useState<GoldTx[]>([]);
+  const [txTotal, setTxTotal] = useState(0);
+  const [txLoading, setTxLoading] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -68,6 +107,26 @@ export default function AdminUsersPage() {
     setEditRoles([...(u.roles ?? [])]);
     setSaveMsg('');
     setSaveErr('');
+    setTxUserId(null);
+    setTxList([]);
+    setTxTotal(0);
+  }
+
+  async function loadTransactions(userId: string) {
+    if (txUserId === userId) { setTxUserId(null); return; }
+    setTxLoading(true);
+    setTxUserId(userId);
+    setTxList([]);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/transactions?limit=50`);
+      const data = await res.json();
+      setTxList(data.transactions ?? []);
+      setTxTotal(data.total ?? 0);
+    } catch {
+      setTxList([]);
+    } finally {
+      setTxLoading(false);
+    }
   }
 
   function toggleRole(role: Role) {
@@ -304,6 +363,64 @@ export default function AdminUsersPage() {
                         style={{ backgroundColor: GOLD }}>
                         {saving ? 'Guardando...' : 'Guardar roles'}
                       </button>
+
+                      {/* Historial de transacciones */}
+                      <div className="border-t border-gray-800 pt-3">
+                        <button
+                          onClick={() => loadTransactions(u._id)}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors text-sm font-semibold text-gray-300"
+                        >
+                          <span>📋 Historial de Golds</span>
+                          <span className="text-gray-500 text-xs">
+                            {txUserId === u._id
+                              ? `${txTotal} operaciones ▲`
+                              : 'Ver historial ▼'}
+                          </span>
+                        </button>
+
+                        {txUserId === u._id && (
+                          <div className="mt-2 space-y-1 max-h-96 overflow-y-auto pr-1">
+                            {txLoading ? (
+                              <div className="space-y-1.5 py-2">
+                                {[1,2,3].map(i => <div key={i} className="h-12 rounded-lg bg-gray-800 animate-pulse" />)}
+                              </div>
+                            ) : txList.length === 0 ? (
+                              <p className="text-xs text-gray-600 text-center py-4">Sin operaciones registradas</p>
+                            ) : (
+                              txList.map(tx => {
+                                const isDebit  = tx.amount < 0;
+                                const isCredit = tx.amount > 0;
+                                const icon  = TX_ICON[tx.type]  ?? '🔹';
+                                const label = TX_LABEL[tx.type] ?? tx.type;
+                                const dt    = new Date(tx.createdAt);
+                                const fecha = dt.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
+                                const hora  = dt.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
+                                return (
+                                  <div key={tx._id} className="bg-gray-800/60 rounded-lg px-3 py-2.5 flex items-start gap-3">
+                                    <span className="text-base shrink-0 mt-0.5">{icon}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-gray-200 truncate">{label}</p>
+                                      <p className="text-xs text-gray-500 truncate">{tx.description}</p>
+                                      <p className="text-xs text-gray-600 mt-0.5">{fecha} · {hora}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className={`text-sm font-bold ${isDebit ? 'text-red-400' : isCredit ? 'text-green-400' : 'text-gray-400'}`}>
+                                        {isCredit ? '+' : ''}{tx.amount}
+                                      </p>
+                                      <p className="text-xs text-gray-600">saldo: {tx.balanceAfter}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                            {!txLoading && txTotal > txList.length && (
+                              <p className="text-xs text-gray-600 text-center py-2">
+                                Mostrando {txList.length} de {txTotal} operaciones
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
