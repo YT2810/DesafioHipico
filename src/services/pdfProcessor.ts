@@ -364,8 +364,8 @@ export function detectSource(rawText: string): DocumentSource {
 export async function processDocument(rawText: string, forcedSource?: DocumentSource): Promise<ProcessedDocument> {
   const source = forcedSource ?? detectSource(rawText);
   if (source === 'hinava') {
-    const { parseHinavaDocument } = require('./parsers/hinava');
-    return parseHinavaDocument(rawText);
+    const { parseHinavaDocumentWithGemini } = await import('./ai/pdfGeminiParser');
+    return parseHinavaDocumentWithGemini(rawText);
   }
 
   const USE_GEMINI_PARSER = process.env.USE_GEMINI_PARSER === 'true';

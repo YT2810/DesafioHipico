@@ -4,8 +4,9 @@ import type {
   ExtractedHorse,
   ExtractedEntry,
   ExtractedRaceBlock,
+  ExtractedMeeting,
 } from '../pdfProcessor';
-import { simpleHash, preprocessText, parseMeeting, splitIntoRaceBlocks, parseRaceHeader } from '../pdfProcessor';
+import { simpleHash, preprocessText, parseMeeting, splitIntoRaceBlocks, parseRaceHeader, parseVEDate } from '../pdfProcessor';
 
 // ─── Types for Gemini horses-only response ─────────────────────────────────
 
@@ -194,6 +195,110 @@ export async function processDocumentWithGemini(rawText: string): Promise<Proces
   const failed = results.filter((r) => r === null).length;
   if (failed > 0) {
     warnings.push(`${failed} de ${blocks.length} bloques fallaron con Gemini.`);
+  }
+
+  return { meeting, races, rawText, hash, warnings };
+}
+
+// ─── HINAVA (Valencia) — Gemini hybrid parser ─────────────────────────────────
+// Race headers (number, distance, time, games) → regex (reliable, never changes)
+// Horse entries → Gemini (format-agnostic, survives any PDF layout change)
+
+function buildHinavaHorsesPrompt(block: string): string {
+  return `Eres un extractor de programas hípicos venezolanos del Hipódromo Nacional de Valencia (HINAVA).
+Analiza el siguiente bloque de una carrera y extrae ÚNICAMENTE los ejemplares inscritos y las condiciones.
+
+EXTRAE:
+- conditions: string con el texto de condiciones/clase de la carrera (puede estar vacío "")
+- horses: array con todos los ejemplares:
+  - dorsalNumber: número entero (el número de partida, columna Nº)
+  - horseName: nombre del caballo en MAYÚSCULAS, sin implementos ni metadata
+  - medication: código de medicación (ej: "BUT-LAX", "LAX", "BUT") o ""
+  - weightRaw: string EXACTO del peso incluyendo descuento si aplica (ej: "54", "55-1", "57,5")
+  - jockeyName: nombre completo del jinete en mayúsculas
+  - trainerName: nombre completo del entrenador en mayúsculas
+  - postPosition: número entero de la posición de partida (P.P., columna al final)
+  - implements: cadena de implementos con puntos (ej: "L.GR.LA.V.", "L.BB.M.") o "" si no tiene
+
+REGLAS CRÍTICAS:
+- El orden de campos puede variar entre PDFs: el peso puede ir antes o después del jinete
+- Los implementos pueden ser una sola letra ("L") o múltiples códigos separados por puntos
+- La posición de partida (P.P.) es siempre un entero entre 1 y 20
+- Ignora líneas que empiecen con MED:, PROP:, CRIADOR:, STUD:, CT, CC, Y C — son metadata interna
+- NUNCA incluyas implementos ni metadata en horseName
+- weightRaw debe ser el texto original del PDF tal cual, sin calcular ni convertir
+- Si el caballo está raspado/scratched pero aparece en el PDF, inclúyelo igual
+
+FORMATO DE SALIDA: Solo JSON válido, sin markdown ni explicaciones.
+Objeto raíz con "conditions" (string) y "horses" (array).
+
+Bloque de carrera:
+${block}`;
+}
+
+async function processHinavaRaceBlock(
+  block: string,
+  index: number,
+  warnings: string[],
+): Promise<ExtractedRaceBlock | null> {
+  const { parseHinavaRaceHeader } = await import('../parsers/hinava');
+  const raceHeader = parseHinavaRaceHeader(block, warnings);
+  if (!raceHeader || !raceHeader.raceNumber) return null;
+
+  const prompt = buildHinavaHorsesPrompt(block);
+  try {
+    const responseText = await callLLM(prompt);
+    const jsonText = extractJSON(responseText);
+    const parsed = JSON.parse(jsonText) as GeminiHorsesResponse;
+    if (!Array.isArray(parsed.horses)) throw new Error('horses array faltante en respuesta Gemini HINAVA');
+
+    const { entries, failedLines } = buildEntries(parsed.horses);
+    const race = parsed.conditions
+      ? { ...raceHeader, conditions: clean(parsed.conditions) }
+      : raceHeader;
+
+    return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
+  } catch (err) {
+    console.error(`[GeminiParser HINAVA] Error bloque ${index + 1} (carrera ${raceHeader.raceNumber}):`, err);
+    return null;
+  }
+}
+
+export async function parseHinavaDocumentWithGemini(rawText: string): Promise<ProcessedDocument> {
+  const warnings: string[] = [];
+  const hash = simpleHash(rawText);
+
+  // Meeting info — HINAVA specific patterns
+  const reunionMatch = rawText.match(/^REUNION:\s*(\d+)/m);
+  const fechaMatch   = rawText.match(/^FECHA:\s*(\d{1,2}\/\d{1,2}\/\d{4})/m);
+  const diaMatch     = rawText.match(/^DIA:\s*(LUNES|MARTES|MI[EÉ]RCOLES|JUEVES|VIERNES|S[AÁ]BADO|DOMINGO)/im);
+
+  const meeting: ExtractedMeeting = {
+    track: { name: 'NACIONAL DE VALENCIA', location: 'VALENCIA', country: 'VE' },
+    date: fechaMatch ? parseVEDate(fechaMatch[1]) : new Date().toISOString(),
+    meetingNumber: reunionMatch ? parseInt(reunionMatch[1]) : 0,
+    dayOfWeek: diaMatch ? diaMatch[1].toUpperCase() : undefined,
+  };
+
+  if (!meeting.meetingNumber) warnings.push('HINAVA: no se detectó número de reunión.');
+  if (!fechaMatch)            warnings.push('HINAVA: no se detectó fecha.');
+
+  // Split into REUNION: blocks
+  const blocks = rawText.split(/(?=^REUNION:)/m).filter(b => /^REUNION:/m.test(b));
+  if (blocks.length === 0) warnings.push('HINAVA: no se detectaron bloques de carrera.');
+
+  // Process all race blocks in parallel — one Gemini call per race
+  const results = await Promise.all(
+    blocks.map((block, i) => processHinavaRaceBlock(block, i, warnings))
+  );
+
+  const races: ExtractedRaceBlock[] = results
+    .filter((r): r is ExtractedRaceBlock => r !== null)
+    .sort((a, b) => a.race.raceNumber - b.race.raceNumber);
+
+  const failed = results.filter(r => r === null).length;
+  if (failed > 0) {
+    warnings.push(`${failed} de ${blocks.length} bloques fallaron con Gemini HINAVA.`);
   }
 
   return { meeting, races, rawText, hash, warnings };

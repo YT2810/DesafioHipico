@@ -249,6 +249,63 @@ function parseHinavaBlock(block: string, warnings: string[]): ExtractedRaceBlock
   return { race, entries, failedLines: failedLines.length > 0 ? failedLines : undefined };
 }
 
+// ─── Exported race header parser (used by Gemini hybrid) ─────────────────────
+// Extracts only the structured race metadata from a REUNION: block.
+// Entry parsing is intentionally omitted — Gemini handles that part.
+
+export function parseHinavaRaceHeader(block: string, warnings: string[]): ExtractedRace | null {
+  const carreraMatch = block.match(/^CARRERA DEL DIA:\s*\n(\d+)/m);
+  const raceNumber = carreraMatch ? parseInt(carreraMatch[1]) : 0;
+  if (!raceNumber) { warnings.push('HINAVA: no se detectó número de carrera.'); return null; }
+
+  const horaMatch   = block.match(/^HORA:\s*(\d{1,2}:\d{2}\s*[aApP]\.\s*[mM]\.)/m);
+  const distMatch   = block.match(/^DISTANCIA:\s*\n([\d.]+)/m)
+                   || block.match(/[Dd][Ii][Ss][Tt][\.:\s]+(\d[\d.]+)\s*[Mm][Tt]/);
+  const premioMatch = block.match(/^Bs\s+([\d.,]+)/m)
+                   || block.match(/^\$\s*([\d.,]+)/m);
+  const condMatch   = block.match(/^((?:HANDICAP|PESOS|P E\.|COPA)[\s\S]+?)(?=\nPREMIO BS\.)/m);
+  const anualMatch  = block.match(/^CARRERA\s+DEL\s+(?:A[ÑN]O|ANUAL)[:\s]*\n?\s*(\d+)/im);
+
+  const distance      = distMatch   ? parseInt(distMatch[1].replace('.', '')) : 0;
+  const scheduledTime = horaMatch   ? normalizeTime(clean(horaMatch[1])) : '';
+  const conditions    = condMatch   ? clean(condMatch[0]) : '';
+  const bsRaw         = premioMatch ? premioMatch[1].replace('.', '').replace(',', '.') : '0';
+  const bs            = parseFloat(bsRaw) || 0;
+  const annualRaceNumber = anualMatch ? parseInt(anualMatch[1]) : undefined;
+
+  // Prize distribution
+  const lines  = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const pctIdx = lines.findIndex(l => l === '% 1º');
+  let prizeDistribution;
+  if (pctIdx >= 0 && pctIdx + 9 < lines.length) {
+    const pcts = [1,3,5,7,9].map(offset => parseInt(lines[pctIdx + offset]) || 0);
+    prizeDistribution = { first: pcts[0], second: pcts[1], third: pcts[2], fourth: pcts[3], fifth: pcts[4], breederBonus: 0 };
+  }
+
+  // Games
+  const games: string[] = [];
+  if (/GANADOR\s*\nX/m.test(block))             games.push('GANADOR');
+  if (/PLACE\s*\nX/m.test(block))               games.push('PLACE');
+  if (/EXACTA\s*\nX/m.test(block))              games.push('EXACTA');
+  if (/TRIFECTA\s*\nX/m.test(block))            games.push('TRIFECTA');
+  if (/SUPERFECTA\s*\nX/m.test(block))          games.push('SUPERFECTA');
+  if (/TRIPLE\s*APUESTA/m.test(block))          games.push('TRIPLE_APUESTA');
+  if (/POOL\s*DE\s*4/m.test(block))             games.push('POOL_DE_4');
+  if (/5\s*Y\s*6|CINCO\s*Y\s*SEIS/m.test(block)) games.push('CINCO_Y_SEIS');
+  if (/LOTO/m.test(block))                      games.push('LOTO_HIPICO');
+
+  return {
+    raceNumber,
+    annualRaceNumber,
+    distance,
+    scheduledTime,
+    conditions,
+    prizePool: { bs, usd: 0 },
+    prizeDistribution,
+    games,
+  };
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function parseHinavaDocument(rawText: string): ProcessedDocument {
