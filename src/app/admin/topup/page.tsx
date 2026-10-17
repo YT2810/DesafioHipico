@@ -186,11 +186,19 @@ export default function AdminTopUpPage() {
                         </div>
                         {/* Row 2: user info */}
                         <div className="flex items-center gap-3 flex-wrap text-xs text-gray-500">
-                          <span>{item.legalId}</span>
-                          <span>·</span>
+                          {item.legalId && (
+                            <>
+                              <span>{item.legalId}</span>
+                              <span>·</span>
+                            </>
+                          )}
                           <span>{item.phone}</span>
-                          <span>·</span>
-                          <span>{item.bank}</span>
+                          {item.bank && (
+                            <>
+                              <span>·</span>
+                              <span>{item.bank}</span>
+                            </>
+                          )}
                           <span>·</span>
                           <span>{item.paymentDate}</span>
                         </div>
@@ -234,9 +242,9 @@ export default function AdminTopUpPage() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <Detail label="Referencia"  value={item.referenceNumber} />
                         <Detail label="Fecha pago"  value={item.paymentDate} />
-                        <Detail label="Banco"       value={item.bank} />
+                        {item.bank && <Detail label="Banco" value={item.bank} />}
                         <Detail label="Monto Bs."   value={item.amountBs.toLocaleString('es-VE')} />
-                        <Detail label="Cédula"      value={item.legalId} />
+                        {item.legalId && <Detail label="Cédula" value={item.legalId} />}
                         <Detail label="Teléfono"    value={item.phone} />
                         <Detail label="Golds"       value={`${item.goldAmount} Golds`} highlight />
                         <Detail label="USD"         value={`$${item.amountUsd}`} />
@@ -288,7 +296,7 @@ export default function AdminTopUpPage() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <Detail label="Referencia" value={item.referenceNumber} />
                         <Detail label="Fecha pago" value={item.paymentDate} />
-                        <Detail label="Banco"      value={item.bank} />
+                        {item.bank && <Detail label="Banco" value={item.bank} />}
                         <Detail label="Monto Bs."  value={item.amountBs.toLocaleString('es-VE')} />
                         <Detail label="Revisado"   value={item.reviewedAt ? new Date(item.reviewedAt).toLocaleDateString('es-VE') : '—'} />
                         {item.rejectionReason && <Detail label="Motivo" value={item.rejectionReason} />}

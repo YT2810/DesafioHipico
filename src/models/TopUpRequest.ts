@@ -10,8 +10,8 @@ export interface ITopUpRequest extends Document {
   goldAmount: number;
   referenceNumber: string;
   phone: string;
-  legalId: string;
-  bank: string;
+  legalId?: string;
+  bank?: string;
   amountBs: number;
   paymentDate: string;      // YYYY-MM-DD as entered by user
   receiptUrl?: string;      // uploaded screenshot URL
@@ -30,8 +30,8 @@ const TopUpRequestSchema = new Schema<ITopUpRequest>(
     goldAmount: { type: Number, required: true },
     referenceNumber: { type: String, required: true, trim: true },
     phone: { type: String, required: true, trim: true },
-    legalId: { type: String, required: true, trim: true },
-    bank: { type: String, required: true, trim: true },
+    legalId: { type: String, default: '', trim: true },
+    bank: { type: String, default: '', trim: true },
     amountBs: { type: Number, required: true, min: 0 },
     paymentDate: { type: String, required: true, trim: true },
     receiptUrl: { type: String, trim: true },

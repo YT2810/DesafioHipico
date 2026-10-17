@@ -7,6 +7,7 @@ import { VENEZUELAN_BANKS, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/con
 type LivePackage = { id: string; label: string; description: string; priceBs: number; golds: number; bsPerGold: number; badge: string | null; saving: string | null; };
 
 const GOLD = '#D4AF37';
+const SHOW_EXTENDED_TOPUP_FIELDS = false;
 
 interface TopUpModalProps { onClose: () => void; }
 
@@ -95,7 +96,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
           packageId: selectedPkgId,
           referenceNumber: form.referenceNumber,
           phone: form.phone,
-          legalId: form.idPrefix + form.identityDocument,
+          legalId: form.identityDocument.trim() ? form.idPrefix + form.identityDocument.trim() : '',
           bank: form.bank,
           amountBs: parseFloat(form.amountBs) || selectedPkg.priceBs,
           paymentDate: form.paymentDate,
@@ -234,7 +235,10 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
               <div className="flex gap-3">
                 <button type="button" onClick={() => setStep('package')} className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">← Atrás</button>
-                <button onClick={() => setStep('form')} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>Ya pagué →</button>
+                <button onClick={() => {
+                  setForm(p => ({ ...p, amountBs: p.amountBs || String(selectedPkg.priceBs) }));
+                  setStep('form');
+                }} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-black" style={{ backgroundColor: GOLD }}>Ya pagué →</button>
               </div>
             </div>
           )}
@@ -248,62 +252,68 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               </div>
 
               <Field label="Número de referencia *" value={form.referenceNumber} onChange={e => set('referenceNumber', e.target.value)}
-                placeholder="Ej: 00123456789" required hint="Mínimo 7 dígitos — rellena con 0 a la izquierda si es necesario" />
-
-              <Field label="Fecha del pago *" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)}
-                placeholder={today} required type="date" />
-
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium">Banco emisor *</label>
-                <select value={form.bank} onChange={e => set('bank', e.target.value)} required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-600 transition-colors">
-                  <option value="">— Selecciona tu banco —</option>
-                  {VENEZUELAN_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-              </div>
-
-              <Field label="Monto en Bs. *" value={form.amountBs} onChange={e => set('amountBs', e.target.value)}
-                placeholder={`Ej: ${selectedPkg.priceBs.toLocaleString('es-VE')}`} required type="number" />
+                placeholder="Ej: 00123456789" required inputMode="numeric" hint="Últimos dígitos o referencia completa del Pago Móvil" />
 
               <Field label="Teléfono del pagador *" value={form.phone} onChange={e => set('phone', e.target.value)}
-                placeholder="Ej: 04121234567" required hint="El número desde el que realizaste el Pago Móvil" />
+                placeholder="Ej: 04121234567" required inputMode="tel" hint="El número desde el que realizaste el Pago Móvil" />
 
-              {/* Cédula inline */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cédula de identidad *</label>
-                <div className="flex gap-2">
-                  <select value={form.idPrefix} onChange={e => set('idPrefix', e.target.value)}
-                    className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-yellow-600 w-20 shrink-0">
-                    <option value="V">V</option><option value="E">E</option><option value="J">J</option><option value="P">P</option><option value="G">G</option>
-                  </select>
-                  <input type="text" value={form.identityDocument}
-                    onChange={e => set('identityDocument', e.target.value.replace(/\D/g, ''))}
-                    placeholder="16108291" required
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
-                </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <Field label="Monto en Bs. *" value={form.amountBs} onChange={e => set('amountBs', e.target.value)}
+                  placeholder={`Ej: ${selectedPkg.priceBs.toLocaleString('es-VE')}`} required type="number" inputMode="decimal" />
+
+                <Field label="Fecha del pago *" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)}
+                  placeholder={today} required type="date" />
               </div>
 
-              {/* Receipt image */}
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium">Comprobante de pago <span className="text-gray-600">(opcional)</span></label>
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                {form.receiptUrl ? (
-                  <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/40 rounded-xl px-3 py-2.5">
-                    <img src={form.receiptUrl} alt="comprobante" className="w-10 h-10 rounded-lg object-cover border border-gray-700 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-green-400">✓ Imagen cargada</p>
-                      <p className="text-xs text-gray-600 truncate">{form.receiptName}</p>
-                    </div>
-                    <button type="button" onClick={() => { setForm(p => ({ ...p, receiptUrl: '', receiptName: '' })); if (fileRef.current) fileRef.current.value = ''; }}
-                      className="text-gray-600 hover:text-red-400 text-sm shrink-0">✕</button>
+              {SHOW_EXTENDED_TOPUP_FIELDS && (
+                <>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium">Banco emisor</label>
+                    <select value={form.bank} onChange={e => set('bank', e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-600 transition-colors">
+                      <option value="">— Selecciona tu banco —</option>
+                      {VENEZUELAN_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
                   </div>
-                ) : (
-                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploadingImg}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-gray-700 text-xs font-semibold text-gray-500 hover:border-yellow-700/50 hover:text-yellow-400 transition-colors disabled:opacity-50">
-                    {uploadingImg ? '⏳ Subiendo...' : '📷 Subir imagen del comprobante'}
-                  </button>
-                )}
-              </div>
+
+                  {/* Cédula inline */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cédula de identidad</label>
+                    <div className="flex gap-2">
+                      <select value={form.idPrefix} onChange={e => set('idPrefix', e.target.value)}
+                        className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-yellow-600 w-20 shrink-0">
+                        <option value="V">V</option><option value="E">E</option><option value="J">J</option><option value="P">P</option><option value="G">G</option>
+                      </select>
+                      <input type="text" value={form.identityDocument}
+                        onChange={e => set('identityDocument', e.target.value.replace(/\D/g, ''))}
+                        placeholder="16108291"
+                        className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600" />
+                    </div>
+                  </div>
+
+                  {/* Receipt image */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium">Comprobante de pago <span className="text-gray-600">(opcional)</span></label>
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                    {form.receiptUrl ? (
+                      <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/40 rounded-xl px-3 py-2.5">
+                        <img src={form.receiptUrl} alt="comprobante" className="w-10 h-10 rounded-lg object-cover border border-gray-700 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-green-400">✓ Imagen cargada</p>
+                          <p className="text-xs text-gray-600 truncate">{form.receiptName}</p>
+                        </div>
+                        <button type="button" onClick={() => { setForm(p => ({ ...p, receiptUrl: '', receiptName: '' })); if (fileRef.current) fileRef.current.value = ''; }}
+                          className="text-gray-600 hover:text-red-400 text-sm shrink-0">✕</button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => fileRef.current?.click()} disabled={uploadingImg}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-gray-700 text-xs font-semibold text-gray-500 hover:border-yellow-700/50 hover:text-yellow-400 transition-colors disabled:opacity-50">
+                        {uploadingImg ? '⏳ Subiendo...' : '📷 Subir imagen del comprobante'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
 
               {error && (
                 <div className="flex items-start gap-2 text-red-400 text-xs bg-red-950/40 border border-red-800/50 rounded-xl px-3 py-2.5">
@@ -369,14 +379,15 @@ function DestRow({ label, value, copyable, highlight }: { label: string; value: 
 
 // ─── Field ────────────────────────────────────────────────────────────────────
 
-function Field({ label, value, onChange, placeholder, required, hint, type = 'text' }: {
+function Field({ label, value, onChange, placeholder, required, hint, type = 'text', inputMode }: {
   label: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string; required?: boolean; hint?: string; type?: string;
+  inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
 }) {
   return (
     <div>
       <label className="block text-xs text-gray-400 mb-1.5 font-medium">{label}</label>
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder} required={required}
+      <input type={type} inputMode={inputMode} value={value} onChange={onChange} placeholder={placeholder} required={required}
         className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors" />
       {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
     </div>

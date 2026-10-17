@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { referenceNumber, phone, legalId, bank, amountBs, paymentDate, receiptUrl, packageId } = body;
 
-    if (!referenceNumber || !phone || !legalId || !bank || !amountBs || !paymentDate || !packageId) {
-      return NextResponse.json({ error: 'Todos los campos son requeridos.' }, { status: 400 });
+    if (!referenceNumber || !phone || !amountBs || !paymentDate || !packageId) {
+      return NextResponse.json({ error: 'Completa los campos requeridos (Referencia, Teléfono, Monto y Fecha).' }, { status: 400 });
     }
 
     const pkg = TOPUP_PACKAGES.find(p => p.id === packageId);
@@ -45,14 +45,16 @@ export async function POST(req: NextRequest) {
     }
 
     const goldAmount = pkg.golds;
+    const cleanLegalId = typeof legalId === 'string' && legalId.trim() !== 'V' ? legalId.trim() : '';
+    const cleanBank = typeof bank === 'string' ? bank.trim() : '';
 
     const request = await TopUpRequest.create({
       userId: new Types.ObjectId(session.user.id),
       goldAmount,
       referenceNumber: referenceNumber.trim(),
       phone: phone.trim(),
-      legalId: legalId.trim(),
-      bank: bank.trim(),
+      legalId: cleanLegalId,
+      bank: cleanBank,
       amountBs: Number(amountBs),
       paymentDate: paymentDate.trim(),
       receiptUrl: receiptUrl?.trim() || undefined,
@@ -62,14 +64,14 @@ export async function POST(req: NextRequest) {
     // Optionally save phone/legalId to user profile if not set
     const updates: Record<string, string> = {};
     if (!user.phone && phone) updates.phone = phone.trim();
-    if (!user.legalId && legalId) updates.legalId = legalId.trim();
+    if (!user.legalId && cleanLegalId) updates.legalId = cleanLegalId;
     if (Object.keys(updates).length > 0) {
       await User.findByIdAndUpdate(session.user.id, { $set: updates });
     }
 
     // Notify admins/staff with full payment details (fire-and-forget)
     notifyTopUpPending(session.user.id, goldAmount, referenceNumber.trim(), {
-      bank: bank.trim(),
+      bank: cleanBank || 'Pago Móvil',
       phone: phone.trim(),
       amountBs: Number(amountBs),
       packageLabel: pkg.label,
