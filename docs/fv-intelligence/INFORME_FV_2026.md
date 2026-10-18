@@ -101,14 +101,21 @@
 
 ---
 
-## 5. Resultados del Backtesting Anual de 5 y 6 (Temporada 2026)
+## 5. Resultados del Backtesting Anual de 5 y 6 (Temporada 2026 — Factor Bs. 35)
 
-Aplicando el algoritmo de asignación por confianza de válida (1 Línea en la más clara + 2 Candados + 2 Trilogías + 1 Multiplicador de 4–5 caballos en la válida más peligrosa) sobre las **50 reuniones completas de 2026**:
+Metodología de 3 niveles diseñada para **maximizar los cuadros con 6 de 6** y que cada nivel supere estrictamente al anterior:
+1. **Regla del "Falso 2º Fijo" (`rk1`):** La 2ª válida en confianza del día es donde estadísticamente más caen los favoritos ante el 3º y 4º del FV. Por eso en el **Cuadro Medio** y **Blindado** se blinda con **4 ejemplares (`Top 4 FV`)**.
+2. **Regla de Cuadros SIN LÍNEA (0 Líneas):** Cuando la reunión NO tiene un Súper Fijo claro (`FV ≥ 58%` o `FV ≥ 48%` en `1.400m+` con lote `≤ 9`), tanto el **Cuadro Medio** (`2 × 4 × 2 × 3 × 3 × 3 = 432 comb.`) como el **Blindado** (`3 × 4 × 3 × 3 × 3 × 3 = 972 comb.`) juegan **SIN LÍNEA**, evitando perder el cuadro cuando el favorito principal llega 2º o 3º.
+3. **Regla del Comodín `"TODOS (Lote Completo)"`:** Cuando sí hay Súper Fijo de Hierro (`1 caballo`), el ahorro de combinaciones se invierte en jugar **TODOS LOS INSCRITOS** (`100%` asegurada) en la válida más peligrosa del día (`rk5`), atrapando cualquier batacazo aunque no aparezca ni entre las 7 marcas del FV.
 
-| Hipódromo | Reuniones Evaluadas | Perfil de Cuadro | Combinaciones Promedio | Reuniones con 6 de 6 | Reuniones con 5 de 6 | Total Reuniones Premiadas (5 o 6) | % de Semanas Cobrando |
+| Hipódromo | Reuniones 2026 | Nivel de Cuadro | Comb. Promedio | Costo Promedio (× 35 Bs) | Cuadros con 6 de 6 | Cuadros con 5 de 6 | Total Reuniones Premiadas (5 o 6) |
 |---|---|---|---|---|---|---|---|
-| **La Rinconada** | 31 reuniones | **Estándar FV** | **140 comb.** | **2** (`R15`, `R32`) | **7** | **9 de 31** | **29.0%** |
-| **La Rinconada** | 31 reuniones | **Blindado FV** | **350 comb.** | **2** (`R15`, `R32`) | **9** | **11 de 31** | **35.5%** |
-| **Valencia** | 19 reuniones | **Estándar FV** | **133 comb.** | **3** (`R7`, `R8`, `R13`) | **6** | **9 de 19** | **47.4%** |
-| **Valencia** | 19 reuniones | **Blindado FV** | **332 comb.** | **4** (`R7`, `R8`, `R13`, `R18`) | **7** | **11 de 19** | **57.9%** |
-| **TOTAL 2026** | **50 reuniones** | **Blindado FV** | **~343 comb.** | **6 cuadros con 6** | **16 cuadros con 5** | **22 de 50 reuniones** | **44.0%** |
+| **La Rinconada** | 31 reuniones | **1. Económico (~$5)** | **144 comb.** | **Bs. 5.040** | **2 con 6** (`6.5%`) | 8 con 5 | **10 de 31 (`32.3%`)** |
+| **La Rinconada** | 31 reuniones | **2. Medio (~$15)** | **432 comb.** | **Bs. 15.120** | **4 con 6 (`12.9%` — Doble)** | 9 con 5 | **13 de 31 (`41.9%`)** |
+| **La Rinconada** | 31 reuniones | **3. Blindado (~1.000)** | **~1.101 comb.** | **Bs. 38.535** | **5 con 6 (`16.1%` — 2.5x)** | 12 con 5 | **17 de 31 (`54.8%`)** |
+| **Valencia** | 19 reuniones | **1. Económico (~$5)** | **144 comb.** | **Bs. 5.040** | **3 con 6** (`15.8%`) | 5 con 5 | **8 de 19 (`42.1%`)** |
+| **Valencia** | 19 reuniones | **2. Medio (~$15)** | **432 comb.** | **Bs. 15.120** | **6 con 6 (`31.6%` — Doble)** | 6 con 5 | **12 de 19 (`63.2%`)** |
+| **Valencia** | 19 reuniones | **3. Blindado (~1.000)** | **~938 comb.** | **Bs. 32.830** | **8 con 6 (`42.1%`)** | 7 con 5 | **15 de 19 (`78.9%`)** |
+| **TOTAL 2026** | **50 reuniones** | **1. Económico (~$5)** | **144 comb.** | **Bs. 5.040** | **5 cuadros con 6 (`10.0%`)** | 13 con 5 | **18 de 50 (`36.0%`)** |
+| **TOTAL 2026** | **50 reuniones** | **2. Medio (~$15)** | **432 comb.** | **Bs. 15.120** | **10 cuadros con 6 (`20.0%`)** | 15 con 5 | **25 de 50 (`50.0%`)** |
+| **TOTAL 2026** | **50 reuniones** | **3. Blindado (~1.000)** | **~1.039 comb.** | **Bs. 36.365** | **13 cuadros con 6 (`26.0%`)** | 19 con 5 | **32 de 50 (`64.0%`)** |
