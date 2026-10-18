@@ -18,6 +18,7 @@ export default function LaboratorioFvTab() {
   const [thresholdMode, setThresholdMode] = useState<'cumulative' | 'band'>('cumulative');
   const [auditFilter, setAuditFilter] = useState<AuditFilter>('all');
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
+  const [distanceFilter, setDistanceFilter] = useState<number | 'all'>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +58,9 @@ export default function LaboratorioFvTab() {
         if (fieldFilter === 11 && r.fieldSize < 11) return false;
         if (fieldFilter !== 11 && r.fieldSize !== fieldFilter) return false;
       }
+      if (distanceFilter !== 'all' && r.distance !== distanceFilter) {
+        return false;
+      }
       if (auditFilter === 'batacazo') return r.winner.fvRank === null;
       if (auditFilter === 'fav50_lost') return (r.topHorses[0]?.fvPct ?? 0) >= 50 && r.winner.fvRank !== 1;
       if (auditFilter === 'fav40_lost') return (r.topHorses[0]?.fvPct ?? 0) >= 40 && r.winner.fvRank !== 1;
@@ -64,7 +68,7 @@ export default function LaboratorioFvTab() {
       if (auditFilter === 'tri_win') return r.winner.fvRank === 1 || r.winner.fvRank === 2 || r.winner.fvRank === 3;
       return true;
     });
-  }, [data, auditFilter, fieldFilter]);
+  }, [data, auditFilter, fieldFilter, distanceFilter]);
 
   const top3WinCount = useMemo(() => {
     if (!data?.byPosition) return 0;
@@ -390,7 +394,114 @@ export default function LaboratorioFvTab() {
             </div>
           </div>
 
-          {/* 3. SIMULADOR DE CANDADOS (DÚOS 1º+2º) Y TRILOGÍAS (1º+2º+3º) */}
+          {/* 2B. MATRIZ DINÁMICA POR DISTANCIA (AUTO-DETECTADA 1100m..3200m+) */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-white">
+                2B. Matriz por Distancia Corrida (Auto-detectada: 1.100m a 3.200m+)
+              </h3>
+              <p className="text-xs text-gray-500">
+                Incluye automáticamente todas las distancias corridas hasta hoy y agregará cualquier distancia nueva en cuanto tenga resultados.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase border-b border-gray-800">
+                  <tr>
+                    <th className="pb-2 pr-3 font-medium">Distancia</th>
+                    <th className="pb-2 px-2 font-medium text-center">Carreras</th>
+                    <th className="pb-2 px-2 font-medium text-center text-green-400">1º FV</th>
+                    <th className="pb-2 px-2 font-medium text-center text-sky-400">2º FV</th>
+                    <th className="pb-2 px-2 font-medium text-center text-indigo-400">3º FV</th>
+                    <th className="pb-2 px-2 font-medium text-center text-purple-400">4º FV</th>
+                    <th className="pb-2 px-2 font-medium text-center text-pink-400">5º FV</th>
+                    <th className="pb-2 px-2 font-medium text-center text-red-400">Batacazo (Fuera Top 5)</th>
+                    <th className="pb-2 pl-2 font-medium text-center border-l border-gray-800 text-orange-400">
+                      % del Total de Batacazos ({data.batacazos})
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.byDistance ?? []).map(row => (
+                    <tr key={row.distance} className="border-b border-gray-800/50 last:border-0">
+                      <td className="py-2.5 pr-3 font-bold text-white whitespace-nowrap">{row.distanceLabel}</td>
+                      <td className="py-2.5 px-2 text-center text-gray-300 font-semibold">{row.totalRaces}</td>
+                      <td className="py-2.5 px-2 text-center text-gray-200">
+                        {row.posWins.pos1} <span className="text-[11px] text-gray-500">({row.posPcts.pos1}%)</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center text-gray-200">
+                        {row.posWins.pos2} <span className="text-[11px] text-gray-500">({row.posPcts.pos2}%)</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center text-gray-200">
+                        {row.posWins.pos3} <span className="text-[11px] text-gray-500">({row.posPcts.pos3}%)</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center text-gray-200">
+                        {row.posWins.pos4} <span className="text-[11px] text-gray-500">({row.posPcts.pos4}%)</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center text-gray-200">
+                        {row.posWins.pos5} <span className="text-[11px] text-gray-500">({row.posPcts.pos5}%)</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-semibold text-red-400">
+                        {row.posWins.batacazo}{' '}
+                        <span className="text-[11px] text-red-400/70">({row.posPcts.batacazo}%)</span>
+                      </td>
+                      <td className="py-2.5 pl-2 text-center border-l border-gray-800">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-md text-xs font-extrabold ${
+                            row.shareOfAllBatacazosPct >= 25
+                              ? 'bg-orange-950/70 text-orange-300 border border-orange-700/50'
+                              : 'bg-gray-800 text-gray-400'
+                          }`}
+                        >
+                          {row.shareOfAllBatacazosPct}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 3. MOTOR DE REGLAS ESTRATÉGICAS PARA ARMAR 5Y6 Y POOL DE 4 */}
+          {(data.prescriptionRules ?? []).length > 0 && (
+            <div className="bg-gray-900 border border-yellow-700/40 rounded-2xl p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-bold text-yellow-400 flex items-center gap-2">
+                  <span>🎯</span>
+                  <span>3. Recetario Matemático para Armar 5y6 y Pool de 4 (FV + Lote + Distancia)</span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Reglas cruzadas validadas contra el historial real para decidir cuándo jugar Línea, Candado (2), Trilogía (3) o Multiplicar (4+).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {data.prescriptionRules.map(pr => (
+                  <div key={pr.id} className="bg-gray-950/80 border border-gray-800 rounded-xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-yellow-500/15 text-yellow-300 border border-yellow-600/30">
+                        {pr.actionBadge}
+                      </span>
+                      <span className="text-xs font-extrabold text-green-400">
+                        {pr.successPct}% ({pr.successCount}/{pr.matchingRaces}) · {pr.targetOutcomeLabel}
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-white">{pr.title}</p>
+                    <p className="text-[11px] text-gray-400">
+                      <strong className="text-gray-300">Condición:</strong> {pr.conditionText}
+                    </p>
+                    <p className="text-[11px] text-yellow-200/90 bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-2.5 py-1.5">
+                      💡 <strong>Acción 5y6:</strong> {pr.recommendation}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3B. SIMULADOR DE CANDADOS (DÚOS 1º+2º) Y TRILOGÍAS (1º+2º+3º) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Dúos / Candados */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
@@ -508,6 +619,19 @@ export default function LaboratorioFvTab() {
                   {data.byFieldSize.map(fs => (
                     <option key={fs.fieldSizeKey} value={fs.fieldSizeKey}>
                       Lote de {fs.fieldSizeLabel} ({fs.totalRaces})
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={distanceFilter}
+                  onChange={e => setDistanceFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                  className="bg-gray-950 border border-gray-700 rounded-xl px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-yellow-600"
+                >
+                  <option value="all">Todas las distancias</option>
+                  {(data.byDistance ?? []).map(d => (
+                    <option key={d.distance} value={d.distance}>
+                      {d.distanceLabel} ({d.totalRaces})
                     </option>
                   ))}
                 </select>

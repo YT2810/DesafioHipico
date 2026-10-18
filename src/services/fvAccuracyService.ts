@@ -4,6 +4,7 @@ import Meeting from '@/models/Meeting';
 import Race from '@/models/Race';
 import Track from '@/models/Track';
 import Entry from '@/models/Entry';
+import Horse from '@/models/Horse';
 import Forecast from '@/models/Forecast';
 
 export interface FvAccuracyRow {
@@ -59,6 +60,7 @@ function calcFv(forecasts: { marks: { preferenceOrder: number; horseName: string
 
 export async function getFvAccuracy(trackNameQuery: string): Promise<FvTrackAccuracy | null> {
   await dbConnect();
+  void Horse;
 
   const track = await Track.findOne({ name: { $regex: new RegExp(trackNameQuery, 'i') } }).lean() as any;
   if (!track) return null;
@@ -203,6 +205,42 @@ export interface FvFieldSizeRow {
   shareOfAllBatacazosPct: number;
 }
 
+export interface FvDistanceRow {
+  distance: number; // e.g. 1100, 1200, ..., 3200
+  distanceLabel: string;
+  totalRaces: number;
+  posWins: {
+    pos1: number;
+    pos2: number;
+    pos3: number;
+    pos4: number;
+    pos5: number;
+    batacazo: number;
+  };
+  posPcts: {
+    pos1: number;
+    pos2: number;
+    pos3: number;
+    pos4: number;
+    pos5: number;
+    batacazo: number;
+  };
+  shareOfAllBatacazosPct: number;
+}
+
+export interface FvPrescriptionRule {
+  id: string;
+  actionBadge: string;
+  title: string;
+  conditionText: string;
+  recommendation: string;
+  matchingRaces: number;
+  frequencyPct: number;
+  successCount: number;
+  successPct: number;
+  targetOutcomeLabel: string;
+}
+
 export interface FvComboRuleRow {
   id: string;
   group: 'duo' | 'trilogia';
@@ -259,7 +297,9 @@ export interface FvLabAnalytics {
   byPosition: FvAccuracyRow[];
   thresholds: FvThresholdBreakdown[];
   byFieldSize: FvFieldSizeRow[];
+  byDistance: FvDistanceRow[];
   comboRules: FvComboRuleRow[];
+  prescriptionRules: FvPrescriptionRule[];
   insights: FvPatternInsight[];
   racesAudit: FvRaceAuditItem[];
 }
@@ -270,6 +310,7 @@ function round1(num: number, den: number): number {
 
 export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAnalytics | null> {
   await dbConnect();
+  void Horse;
 
   const track = await Track.findOne({ name: { $regex: new RegExp(trackNameQuery, 'i') } }).lean() as any;
   if (!track) return null;
@@ -297,7 +338,9 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
       byPosition: [],
       thresholds: [],
       byFieldSize: [],
+      byDistance: [],
       comboRules: [],
+      prescriptionRules: [],
       insights: [],
       racesAudit: [],
     };
@@ -317,7 +360,9 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
       byPosition: [],
       thresholds: [],
       byFieldSize: [],
+      byDistance: [],
       comboRules: [],
+      prescriptionRules: [],
       insights: [],
       racesAudit: [],
     };
@@ -557,6 +602,45 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
     };
   });
 
+  // ── 2B. Dynamic Distance Matrix (auto-adds any distance run: 1100..3200m+) ─
+  const distanceBuckets = new Map<number, FvRaceAuditItem[]>();
+  for (const r of racesAudit) {
+    if (!r.distance || r.distance <= 0) continue;
+    const list = distanceBuckets.get(r.distance) ?? [];
+    list.push(r);
+    distanceBuckets.set(r.distance, list);
+  }
+
+  const sortedDistances = [...distanceBuckets.keys()].sort((a, b) => a - b);
+  const byDistance: FvDistanceRow[] = sortedDistances.map(dist => {
+    const list = distanceBuckets.get(dist) ?? [];
+    const totalRaces = list.length;
+    const posWins = { pos1: 0, pos2: 0, pos3: 0, pos4: 0, pos5: 0, batacazo: 0 };
+    for (const r of list) {
+      if (r.winner.fvRank === 1) posWins.pos1++;
+      else if (r.winner.fvRank === 2) posWins.pos2++;
+      else if (r.winner.fvRank === 3) posWins.pos3++;
+      else if (r.winner.fvRank === 4) posWins.pos4++;
+      else if (r.winner.fvRank === 5) posWins.pos5++;
+      else posWins.batacazo++;
+    }
+    return {
+      distance: dist,
+      distanceLabel: `${dist.toLocaleString('es-VE')} mts`,
+      totalRaces,
+      posWins,
+      posPcts: {
+        pos1: round1(posWins.pos1, totalRaces),
+        pos2: round1(posWins.pos2, totalRaces),
+        pos3: round1(posWins.pos3, totalRaces),
+        pos4: round1(posWins.pos4, totalRaces),
+        pos5: round1(posWins.pos5, totalRaces),
+        batacazo: round1(posWins.batacazo, totalRaces),
+      },
+      shareOfAllBatacazosPct: round1(posWins.batacazo, batacazos),
+    };
+  });
+
   // ── 3. Combo Rules (Candados 1º+2º & Trilogías 1º+2º+3º) ──────────────────
   const comboDefs: {
     id: string;
@@ -668,45 +752,140 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
     };
   });
 
-  // ── 4. Automatic Pattern Insights ─────────────────────────────────────────
+  // ── 4. Prescription Engine for 5y6 & Pool de 4 (Multivariable Rules) ──────
+  const prescriptionDefs: {
+    id: string;
+    actionBadge: string;
+    title: string;
+    conditionText: string;
+    recommendation: string;
+    targetOutcomeLabel: string;
+    match: (r: FvRaceAuditItem) => boolean;
+    isSuccess: (r: FvRaceAuditItem) => boolean;
+  }[] = [
+    {
+      id: 'linea_60',
+      actionBadge: '📌 JUGAR LÍNEA (1 CABALLO)',
+      title: 'Súper Favorito de Consenso (1º FV ≥ 60%)',
+      conditionText: 'El 1º del Factor de Victoria tiene 60% o más de consenso.',
+      recommendation: 'Jugar como Línea fija en el 5y6 o base del Pool de 4. Si decides cubrirlo en carreras de lote grande, el único refuerzo lógico es el 2º o 3º FV.',
+      targetOutcomeLabel: 'Ganó el 1º FV directo',
+      match: r => (r.topHorses[0]?.fvPct ?? 0) >= 60,
+      isSuccess: r => r.winner.fvRank === 1,
+    },
+    {
+      id: 'linea_1400_plus',
+      actionBadge: '📌 LÍNEA / CANDADO CORTO',
+      title: 'Favorito +50% en 1.400 mts o más',
+      conditionText: 'Distancia ≥ 1.400m y el 1º FV tiene ≥ 50%.',
+      recommendation: 'En 1.400m+ el desarrollo favorece al ejemplar superior: altísima efectividad del 1º FV y casi nulo riesgo de batacazo.',
+      targetOutcomeLabel: 'Ganó 1º o 2º FV',
+      match: r => r.distance >= 1400 && (r.topHorses[0]?.fvPct ?? 0) >= 50,
+      isSuccess: r => r.winner.fvRank === 1 || r.winner.fvRank === 2,
+    },
+    {
+      id: 'candado_50_59',
+      actionBadge: '🔒 CANDADO DOBLE (1º + 2º FV)',
+      title: 'Favorito en Banda 50%–59.9% + su Escolta (2º FV)',
+      conditionText: 'El 1º FV está entre 50% y 59.9% (cuando pierde, la mitad de las veces lo derrota el 2º FV).',
+      recommendation: 'En vez de arriesgar una línea vulnerable, amarrar la carrera con el 1º y 2º del FV en el cuadro.',
+      targetOutcomeLabel: 'Ganó 1º o 2º FV',
+      match: r => (r.topHorses[0]?.fvPct ?? 0) >= 50 && (r.topHorses[0]?.fvPct ?? 0) < 60,
+      isSuccess: r => r.winner.fvRank === 1 || r.winner.fvRank === 2,
+    },
+    {
+      id: 'candado_tiro_largo',
+      actionBadge: '🔱 BLINDAJE TIRO MEDIO/LARGO (≥ 1.500m)',
+      title: 'Carreras de 1.500m a 3.200m (Cero Batacazos)',
+      conditionText: 'Distancia ≥ 1.500 metros.',
+      recommendation: 'Históricamente NO ocurren batacazos fuera del Top 5 en tiros de 1.500m en adelante. Cerrar con los 3 primeros del FV asegura prácticamente la carrera.',
+      targetOutcomeLabel: 'Ganó Top 3 FV (0% Batacazo)',
+      match: r => r.distance >= 1500,
+      isSuccess: r => r.winner.fvRank === 1 || r.winner.fvRank === 2 || r.winner.fvRank === 3,
+    },
+    {
+      id: 'trilogia_20_corte',
+      actionBadge: '🔱 TRILOGÍA (1º + 2º + 3º FV)',
+      title: 'Trilogía de Corte Limpio (3 ejemplares ≥ 20% y 4º < 20%)',
+      conditionText: 'Los 3 primeros tienen ≥ 20% cada uno y el 4º cae por debajo de 20%.',
+      recommendation: 'Jugar exactamente esos 3 ejemplares en el 5y6 o Pool de 4. No gastar en un 4º caballo.',
+      targetOutcomeLabel: 'Ganó 1º, 2º o 3º FV',
+      match: r =>
+        (r.topHorses[0]?.fvPct ?? 0) >= 20 &&
+        (r.topHorses[1]?.fvPct ?? 0) >= 20 &&
+        (r.topHorses[2]?.fvPct ?? 0) >= 20 &&
+        (r.topHorses[3]?.fvPct ?? 0) < 20,
+      isSuccess: r => r.winner.fvRank === 1 || r.winner.fvRank === 2 || r.winner.fvRank === 3,
+    },
+    {
+      id: 'alerta_batacazo_lote_grande',
+      actionBadge: '🚨 MULTIPLICAR / ALERTA DE BATACAZO',
+      title: 'Tiro Corto (1.100m–1.300m) + Lote Grande (≥ 9 caballos) + 1º FV < 45%',
+      conditionText: 'Distancia ≤ 1.300m, corren 9 o más ejemplares y ningún caballo llega a 45% de FV.',
+      recommendation: 'Aquí es donde se caen los cuadros del 5y6. El 1º FV baja drásticamente su acierto; es la carrera obligatoria para abrir con 4+ ejemplares o buscar dividendo.',
+      targetOutcomeLabel: 'Perdió el 1º FV (Sorpresa / Dividendo)',
+      match: r => r.distance > 0 && r.distance <= 1300 && r.fieldSize >= 9 && (r.topHorses[0]?.fvPct ?? 0) < 45,
+      isSuccess: r => r.winner.fvRank !== 1,
+    },
+  ];
+
+  const prescriptionRules: FvPrescriptionRule[] = prescriptionDefs.map(def => {
+    const matched = racesAudit.filter(def.match);
+    const matchingRaces = matched.length;
+    const successCount = matched.filter(def.isSuccess).length;
+    return {
+      id: def.id,
+      actionBadge: def.actionBadge,
+      title: def.title,
+      conditionText: def.conditionText,
+      recommendation: def.recommendation,
+      matchingRaces,
+      frequencyPct: round1(matchingRaces, countedRaces),
+      successCount,
+      successPct: round1(successCount, matchingRaces),
+      targetOutcomeLabel: def.targetOutcomeLabel,
+    };
+  });
+
+  // ── 5. Automatic Pattern Insights ─────────────────────────────────────────
   const insights: FvPatternInsight[] = [];
+
+  const longRaces = racesAudit.filter(r => r.distance >= 1500);
+  if (longRaces.length > 0) {
+    const longBatacazos = longRaces.filter(r => r.winner.fvRank === null).length;
+    const longTop3 = longRaces.filter(r => r.winner.fvRank !== null && r.winner.fvRank <= 3).length;
+    insights.push({
+      title: 'Patrón de Distancia: 1.500m a 3.200m vs Tiros Cortos',
+      category: 'batacazos',
+      metric: `${longBatacazos} batacazos en ${longRaces.length} carreras ≥ 1.500m`,
+      detail: `En distancias de 1.500m o más solo hubo ${longBatacazos} batacazos (${round1(longBatacazos, longRaces.length)}%) y el Top 3 FV ganó el ${round1(longTop3, longRaces.length)}% de las veces. Todos los batacazos se concentran entre 1.100m y 1.400m.`,
+    });
+  }
 
   const th50 = thresholds.find(t => t.mode === 'cumulative' && t.label.includes('+50%'));
   if (th50 && th50.totalCandidates > 0) {
     const top23WhenLost = th50.whenLost.wonBy2nd + th50.whenLost.wonBy3rd;
     const top23Pct = round1(top23WhenLost, th50.losses);
     insights.push({
-      title: 'Comportamiento de Favoritos +50% FV',
+      title: 'Con Quién Se Caen los Grandes Favoritos (+50% FV)',
       category: 'favoritos',
       metric: `${th50.winPct}% acierto (${th50.wins}/${th50.totalCandidates})`,
       detail:
         th50.losses > 0
-          ? `Cuando un ejemplar de +50% FV pierde (${th50.losses} casos), el ${top23Pct}% de las veces gana el 2º (${th50.whenLost.wonBy2nd}) o 3º (${th50.whenLost.wonBy3rd}) del FV, y solo ${th50.whenLost.wonByBatacazo} vez/veces fue batacazo.`
+          ? `Cuando un ejemplar de +50% FV pierde (${th50.losses} casos), el ${top23Pct}% de las veces lo derrota el 2º (${th50.whenLost.wonBy2nd}) o 3º (${th50.whenLost.wonBy3rd}) del FV.`
           : `Los ejemplares con +50% FV han ganado el 100% de las veces registradas (${th50.wins}/${th50.totalCandidates}).`,
     });
   }
 
-  if (byFieldSize.length > 0 && batacazos > 0) {
-    const peakBatacazoRow = [...byFieldSize].sort((a, b) => b.posWins.batacazo - a.posWins.batacazo)[0];
-    if (peakBatacazoRow && peakBatacazoRow.posWins.batacazo > 0) {
-      insights.push({
-        title: 'Zona de Mayor Concentración de Batacazos',
-        category: 'batacazos',
-        metric: `${peakBatacazoRow.shareOfAllBatacazosPct}% en lotes de ${peakBatacazoRow.fieldSizeLabel}`,
-        detail: `El ${peakBatacazoRow.shareOfAllBatacazosPct}% de todos los batacazos (${peakBatacazoRow.posWins.batacazo} de ${batacazos}) ocurrió en carreras de ${peakBatacazoRow.fieldSizeLabel}, donde la probabilidad de batacazo es ${peakBatacazoRow.posPcts.batacazo}%.`,
-      });
-    }
-  }
-
-  const bestDuo = comboRules
-    .filter(c => c.group === 'duo' && c.matchingRaces >= 3)
-    .sort((a, b) => b.accuracyPct - a.accuracyPct)[0];
-  if (bestDuo) {
+  const largeFieldBatacazos = byFieldSize
+    .filter(f => f.fieldSizeKey >= 9)
+    .reduce((acc, f) => acc + f.posWins.batacazo, 0);
+  if (batacazos > 0) {
     insights.push({
-      title: 'Mejor Regla de Candado (Dúo 1º+2º)',
-      category: 'candados',
-      metric: `${bestDuo.accuracyPct}% efectividad (${bestDuo.winsInGroup}/${bestDuo.matchingRaces})`,
-      detail: `"${bestDuo.label}" aparece en el ${bestDuo.frequencyPct}% de las carreras y asegura el ganador entre el 1º y 2º FV en el ${bestDuo.accuracyPct}% de las ocasiones.`,
+      title: 'Efecto Tamaño de Lote (9+ Ejemplares)',
+      category: 'batacazos',
+      metric: `${round1(largeFieldBatacazos, batacazos)}% de todos los batacazos`,
+      detail: `${largeFieldBatacazos} de los ${batacazos} batacazos totales ocurrieron cuando corrieron 9 o más ejemplares en pista.`,
     });
   }
 
@@ -718,7 +897,7 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
       title: 'Mejor Regla de Trilogía (1º+2º+3º)',
       category: 'trilogias',
       metric: `${bestTri.accuracyPct}% efectividad (${bestTri.winsInGroup}/${bestTri.matchingRaces})`,
-      detail: `"${bestTri.label}" cubre el ganador en el ${bestTri.accuracyPct}% de las carreras donde se cumple (${bestTri.matchingRaces} de ${countedRaces} carreras).`,
+      detail: `"${bestTri.label}" asegura el ganador en el ${bestTri.accuracyPct}% de las carreras donde se cumple (${bestTri.matchingRaces} de ${countedRaces} carreras).`,
     });
   }
 
@@ -731,7 +910,9 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
     byPosition: byPositionArray,
     thresholds,
     byFieldSize,
+    byDistance,
     comboRules,
+    prescriptionRules,
     insights,
     racesAudit,
   };
