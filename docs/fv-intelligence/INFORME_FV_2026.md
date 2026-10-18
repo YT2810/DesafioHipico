@@ -144,3 +144,33 @@ Al evaluar el ranking completo del Factor de Victoria (`1º al 12º puesto del F
 | **TOTAL 2026** *(50 reun.)* | **2. Medio** | ~413 comb. | **10 cuadros con 6 (`20.0%`)** | 16 con 5 | Bs. 484.560 | Bs. 1.902.634 | **+Bs. 1.418.074** |
 | **TOTAL 2026** *(50 reun.)* | **3. Blindado** | ~1.131 comb. | **16 cuadros con 6 (`32.0%`)** | 12 con 5 | Bs. 1.325.280 | Bs. 4.072.973 | **+Bs. 2.747.693** |
 | **TOTAL 2026** *(50 reun.)* | **👑 4. Premium** | ~1.710 comb. | **20 cuadros con 6 (`40.0%`)** | 17 con 5 | Bs. 2.004.695 | **Bs. 5.368.777** | **+Bs. 3.364.082** |
+
+---
+
+## 6. Leyes de las Jornadas Millonarias (`< 300 Cuadros` / `> Bs. 1.000.000`) y el "Cuadro Cazador"
+
+Al auditar las 14 reuniones de La Rinconada y 4 de Valencia donde hubo menos de 350 cuadros con 6 o el dividendo superó `Bs. 800.000 – 31.965.521`, se identificaron 3 leyes estructurales:
+
+### Ley 1: En los días millonarios NO ganan 6 batacazos — ganan 4 o 5 favoritos (`1º a 3º FV`) + 1 o 2 sorpresas
+- En `R39` (`Bs. 1.543.968`), `R13` (`Bs. 1.265.197`), `R21` (`Bs. 1.047.641`), `R25` (`Bs. 906.115`), `Valencia R26` (`Bs. 1.050.325`) y `Valencia R19` (`Bs. 784.764`), **5 de las 6 válidas fueron ganadas por el Top 3 del FV (`1º, 2º o 3º FV`)**.
+- En `R26` (`Bs. 5.307.966`), `R24` (`Bs. 3.250.773`), `R35` (`Bs. 3.226.316`), `R10` (`Bs. 2.111.254`) y `R20` (`Bs. 1.466.235`), **4 de las 6 válidas fueron ganadas por el Top 3 del FV**.
+
+### Ley 2: La "Trampa del Falso Fijo de `48.5% a 55.5% FV`" en Tiro Corto / Lote Grande
+En la mayoría de las jornadas de dividendo millonario, el batacazo (`6º–8º FV` o `0% FV`) explotó exactamente en la carrera donde había un favorito en la banda **`48.5% a 55.5% de FV`**:
+- **`Caracas R28` (`Bs. 31.965.521` · 8 cuadros):** Cayó el favorito de **`50.0% FV`** en la 3ª válida y ganó un `0% FV`.
+- **`Valencia R10` (`Bs. 14.150.586` · 3 cuadros):** Cayó el favorito de **`50.0% FV`** en la 2ª válida y ganó un `0% FV`.
+- **`Caracas R34` (`Bs. 3.713.235` · 116 cuadros):** Cayó el único favorito de **`53.6% FV`** en la 3ª válida y ganó el `4º FV`.
+- **`Caracas R35` (`Bs. 3.226.316` · 143 cuadros):** Cayó el favorito de **`51.8% FV`** en la 2ª válida y ganó el `7º FV`.
+- **`Caracas R39` (`Bs. 1.543.968` · 346 cuadros):** Cayó el favorito de **`52.7% FV`** en la 1ª válida (`1.200m · 10 ej.`) y ganó el `6º FV`.
+- **`Caracas R25` (`Bs. 906.115` · 351 cuadros):** Cayó el favorito de **`54.6% FV`** en la 2ª válida (`1.100m · 10 ej.`) y ganó un `0% FV`.
+- **`Valencia R19` (`Bs. 784.764` · 88 cuadros):** Cayó el favorito de **`55.2% FV`** en la 4ª válida y ganó un `0% FV`.
+
+### Ley 3: "Bloque Compacto (`≥ 91%`)" vs. "Vacío en el 3º FV (`≤ 14.5%`)" — Cómo saber dónde meter `TODOS`
+Para no meter `TODOS` en varias carreras el mismo día:
+1. **Bloque Compacto (NO lleva `TODOS`):** Cuando los 3 primeros suman **`≥ 91%` con el `3º ≥ 20%`** (Trilogía Compacta, ej. `39% + 31.4% + 25.8% = 96.2%`) o cuando los 4 primeros suman **`≥ 91%` con el `4º ≥ 15%`** (Póker Compacto, ej. `29.5% + 26.1% + 21.2% + 19.3% = 96.1%`), los pronosticadores ya encerraron la carrera en ese bloque de 3 o 4 ejemplares.
+2. **Vacío de Escolta / Cola Rota (SÍ lleva `TODOS` en el Cuadro Cazador):** Cuando en `1.100m–1.300m` (o con `9+ ejemplares`) el **`3º FV` cae a `≤ 14.5%`** dejando entre `24% y 35%` de los puntos pulverizados en muchos caballos secundarios (o cuando hay un Falso Fijo de `48.5%–55.5%`). Si fallan los 2 primeros, no existe un 3er favorito fuerte que sostenga la carrera y entra cualquiera del lote (`6º–8º FV` o `0% FV`).
+
+### Regla de Acceso del Club 5y6 VIP Semanal (Frontend Público)
+- El widget flotante `👑 5y6 Algoritmo` (`src/components/VipFiveAndSixWidget.tsx` y `GET /api/vip-5y6`) desbloquea los cuadros **Económico** y **Medio** únicamente para usuarios con recarga aprobada dentro de la **semana calendario en curso (`Lunes 00:00:00 a Domingo 23:59:59`, hora de Venezuela `UTC-4`)**.
+- Los ejemplares se muestran **ordenados estrictamente por número de dorsal de menor a mayor (`#1, #4, #9`) sin revelar el `% FV`**, protegiendo el consumo de Golds carrera por carrera.
+

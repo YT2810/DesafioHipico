@@ -926,6 +926,197 @@ export default function LaboratorioFvTab() {
             </div>
           )}
 
+          {/* 3E. SECCIÓN PRIVADA ADMIN: CUADRO CAZADOR DE BATACAZOS Y DIVIDENDOS MILLONARIOS */}
+          {data.upcomingFiveAndSix && data.fiveAndSixBacktest && (
+            <div className="bg-gradient-to-br from-gray-900 via-[#1a0f1e] to-gray-900 border-2 border-rose-600/50 rounded-2xl p-4 space-y-4 shadow-[0_0_35px_rgba(225,29,72,0.12)]">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-rose-900/40 pb-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
+                      <span>💣</span>
+                      <span>3E. Laboratorio Privado — Cuadro Cazador de Batacazos y Millones</span>
+                    </h3>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-600">
+                      🔒 Uso Exclusivo Admin
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Distingue entre <strong>Bloques Compactos (Top 3/4 ≥ 91% FV)</strong> y <strong>Carreras con Vacío en 3º FV (≤ 14.5%) o Trampa Falso Fijo (48.5%–55.5%)</strong> para meter <strong>TODOS los inscritos</strong> donde explota el dividendo millonario.
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-xs font-extrabold px-3 py-1.5 rounded-xl bg-rose-600 text-white shadow">
+                    Reunión {data.upcomingFiveAndSix.meetingNumber}: {data.upcomingFiveAndSix.combinationsCazador} comb. · Bs. {data.upcomingFiveAndSix.costBsCazador.toLocaleString('es-VE')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Diagnóstico de las 6 Válidas de la Reunión Activa para el Cazador */}
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-rose-300 mb-2.5">
+                  🎯 Tu Cuadro Cazador Personal — Reunión {data.upcomingFiveAndSix.meetingNumber} ({data.upcomingFiveAndSix.date})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {data.upcomingFiveAndSix.validas.map(v => {
+                    const isBomb = v.isAllCazador || v.vacioType === 'vacio_explosion';
+                    return (
+                      <div
+                        key={v.validaNumber}
+                        className={`rounded-xl p-3 space-y-2 border ${
+                          v.isAllCazador
+                            ? 'bg-rose-950/30 border-rose-500/70'
+                            : isBomb
+                            ? 'bg-amber-950/20 border-amber-600/50'
+                            : 'bg-gray-950/90 border-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-extrabold text-white">
+                            {v.validaNumber}ª Válida · C{v.raceNumber} ({v.distance}m · {v.fieldSize} ej.)
+                          </span>
+                          {v.hitCazador !== undefined && (
+                            <span
+                              className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                                v.hitCazador
+                                  ? 'bg-green-950 text-green-400 border border-green-700/50'
+                                  : 'bg-red-950 text-red-400 border border-red-700/50'
+                              }`}
+                            >
+                              {v.hitCazador ? '✅ ACERTADA' : '❌ FALLÓ'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[10px] font-bold text-rose-200 bg-rose-950/50 border border-rose-800/50 rounded px-2 py-1">
+                          {v.badgeCazador}
+                        </div>
+
+                        <p className="text-[11px] text-gray-300 leading-snug">{v.cazadorReason}</p>
+
+                        {v.isAllCazador ? (
+                          <div className="text-xs font-extrabold text-rose-200 bg-rose-900/40 border border-rose-500/60 rounded-lg px-2.5 py-2 text-center">
+                            🌟 TODOS LOS {v.fieldSize} EJEMPLARES (Atrapa 6º–8º FV y 0% FV)
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {v.picksCazador.map(p => (
+                              <div
+                                key={p.pos}
+                                className="flex items-center justify-between text-xs bg-gray-900/90 rounded-lg px-2.5 py-1"
+                              >
+                                <span className="font-semibold text-white truncate">
+                                  #{p.dorsalNumber ?? '?'} {p.horseName}
+                                </span>
+                                <span className="text-[11px] font-bold text-yellow-300 shrink-0 ml-2">
+                                  {p.pos}º FV ({p.fvPct}%)
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* KPIs Anuales del Cazador + Tabla de Jornadas Millonarias */}
+              {data.fiveAndSixBacktest.cazador && (
+                <div className="space-y-3 pt-2 border-t border-rose-900/40">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <KpiCard
+                      label="Cazador: Cuadros con 6"
+                      value={`${data.fiveAndSixBacktest.cazador.hits6} de ${data.fiveAndSixBacktest.totalMeetings}`}
+                      sub={`${data.fiveAndSixBacktest.cazador.pct6}% reuniones (+${data.fiveAndSixBacktest.cazador.hits5} con 5)`}
+                      color="#fb7185"
+                    />
+                    <KpiCard
+                      label="Comb. Promedio Cazador"
+                      value={`${data.fiveAndSixBacktest.cazador.avgCombinations} comb.`}
+                      sub="1 carrera con TODOS + bloques compactos"
+                      color="white"
+                    />
+                    <KpiCard
+                      label="Total Cobrado por Cazador"
+                      value={`Bs. ${data.fiveAndSixBacktest.cazador.totalWonBs.toLocaleString('es-VE')}`}
+                      sub={`Invertido: Bs. ${data.fiveAndSixBacktest.cazador.totalCostBs.toLocaleString('es-VE')}`}
+                      color="#22c55e"
+                    />
+                    <KpiCard
+                      label="Ganancia Neta Cazador"
+                      value={`Bs. ${data.fiveAndSixBacktest.cazador.netProfitBs.toLocaleString('es-VE')}`}
+                      sub="Un solo dividendo millonario paga todo el año"
+                      color={GOLD}
+                    />
+                  </div>
+
+                  {/* Tabla filtrada de las Jornadas Millonarias (> Bs. 500.000) */}
+                  <div className="bg-gray-950/90 border border-gray-800 rounded-xl p-3 space-y-2">
+                    <h5 className="text-xs font-bold text-rose-300">
+                      💰 Desempeño del Cuadro Cazador en las Jornadas de Mayor Dividendo (&gt; Bs. 500.000 con 6)
+                    </h5>
+                    <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="text-[11px] text-gray-500 uppercase border-b border-gray-800">
+                          <tr>
+                            <th className="py-1.5 pr-2">Reunión</th>
+                            <th className="py-1.5 px-2 text-right">Dividendo 6 Ac.</th>
+                            <th className="py-1.5 px-2">Puestos FV Ganadores (V1 a V6)</th>
+                            <th className="py-1.5 px-2 text-center">Comb. Cazador</th>
+                            <th className="py-1.5 px-2 text-center">Aciertos Cazador</th>
+                            <th className="py-1.5 pl-2 text-right">Cobrado Cazador</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.fiveAndSixBacktest.meetings
+                            .filter(m => m.payout6Bs >= 500000)
+                            .map(m => (
+                              <tr key={`${m.meetingId}-caz`} className="border-b border-gray-800/40">
+                                <td className="py-2 pr-2 font-bold text-white whitespace-nowrap">
+                                  R{m.meetingNumber} <span className="text-gray-500 font-normal">· {m.date}</span>
+                                </td>
+                                <td className="py-2 px-2 text-right font-extrabold text-yellow-400 whitespace-nowrap">
+                                  Bs. {Math.round(m.payout6Bs).toLocaleString('es-VE')}
+                                </td>
+                                <td className="py-2 px-2 text-[11px] text-gray-300">
+                                  {m.validas
+                                    .map(v =>
+                                      v.winner?.fullFvRank
+                                        ? `${v.winner.fullFvRank}º(${v.winner.fvPct}%)`
+                                        : '🔥0%_NO_FV'
+                                    )
+                                    .join(' · ')}
+                                </td>
+                                <td className="py-2 px-2 text-center text-gray-300">{m.combinationsCazador}c</td>
+                                <td className="py-2 px-2 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-extrabold ${
+                                      m.hitsCazador === 6
+                                        ? 'bg-rose-950 text-rose-200 border border-rose-500'
+                                        : m.hitsCazador === 5
+                                        ? 'bg-yellow-950/80 text-yellow-300 border border-yellow-700/50'
+                                        : 'bg-gray-800 text-gray-400'
+                                    }`}
+                                  >
+                                    {m.hitsCazador}/6 {m.hitsCazador === 6 ? '💣🏆' : m.hitsCazador === 5 ? '🎯' : ''}
+                                  </span>
+                                </td>
+                                <td className="py-2 pl-2 text-right font-bold text-green-400 whitespace-nowrap">
+                                  {m.prizeBsCazador > 0
+                                    ? `Bs. ${Math.round(m.prizeBsCazador).toLocaleString('es-VE')}`
+                                    : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 4. EXPLORADOR Y AUDITORÍA DE CARRERAS (SECCIÓN D) */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">

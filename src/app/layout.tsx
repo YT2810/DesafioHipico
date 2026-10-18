@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 import SponsorDemoBanner from "@/components/SponsorDemoBanner";
+import VipFiveAndSixWidget from "@/components/VipFiveAndSixWidget";
 // import ElMelliChat from "@/components/ElMelliChat"; // TEMP: oculto hasta fase 3
 import Script from "next/script";
 
@@ -170,6 +171,7 @@ export default function RootLayout({
         <SessionProviderWrapper>
           <SponsorDemoBanner />
           {children}
+          <VipFiveAndSixWidget />
           {/* <ElMelliChat /> */}
         </SessionProviderWrapper>
       </body>
