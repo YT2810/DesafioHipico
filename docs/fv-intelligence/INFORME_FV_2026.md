@@ -101,21 +101,46 @@
 
 ---
 
-## 5. Resultados del Backtesting Anual de 5 y 6 (Temporada 2026 — Factor Bs. 35)
+## 5. Resultados del Backtesting Anual de 5 y 6 y Rentabilidad Real (Temporada 2026)
 
-Metodología de 3 niveles diseñada para **maximizar los cuadros con 6 de 6** y que cada nivel supere estrictamente al anterior:
-1. **Regla del "Falso 2º Fijo" (`rk1`):** La 2ª válida en confianza del día es donde estadísticamente más caen los favoritos ante el 3º y 4º del FV. Por eso en el **Cuadro Medio** y **Blindado** se blinda con **4 ejemplares (`Top 4 FV`)**.
-2. **Regla de Cuadros SIN LÍNEA (0 Líneas):** Cuando la reunión NO tiene un Súper Fijo claro (`FV ≥ 58%` o `FV ≥ 48%` en `1.400m+` con lote `≤ 9`), tanto el **Cuadro Medio** (`2 × 4 × 2 × 3 × 3 × 3 = 432 comb.`) como el **Blindado** (`3 × 4 × 3 × 3 × 3 × 3 = 972 comb.`) juegan **SIN LÍNEA**, evitando perder el cuadro cuando el favorito principal llega 2º o 3º.
-3. **Regla del Comodín `"TODOS (Lote Completo)"`:** Cuando sí hay Súper Fijo de Hierro (`1 caballo`), el ahorro de combinaciones se invierte en jugar **TODOS LOS INSCRITOS** (`100%` asegurada) en la válida más peligrosa del día (`rk5`), atrapando cualquier batacazo aunque no aparezca ni entre las 7 marcas del FV.
+### Descubrimiento sobre los "Batacazos" y el Ranking Completo del FV
+Al evaluar el ranking completo del Factor de Victoria (`1º al 12º puesto del FV` en lugar de cortar en el Top 5):
+- **En el 80.6% de las reuniones de La Rinconada (25 de 31) y en el 82.4% de Valencia, LOS 6 GANADORES DEL 5Y6 ESTABAN DENTRO DEL FV (`1º al 7º puesto del FV`).**
+- Muchos ganadores catalogados antes como "fuera del Top 5" eran en realidad el **6º o 7º del FV** (ejemplares con `3.3% a 8.6%` de FV en carreras de 10+ caballos en `1.100m–1.300m`, como en `R39` que pagó **Bs. 1.543.968**, o `R14` que pagó **Bs. 610.722**).
+- En **Valencia**, en **12 de las 19 reuniones (`63.2%`), los 6 ganadores estuvieron entre el `1º y 4º del FV`** (incluyendo `R26` que pagó **Bs. 1.050.325** y `R23` que pagó **Bs. 682.303**).
 
-| Hipódromo | Reuniones 2026 | Nivel de Cuadro | Comb. Promedio | Costo Promedio (× 35 Bs) | Cuadros con 6 de 6 | Cuadros con 5 de 6 | Total Reuniones Premiadas (5 o 6) |
+### Regla de Extracción de Dividendos Oficiales y Factor Multiplicador Histórico
+1. **Normalización automática de `payouts.cincoYSeis`:** Como algunos registros provienen de OCR/IA y otros de carga manual, el motor filtra entradas de otros juegos (Doble Perfecta / Pool de 4 con guiones/barras) y ordena por monto: **el monto mayor corresponde siempre al dividendo con 6 aciertos (`payout6`) y el segundo monto al dividendo con 5 aciertos (`payout5`)**.
+2. **Factor Multiplicador por Fecha:**
+   - **Hasta el `2026-09-03`:** Factor = **`Bs. 20`** por combinación.
+   - **Desde el `2026-09-04`:** Factor = **`Bs. 35`** por combinación.
+3. **Cobro Real de Cuadros Múltiples:** Cuando un cuadro acierta las **6 válidas**, cobra `1 × Dividendo_6 + Σ(c_i - 1) × Dividendo_5`. Cuando acierta **5 de 6** (fallando solo en la válida $k$ donde llevaba $c_k$ ejemplares), cobra `$c_k \times \text{Dividendo\_5}$`.
+
+### Arquitectura de los 4 Niveles de Cuadro
+
+1. **1. Cuadro Económico (`144 comb.` · `Bs. 2.880` antes del 03/09 / `Bs. 5.040` actual):**
+   - Molde `1 × 2 × 2 × 3 × 3 × 4` (1 Línea en la más clara, 2 Candados, 2 Trilogías y 4 en la más abierta).
+2. **2. Cuadro Medio (`~423 comb.` · `Bs. 8.640` antes del 03/09 / `Bs. 15.120` actual):**
+   - Blinda el **"Falso 2º Fijo" (`rk1`) con 4 caballos** y juega **Sin Línea (`2 × 4 × 2 × 3 × 3 × 3 = 432 comb.`)** cuando no hay Súper Fijo claro.
+3. **3. Cuadro Blindado (`~1.118–1.152 comb.` · `~Bs. 39.000` actual):**
+   - **En La Rinconada:** Cierra a Candado (`2`) las válidas nobles (`rk0` y `rk2`), blinda `rk1` con `4`, e identifica las **2 válidas con el `1º FV` más débil** entre `rk2..rk5` para meterles **5 caballos del FV (`Top 5 FV`)** (`2 × 4 × 2 × 3 × 5 × 5 = 1.200 comb.`).
+   - **En Valencia:** Juega **Sin Línea `3 × 4 × 2 × 3 × 4 × 4 = 1.152 comb.`**, cubriendo hasta el 4º del FV en 3 válidas y atrapando **10 de las 19 reuniones del año con 6 de 6 (`52.6%`)**.
+4. **👑 4. Cuadro Premium (`Elástico por Condición Estadística`, cap `≤ 2.160 comb.`):**
+   - Evalúa carrera por carrera cuántos ejemplares tienen opción estadística real en el FV: si el **5º caballo tiene `≥ 6.2%` de FV** (como en `R38`, `R36`, `R30`) o si es un **tiro corto `≤ 1.300m` con `10+ caballos` donde el 6º FV tiene `≥ 3.3%`** (como en `R14` que pagó **Bs. 610.722**), expande automáticamente esa carrera a **5 o 6 caballos del FV**, recortando a `2` (`Candado`) solo cuando `1º+2º FV ≥ 75%` y el `3º < 13%`.
+
+### Tabla Comparativa Verificada (50 Reuniones 2026 — Premios y Ganancia Neta Real)
+
+| Hipódromo | Nivel de Cuadro | Comb. Promedio | Cuadros con 6 de 6 🏆 | Cuadros con 5 de 6 🎯 | Total Invertido 2026 | Total Cobrado 2026 | Ganancia Neta (ROI) |
 |---|---|---|---|---|---|---|---|
-| **La Rinconada** | 31 reuniones | **1. Económico (~$5)** | **144 comb.** | **Bs. 5.040** | **2 con 6** (`6.5%`) | 8 con 5 | **10 de 31 (`32.3%`)** |
-| **La Rinconada** | 31 reuniones | **2. Medio (~$15)** | **432 comb.** | **Bs. 15.120** | **4 con 6 (`12.9%` — Doble)** | 9 con 5 | **13 de 31 (`41.9%`)** |
-| **La Rinconada** | 31 reuniones | **3. Blindado (~1.000)** | **~1.101 comb.** | **Bs. 38.535** | **5 con 6 (`16.1%` — 2.5x)** | 12 con 5 | **17 de 31 (`54.8%`)** |
-| **Valencia** | 19 reuniones | **1. Económico (~$5)** | **144 comb.** | **Bs. 5.040** | **3 con 6** (`15.8%`) | 5 con 5 | **8 de 19 (`42.1%`)** |
-| **Valencia** | 19 reuniones | **2. Medio (~$15)** | **432 comb.** | **Bs. 15.120** | **6 con 6 (`31.6%` — Doble)** | 6 con 5 | **12 de 19 (`63.2%`)** |
-| **Valencia** | 19 reuniones | **3. Blindado (~1.000)** | **~938 comb.** | **Bs. 32.830** | **8 con 6 (`42.1%`)** | 7 con 5 | **15 de 19 (`78.9%`)** |
-| **TOTAL 2026** | **50 reuniones** | **1. Económico (~$5)** | **144 comb.** | **Bs. 5.040** | **5 cuadros con 6 (`10.0%`)** | 13 con 5 | **18 de 50 (`36.0%`)** |
-| **TOTAL 2026** | **50 reuniones** | **2. Medio (~$15)** | **432 comb.** | **Bs. 15.120** | **10 cuadros con 6 (`20.0%`)** | 15 con 5 | **25 de 50 (`50.0%`)** |
-| **TOTAL 2026** | **50 reuniones** | **3. Blindado (~1.000)** | **~1.039 comb.** | **Bs. 36.365** | **13 cuadros con 6 (`26.0%`)** | 19 con 5 | **32 de 50 (`64.0%`)** |
+| **La Rinconada** *(31 reun.)* | **1. Económico** | 144 comb. | **2 con 6** (`6.5%`) | 9 con 5 | Bs. 102.240 | Bs. 161.823 | **+Bs. 59.583** |
+| **La Rinconada** *(31 reun.)* | **2. Medio** | 423 comb. | **4 con 6 (`12.9%`)** | 10 con 5 | Bs. 300.960 | Bs. 717.906 | **+Bs. 416.946** |
+| **La Rinconada** *(31 reun.)* | **3. Blindado** | 1.118 comb. | **6 con 6 (`19.4%`)** | 7 con 5 | Bs. 801.120 | Bs. 1.225.783 | **+Bs. 424.663** |
+| **La Rinconada** *(31 reun.)* | **👑 4. Premium** | 1.943 comb. | **9 con 6 (`29.0%`)** | 12 con 5 | Bs. 1.390.295 | **Bs. 2.443.634** | **+Bs. 1.053.339** |
+| **Valencia** *(19 reun.)* | **1. Económico** | 144 comb. | **3 con 6** (`15.8%`) | 5 con 5 | Bs. 65.520 | Bs. 79.954 | **+Bs. 14.434** |
+| **Valencia** *(19 reun.)* | **2. Medio** | 398 comb. | **6 con 6 (`31.6%`)** | 6 con 5 | Bs. 183.600 | Bs. 1.184.728 | **+Bs. 1.001.128** |
+| **Valencia** *(19 reun.)* | **3. Blindado** | 1.152 comb. | **10 con 6 (`52.6%`)** | 5 con 5 | Bs. 524.160 | **Bs. 2.847.190** | **+Bs. 2.323.030** |
+| **Valencia** *(19 reun.)* | **👑 4. Premium** | 1.329 comb. | **11 con 6 (`57.9%`)** | 5 con 5 | Bs. 614.400 | **Bs. 2.925.143** | **+Bs. 2.310.743** |
+| **TOTAL 2026** *(50 reun.)* | **1. Económico** | 144 comb. | **5 cuadros con 6 (`10.0%`)** | 14 con 5 | Bs. 167.760 | Bs. 241.777 | **+Bs. 74.017** |
+| **TOTAL 2026** *(50 reun.)* | **2. Medio** | ~413 comb. | **10 cuadros con 6 (`20.0%`)** | 16 con 5 | Bs. 484.560 | Bs. 1.902.634 | **+Bs. 1.418.074** |
+| **TOTAL 2026** *(50 reun.)* | **3. Blindado** | ~1.131 comb. | **16 cuadros con 6 (`32.0%`)** | 12 con 5 | Bs. 1.325.280 | Bs. 4.072.973 | **+Bs. 2.747.693** |
+| **TOTAL 2026** *(50 reun.)* | **👑 4. Premium** | ~1.710 comb. | **20 cuadros con 6 (`40.0%`)** | 17 con 5 | Bs. 2.004.695 | **Bs. 5.368.777** | **+Bs. 3.364.082** |

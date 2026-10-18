@@ -17,7 +17,7 @@ export default function LaboratorioFvTab() {
   const [data, setData] = useState<FvLabAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
   const [thresholdMode, setThresholdMode] = useState<'cumulative' | 'band'>('cumulative');
-  const [ticketProfile, setTicketProfile] = useState<'economico' | 'medio' | 'blindado'>('medio');
+  const [ticketProfile, setTicketProfile] = useState<'economico' | 'medio' | 'blindado' | 'premium'>('premium');
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<AuditFilter>('all');
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
@@ -639,7 +639,7 @@ export default function LaboratorioFvTab() {
                         : 'bg-gray-950 text-gray-400 border-gray-800'
                     }`}
                   >
-                    Económico ({data.upcomingFiveAndSix.combinationsEco} comb. · Bs. {data.upcomingFiveAndSix.costBsEco.toLocaleString('es-VE')})
+                    1. Económico ({data.upcomingFiveAndSix.combinationsEco} comb. · Bs. {data.upcomingFiveAndSix.costBsEco.toLocaleString('es-VE')})
                   </button>
                   <button
                     type="button"
@@ -650,7 +650,7 @@ export default function LaboratorioFvTab() {
                         : 'bg-gray-950 text-gray-400 border-gray-800'
                     }`}
                   >
-                    Medio ({data.upcomingFiveAndSix.combinationsMed} comb. · Bs. {data.upcomingFiveAndSix.costBsMed.toLocaleString('es-VE')})
+                    2. Medio ({data.upcomingFiveAndSix.combinationsMed} comb. · Bs. {data.upcomingFiveAndSix.costBsMed.toLocaleString('es-VE')})
                   </button>
                   <button
                     type="button"
@@ -661,7 +661,18 @@ export default function LaboratorioFvTab() {
                         : 'bg-gray-950 text-gray-400 border-gray-800'
                     }`}
                   >
-                    Blindado ({data.upcomingFiveAndSix.combinationsBlindado} comb. · Bs. {data.upcomingFiveAndSix.costBsBlindado.toLocaleString('es-VE')})
+                    3. Blindado ({data.upcomingFiveAndSix.combinationsBlindado} comb. · Bs. {data.upcomingFiveAndSix.costBsBlindado.toLocaleString('es-VE')})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTicketProfile('premium')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                      ticketProfile === 'premium'
+                        ? 'bg-purple-400 text-black border-purple-400'
+                        : 'bg-gray-950 text-gray-400 border-gray-800'
+                    }`}
+                  >
+                    👑 4. Premium ({data.upcomingFiveAndSix.combinationsPremium} comb. · Bs. {data.upcomingFiveAndSix.costBsPremium.toLocaleString('es-VE')})
                   </button>
                 </div>
               </div>
@@ -673,25 +684,25 @@ export default function LaboratorioFvTab() {
                       ? v.picksEco
                       : ticketProfile === 'medio'
                       ? v.picksMed
-                      : v.picksBlindado;
+                      : ticketProfile === 'blindado'
+                      ? v.picksBlindado
+                      : v.picksPremium;
                   const hit =
                     ticketProfile === 'economico'
                       ? v.hitEco
                       : ticketProfile === 'medio'
                       ? v.hitMed
-                      : v.hitBlindado;
+                      : ticketProfile === 'blindado'
+                      ? v.hitBlindado
+                      : v.hitPremium;
                   const badge =
                     ticketProfile === 'economico'
                       ? v.badgeEco
                       : ticketProfile === 'medio'
                       ? v.badgeMed
-                      : v.badgeBli;
-                  const isAll =
-                    ticketProfile === 'economico'
-                      ? v.isAllEco
-                      : ticketProfile === 'medio'
-                      ? v.isAllMed
-                      : v.isAllBli;
+                      : ticketProfile === 'blindado'
+                      ? v.badgeBli
+                      : v.badgePre;
                   return (
                     <div key={v.validaNumber} className="bg-gray-950/90 border border-gray-800 rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
@@ -712,11 +723,6 @@ export default function LaboratorioFvTab() {
                         {badge} — <span className="font-normal text-gray-300">{v.reasonText}</span>
                       </div>
                       <div className="space-y-1">
-                        {isAll && (
-                          <div className="text-xs font-extrabold text-green-300 bg-green-950/60 border border-green-700/50 rounded-lg px-2.5 py-2 text-center">
-                            🌟 SE JUEGAN TODOS LOS {v.fieldSize} EJEMPLARES INSCRITOS (100% Asegurada)
-                          </div>
-                        )}
                         {picks.map(p => (
                           <div key={p.pos} className="flex items-center justify-between text-xs bg-gray-900/90 rounded-lg px-2.5 py-1.5">
                             <span className="font-semibold text-white truncate">
@@ -735,38 +741,44 @@ export default function LaboratorioFvTab() {
             </div>
           )}
 
-          {/* 3D. BACKTESTING HISTÓRICO ANUAL DE TODOS LOS 5 Y 6 */}
+          {/* 3D. BACKTESTING HISTÓRICO ANUAL DE TODOS LOS 5 Y 6 + AUDITORÍA DE DIVIDENDOS */}
           {data.fiveAndSixBacktest && data.fiveAndSixBacktest.totalMeetings > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-white">
-                    📊 3D. Verificador Anual de 5 y 6 ({data.fiveAndSixBacktest.totalMeetings} reuniones evaluadas · Factor Bs. {data.fiveAndSixBacktest.factorBs})
+                    📊 3D. Verificador Anual y Rentabilidad de 5 y 6 ({data.fiveAndSixBacktest.totalMeetings} reuniones · Factor Bs. 20 hasta 03/09 y Bs. 35 desde 04/09)
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Comparativa real de cuántos cuadros con 6 de 6 (y con 5 de 6) pegó cada nivel de inversión en el año.
+                    Compara cuadros con 6 aciertos, inversión acumulada, premios cobrados (con 6 + múltiplos de 5) y ganancia neta por metodología.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <KpiCard
-                  label={`1. Económico (~${data.fiveAndSixBacktest.economico.avgCombinations} comb. · Bs. ${data.fiveAndSixBacktest.economico.avgCostBs.toLocaleString('es-VE')})`}
-                  value={`${data.fiveAndSixBacktest.economico.hits6} cuadros con 6`}
-                  sub={`+ ${data.fiveAndSixBacktest.economico.hits5} con 5 · Total premiados: ${data.fiveAndSixBacktest.economico.hits5Or6}/${data.fiveAndSixBacktest.totalMeetings} (${data.fiveAndSixBacktest.economico.pct5Or6}%)`}
+                  label={`1. Económico (~${data.fiveAndSixBacktest.economico.avgCombinations} comb.)`}
+                  value={`${data.fiveAndSixBacktest.economico.hits6} con 6 (${data.fiveAndSixBacktest.economico.pct6}%)`}
+                  sub={`+${data.fiveAndSixBacktest.economico.hits5} con 5 · Cobró Bs. ${data.fiveAndSixBacktest.economico.totalWonBs.toLocaleString('es-VE')} · Neto: Bs. ${data.fiveAndSixBacktest.economico.netProfitBs.toLocaleString('es-VE')}`}
                   color={GOLD}
                 />
                 <KpiCard
-                  label={`2. Medio (~${data.fiveAndSixBacktest.medio.avgCombinations} comb. · Bs. ${data.fiveAndSixBacktest.medio.avgCostBs.toLocaleString('es-VE')})`}
-                  value={`${data.fiveAndSixBacktest.medio.hits6} cuadros con 6`}
-                  sub={`+ ${data.fiveAndSixBacktest.medio.hits5} con 5 · Total premiados: ${data.fiveAndSixBacktest.medio.hits5Or6}/${data.fiveAndSixBacktest.totalMeetings} (${data.fiveAndSixBacktest.medio.pct5Or6}%)`}
+                  label={`2. Medio (~${data.fiveAndSixBacktest.medio.avgCombinations} comb.)`}
+                  value={`${data.fiveAndSixBacktest.medio.hits6} con 6 (${data.fiveAndSixBacktest.medio.pct6}%)`}
+                  sub={`+${data.fiveAndSixBacktest.medio.hits5} con 5 · Cobró Bs. ${data.fiveAndSixBacktest.medio.totalWonBs.toLocaleString('es-VE')} · Neto: Bs. ${data.fiveAndSixBacktest.medio.netProfitBs.toLocaleString('es-VE')}`}
                   color="#38bdf8"
                 />
                 <KpiCard
-                  label={`3. Blindado (~${data.fiveAndSixBacktest.blindado.avgCombinations} comb. · Bs. ${data.fiveAndSixBacktest.blindado.avgCostBs.toLocaleString('es-VE')})`}
-                  value={`${data.fiveAndSixBacktest.blindado.hits6} cuadros con 6`}
-                  sub={`+ ${data.fiveAndSixBacktest.blindado.hits5} con 5 · Total premiados: ${data.fiveAndSixBacktest.blindado.hits5Or6}/${data.fiveAndSixBacktest.totalMeetings} (${data.fiveAndSixBacktest.blindado.pct5Or6}%)`}
+                  label={`3. Blindado (~${data.fiveAndSixBacktest.blindado.avgCombinations} comb.)`}
+                  value={`${data.fiveAndSixBacktest.blindado.hits6} con 6 (${data.fiveAndSixBacktest.blindado.pct6}%)`}
+                  sub={`+${data.fiveAndSixBacktest.blindado.hits5} con 5 · Cobró Bs. ${data.fiveAndSixBacktest.blindado.totalWonBs.toLocaleString('es-VE')} · Neto: Bs. ${data.fiveAndSixBacktest.blindado.netProfitBs.toLocaleString('es-VE')}`}
                   color="#22c55e"
+                />
+                <KpiCard
+                  label={`👑 4. Premium (~${data.fiveAndSixBacktest.premium.avgCombinations} comb.)`}
+                  value={`${data.fiveAndSixBacktest.premium.hits6} con 6 (${data.fiveAndSixBacktest.premium.pct6}%)`}
+                  sub={`+${data.fiveAndSixBacktest.premium.hits5} con 5 · Cobró Bs. ${data.fiveAndSixBacktest.premium.totalWonBs.toLocaleString('es-VE')} · Neto: Bs. ${data.fiveAndSixBacktest.premium.netProfitBs.toLocaleString('es-VE')}`}
+                  color="#c084fc"
                 />
               </div>
 
@@ -775,10 +787,11 @@ export default function LaboratorioFvTab() {
                   <thead className="text-[11px] text-gray-500 uppercase border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
                     <tr>
                       <th className="py-2 pr-3 font-medium">Reunión / Fecha</th>
-                      <th className="py-2 px-2 font-medium text-center">Estructura</th>
-                      <th className="py-2 px-2 font-medium text-center">Económico (~Bs 5.040)</th>
-                      <th className="py-2 px-2 font-medium text-center">Medio (~Bs 15.120)</th>
-                      <th className="py-2 px-2 font-medium text-center">Blindado (~1.000 comb)</th>
+                      <th className="py-2 px-2 font-medium text-right">Dividendo Oficial (6 / 5)</th>
+                      <th className="py-2 px-2 font-medium text-center">1. Económico</th>
+                      <th className="py-2 px-2 font-medium text-center">2. Medio</th>
+                      <th className="py-2 px-2 font-medium text-center">3. Blindado</th>
+                      <th className="py-2 px-2 font-medium text-center text-purple-300">👑 4. Premium</th>
                       <th className="py-2 pl-2 font-medium text-right">Detalle 6 Válidas</th>
                     </tr>
                   </thead>
@@ -789,11 +802,15 @@ export default function LaboratorioFvTab() {
                         <>
                           <tr key={m.meetingId} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                             <td className="py-2.5 pr-3 font-bold text-white whitespace-nowrap">
-                              Reunión {m.meetingNumber} <span className="text-gray-500 font-normal">· {m.date}</span>
+                              R{m.meetingNumber} <span className="text-gray-500 font-normal">· {m.date}</span>
+                              <span className="block text-[10px] text-gray-600 font-normal">Factor Bs. {m.factorBs}</span>
                             </td>
-                            <td className="py-2.5 px-2 text-center">
-                              <span className="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-semibold">
-                                {m.hasSuperFijo ? '📌 Con Línea + TODOS' : '🛡️ Sin Línea (0 Líneas)'}
+                            <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                              <span className="font-bold text-yellow-400">
+                                {m.payout6Bs > 0 ? `Bs. ${Math.round(m.payout6Bs).toLocaleString('es-VE')}` : '—'}
+                              </span>
+                              <span className="block text-[10px] text-gray-500">
+                                5ac: {m.payout5Bs > 0 ? `Bs. ${Math.round(m.payout5Bs).toLocaleString('es-VE')}` : '—'}
                               </span>
                             </td>
                             <td className="py-2.5 px-2 text-center">
@@ -808,7 +825,7 @@ export default function LaboratorioFvTab() {
                               >
                                 {m.hitsEco}/6 {m.hitsEco === 6 ? '🏆' : m.hitsEco === 5 ? '🎯' : ''}
                               </span>
-                              <span className="block text-[10px] text-gray-500 mt-0.5">{m.combinationsEco} comb.</span>
+                              <span className="block text-[10px] text-gray-500 mt-0.5">{m.combinationsEco}c</span>
                             </td>
                             <td className="py-2.5 px-2 text-center">
                               <span
@@ -822,7 +839,7 @@ export default function LaboratorioFvTab() {
                               >
                                 {m.hitsMed}/6 {m.hitsMed === 6 ? '🏆' : m.hitsMed === 5 ? '🎯' : ''}
                               </span>
-                              <span className="block text-[10px] text-gray-500 mt-0.5">{m.combinationsMed} comb.</span>
+                              <span className="block text-[10px] text-gray-500 mt-0.5">{m.combinationsMed}c</span>
                             </td>
                             <td className="py-2.5 px-2 text-center">
                               <span
@@ -836,7 +853,24 @@ export default function LaboratorioFvTab() {
                               >
                                 {m.hitsBlindado}/6 {m.hitsBlindado === 6 ? '🏆' : m.hitsBlindado === 5 ? '🎯' : ''}
                               </span>
-                              <span className="block text-[10px] text-gray-500 mt-0.5">{m.combinationsBlindado} comb.</span>
+                              <span className="block text-[10px] text-gray-500 mt-0.5">{m.combinationsBlindado}c</span>
+                            </td>
+                            <td className="py-2.5 px-2 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-extrabold ${
+                                  m.hitsPremium === 6
+                                    ? 'bg-purple-950 text-purple-200 border border-purple-500'
+                                    : m.hitsPremium === 5
+                                    ? 'bg-yellow-950/80 text-yellow-300 border border-yellow-700/50'
+                                    : 'bg-gray-800 text-gray-400'
+                                }`}
+                              >
+                                {m.hitsPremium}/6 {m.hitsPremium === 6 ? '👑' : m.hitsPremium === 5 ? '🎯' : ''}
+                              </span>
+                              <span className="block text-[10px] text-gray-500 mt-0.5">
+                                {m.combinationsPremium}c
+                                {m.prizeBsPremium > 0 ? ` · +Bs.${Math.round(m.prizeBsPremium).toLocaleString('es-VE')}` : ''}
+                              </span>
                             </td>
                             <td className="py-2.5 pl-2 text-right">
                               <button
@@ -850,7 +884,7 @@ export default function LaboratorioFvTab() {
                           </tr>
                           {isOpen && (
                             <tr key={`${m.meetingId}-detail`} className="bg-gray-950/90 border-b border-gray-800">
-                              <td colSpan={6} className="p-3">
+                              <td colSpan={7} className="p-3">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                   {m.validas.map(v => (
                                     <div key={v.validaNumber} className="bg-gray-900 border border-gray-800 rounded-lg p-2.5 space-y-1">
@@ -859,21 +893,22 @@ export default function LaboratorioFvTab() {
                                           {v.validaNumber}ª Válida (C{v.raceNumber} · {v.distance}m · {v.fieldSize} ej.)
                                         </span>
                                         <span className="text-[11px] font-bold text-gray-300">
-                                          Eco:{v.hitEco ? '✅' : '❌'} · Med:{v.hitMed ? '✅' : '❌'} · Bli:{v.hitBlindado ? '✅' : '❌'}
+                                          Eco:{v.hitEco ? '✅' : '❌'} · Med:{v.hitMed ? '✅' : '❌'} · Bli:{v.hitBlindado ? '✅' : '❌'} · Pre:{v.hitPremium ? '✅' : '❌'}
                                         </span>
                                       </div>
                                       <p className="text-[10px] text-sky-300">
-                                        Eco({v.countEco}) · Med({v.isAllMed ? 'TODOS' : v.countMed}) · Bli({v.isAllBli ? 'TODOS' : v.countBli})
+                                        Caballos por nivel: Eco({v.countEco}) · Med({v.countMed}) · Bli({v.countBli}) · 👑Pre({v.countPre})
                                       </p>
                                       <p className="text-[11px] text-gray-300">
-                                        <strong>Top FV:</strong>{' '}
-                                        {v.picksBlindado.map(p => `#${p.dorsalNumber ?? '?'} (${p.fvPct}%)`).join(', ')}
-                                        {v.isAllBli ? ' + Lote Completo (TODOS)' : ''}
+                                        <strong>Selección Premium:</strong>{' '}
+                                        {v.picksPremium.map(p => `#${p.dorsalNumber ?? '?'} (${p.fvPct}%)`).join(', ')}
                                       </p>
                                       {v.winner && (
                                         <p className="text-[11px] text-yellow-300">
                                           <strong>Ganó:</strong> #{v.winner.dorsalNumber ?? '?'} {v.winner.horseName} (
-                                          {v.winner.fvRank ? `${v.winner.fvRank}º FV` : '🔥 Batacazo fuera Top 5'})
+                                          {v.winner.fullFvRank
+                                            ? `${v.winner.fullFvRank}º del FV · ${v.winner.fvPct}%`
+                                            : '🔥 0% Sin marcas en FV'})
                                         </p>
                                       )}
                                     </div>

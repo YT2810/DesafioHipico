@@ -278,7 +278,8 @@ export interface FvRaceAuditItem {
   winner: {
     dorsalNumber?: number;
     horseName: string;
-    fvRank: number | null; // 1..5 or null if Batacazo
+    fvRank: number | null; // 1..5 or null if outside Top 5
+    fullFvRank?: number | null; // 1..N across all horses in FV, or null if 0% FV
     fvPct: number;
   };
 }
@@ -292,6 +293,33 @@ export interface FvPatternInsight {
 
 export const FACTOR_5Y6_BS = 35;
 
+export function get5y6FactorBs(dateStr: string): number {
+  return dateStr && dateStr <= '2026-09-03' ? 20 : 35;
+}
+
+export function extractMeeting5y6Payouts(
+  racesWithPayouts: { payouts?: { cincoYSeis?: { combination?: string; amount?: number }[] } }[]
+): { payout6: number; payout5: number } {
+  const raw: { c: string; a: number }[] = [];
+  for (const r of racesWithPayouts) {
+    if (r.payouts?.cincoYSeis?.length) {
+      for (const p of r.payouts.cincoYSeis) {
+        if (typeof p.amount === 'number' && p.amount > 0) {
+          raw.push({ c: String(p.combination ?? ''), a: p.amount });
+        }
+      }
+    }
+  }
+  if (!raw.length) return { payout6: 0, payout5: 0 };
+  const unique = [...new Map(raw.map(x => [x.a, x])).values()];
+  const filtered = unique.length >= 3 ? unique.filter(x => !/[-/]/.test(x.c)) : unique;
+  const list = (filtered.length ? filtered : unique).sort((a, b) => b.a - a.a);
+  if (list.length === 1) {
+    return list[0].a < 5000 ? { payout6: 0, payout5: list[0].a } : { payout6: list[0].a, payout5: 0 };
+  }
+  return { payout6: list[0].a, payout5: list[1].a };
+}
+
 export interface FvValidaPick {
   validaNumber: number; // 1..6
   raceNumber: number;
@@ -301,25 +329,31 @@ export interface FvValidaPick {
   badgeEco: string;
   badgeMed: string;
   badgeBli: string;
+  badgePre: string;
   reasonText: string;
   countEco: number;
   countMed: number;
   countBli: number;
+  countPre: number;
   isAllEco?: boolean;
   isAllMed?: boolean;
   isAllBli?: boolean;
+  isAllPre?: boolean;
   picksEco: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksMed: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksBlindado: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
+  picksPremium: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   winner?: {
     dorsalNumber?: number;
     horseName: string;
     fvRank: number | null;
+    fullFvRank?: number | null;
     fvPct: number;
   };
   hitEco?: boolean;
   hitMed?: boolean;
   hitBlindado?: boolean;
+  hitPremium?: boolean;
 }
 
 export interface FvMeetingBacktestRow {
@@ -327,16 +361,26 @@ export interface FvMeetingBacktestRow {
   meetingNumber: number;
   date: string;
   year: number;
+  factorBs: number;
+  payout6Bs: number;
+  payout5Bs: number;
   hasSuperFijo: boolean;
   combinationsEco: number;
   combinationsMed: number;
   combinationsBlindado: number;
+  combinationsPremium: number;
   costBsEco: number;
   costBsMed: number;
   costBsBlindado: number;
+  costBsPremium: number;
+  prizeBsEco: number;
+  prizeBsMed: number;
+  prizeBsBlindado: number;
+  prizeBsPremium: number;
   hitsEco: number; // 0..6
   hitsMed: number; // 0..6
   hitsBlindado: number; // 0..6
+  hitsPremium: number; // 0..6
   validas: FvValidaPick[];
 }
 
@@ -348,6 +392,9 @@ export interface FvTierSummary {
   pct5Or6: number;
   avgCombinations: number;
   avgCostBs: number;
+  totalCostBs: number;
+  totalWonBs: number;
+  netProfitBs: number;
 }
 
 export interface FvFiveAndSixBacktestSummary {
@@ -356,6 +403,7 @@ export interface FvFiveAndSixBacktestSummary {
   economico: FvTierSummary;
   medio: FvTierSummary;
   blindado: FvTierSummary;
+  premium: FvTierSummary;
   meetings: FvMeetingBacktestRow[];
 }
 
@@ -368,9 +416,11 @@ export interface FvUpcomingFiveAndSix {
   combinationsEco: number;
   combinationsMed: number;
   combinationsBlindado: number;
+  combinationsPremium: number;
   costBsEco: number;
   costBsMed: number;
   costBsBlindado: number;
+  costBsPremium: number;
   validas: FvValidaPick[];
 }
 
@@ -406,20 +456,36 @@ function buildMeetingValidasPicks(
     topHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
     sumTop2Pct: number;
     sumTop3Pct: number;
-    winner?: { dorsalNumber?: number; horseName: string; fvRank: number | null; fvPct: number };
+    winner?: {
+      dorsalNumber?: number;
+      horseName: string;
+      fvRank: number | null;
+      fullFvRank?: number | null;
+      fvPct: number;
+    };
   }[],
-  isValencia: boolean
+  isValencia: boolean,
+  factorBs: number = FACTOR_5Y6_BS,
+  payout6Bs: number = 0,
+  payout5Bs: number = 0
 ): {
   hasSuperFijo: boolean;
   combinationsEco: number;
   combinationsMed: number;
   combinationsBlindado: number;
+  combinationsPremium: number;
   costBsEco: number;
   costBsMed: number;
   costBsBlindado: number;
+  costBsPremium: number;
+  prizeBsEco: number;
+  prizeBsMed: number;
+  prizeBsBlindado: number;
+  prizeBsPremium: number;
   hitsEco: number;
   hitsMed: number;
   hitsBlindado: number;
+  hitsPremium: number;
   validas: FvValidaPick[];
 } {
   const scored = validasRaces.map((r, idx) => {
@@ -427,7 +493,7 @@ function buildMeetingValidasPicks(
     const p2 = r.topHorses[1]?.fvPct ?? 0;
     const gap12 = p1 - p2;
     const distScore =
-      r.distance >= 1500 ? 14 : r.distance === 1400 && p1 >= 42 ? 10 : r.distance === 1100 ? -6 : 0;
+      r.distance >= 1500 && p1 >= 42 ? 14 : r.distance === 1400 && p1 >= 42 ? 10 : r.distance === 1100 ? -6 : 0;
     const lotScore = r.fieldSize <= 7 ? 10 : r.fieldSize === 8 ? 6 : r.fieldSize === 9 ? 0 : -10;
     const score = p1 * 1.15 + gap12 * 0.4 + r.sumTop2Pct * 0.35 + r.sumTop3Pct * 0.45 + distScore + lotScore;
     return { idx, score, p1, p2, r };
@@ -445,127 +511,186 @@ function buildMeetingValidasPicks(
       (bestSafe.p1 >= 48 && bestSafe.r.distance >= 1400 && bestSafe.r.fieldSize <= 9)
     : bestSafe.p1 >= 58 && bestSafe.r.fieldSize <= 8;
 
-  let combinationsEco = 1;
-  let combinationsMed = 1;
-  let combinationsBlindado = 1;
-  let hitsEco = 0;
-  let hitsMed = 0;
-  let hitsBlindado = 0;
+  const bottom4ByWeakestP1 = [...validasRaces]
+    .map((r, idx) => ({ idx, p1: r.topHorses[0]?.fvPct ?? 0 }))
+    .filter(x => (safetyRankByIdx.get(x.idx) ?? 0) >= 2)
+    .sort((a, b) => a.p1 - b.p1);
+  const weakestIdx1 = bottom4ByWeakestP1[0]?.idx ?? -1;
+  const weakestIdx2 = bottom4ByWeakestP1[1]?.idx ?? -1;
+
+  // Compute raw counts for the 4 tiers
+  const countsEco = validasRaces.map((_, idx) => {
+    const rk = safetyRankByIdx.get(idx) ?? 3;
+    return rk === 0 ? 1 : rk === 1 || rk === 2 ? 2 : rk === 3 || rk === 4 ? 3 : 4;
+  });
+
+  const countsMed = validasRaces.map((r, idx) => {
+    const rk = safetyRankByIdx.get(idx) ?? 3;
+    const fvLen = Math.max(r.topHorses.length, 4);
+    if (hasSuperFijo) {
+      return rk === 0 ? 1 : rk === 1 ? 4 : rk === 2 ? 2 : rk === 3 || rk === 4 ? 3 : Math.min(fvLen, 6);
+    } else {
+      return rk === 0 ? 2 : rk === 1 ? 4 : rk === 2 ? 2 : 3;
+    }
+  });
+
+  const countsBli = validasRaces.map((r, idx) => {
+    const rk = safetyRankByIdx.get(idx) ?? 3;
+    const p1 = r.topHorses[0]?.fvPct ?? 0;
+    const fvLen = Math.max(r.topHorses.length, 4);
+    if (!isValencia) {
+      if (rk === 0) return p1 >= 61 && r.fieldSize <= 9 ? 1 : 2;
+      if (rk === 1) return 4;
+      if (idx === weakestIdx1 || idx === weakestIdx2) return Math.min(5, fvLen);
+      if (rk === 2) return 2;
+      return 3;
+    } else {
+      return rk === 0 ? 3 : rk === 1 ? 4 : rk === 2 ? 2 : rk === 3 ? 3 : 4;
+    }
+  });
+
+  const countsPre = validasRaces.map((r, idx) => {
+    const rk = safetyRankByIdx.get(idx) ?? 3;
+    const p1 = r.topHorses[0]?.fvPct ?? 0;
+    const p3 = r.topHorses[2]?.fvPct ?? 0;
+    const p4 = r.topHorses[3]?.fvPct ?? 0;
+    const p5 = r.topHorses[4]?.fvPct ?? 0;
+    const p6 = r.topHorses[5]?.fvPct ?? 0;
+    const optHorses = r.topHorses.filter(h => h.fvPct >= 3.3).length;
+    const fvLen = Math.max(r.topHorses.length, 4);
+
+    if (!isValencia) {
+      let base =
+        bestSafe.p1 >= 59 && bestSafe.r.fieldSize <= 9
+          ? rk === 0
+            ? 1
+            : rk === 1
+            ? 5
+            : rk === 2 || rk === 3
+            ? 3
+            : rk === 4
+            ? 4
+            : 5
+          : rk === 0
+          ? 3
+          : rk === 1
+          ? 4
+          : rk === 2
+          ? 2
+          : rk === 3
+          ? 3
+          : 4;
+      if (rk === 0 && base === 3 && ((r.sumTop2Pct >= 75 && p3 < 13) || (r.distance >= 1500 && r.fieldSize <= 8))) {
+        base = 2;
+      }
+      if (p1 < 37 || p5 >= 6.2 || (r.fieldSize >= 10 && r.distance <= 1300 && p6 >= 3.3)) {
+        base = Math.max(base, Math.min(optHorses, 6));
+      }
+      if (rk === 2 && p3 >= 16) {
+        base = Math.max(base, p4 >= 11 ? 4 : 3);
+      }
+      return Math.min(base, fvLen);
+    } else {
+      let base = countsBli[idx];
+      if (r.fieldSize >= 10 && p6 >= 4.5) base = Math.max(base, Math.min(optHorses, 6));
+      if (rk === 2 && p4 >= 10) base = Math.max(base, 4);
+      if (rk === 3 && p3 >= 16) base = Math.max(base, 3);
+      return Math.min(base, fvLen);
+    }
+  });
+
+  const prod = (arr: number[]) => arr.reduce((a, b) => a * b, 1);
+  while (prod(countsPre) > 2160) {
+    let trimmed = false;
+    if (isValencia) {
+      for (let i = 0; i < 6; i++) {
+        const rk = safetyRankByIdx.get(i) ?? 3;
+        const p3 = validasRaces[i].topHorses[2]?.fvPct ?? 0;
+        if (rk === 0 && countsPre[i] === 3 && validasRaces[i].sumTop2Pct >= 74 && p3 < 15) {
+          countsPre[i] = 2;
+          trimmed = true;
+          break;
+        }
+      }
+      if (trimmed) continue;
+    }
+    let minPct = 999;
+    let trimIdx = -1;
+    for (let i = 0; i < 6; i++) {
+      const minFloor = isValencia ? countsBli[i] : 3;
+      if (countsPre[i] > minFloor) {
+        const rk = safetyRankByIdx.get(i) ?? 3;
+        const p4 = validasRaces[i].topHorses[3]?.fvPct ?? 0;
+        const lastPct = rk === 0 ? 99 : p4;
+        if (lastPct < minPct) {
+          minPct = lastPct;
+          trimIdx = i;
+        }
+      }
+    }
+    if (trimIdx >= 0) countsPre[trimIdx]--;
+    else break;
+  }
+
+  let hitsEco = 0,
+    hitsMed = 0,
+    hitsBlindado = 0,
+    hitsPremium = 0;
+  let missedIdxEco = -1,
+    missedIdxMed = -1,
+    missedIdxBli = -1,
+    missedIdxPre = -1;
 
   const validas: FvValidaPick[] = validasRaces.map((r, idx) => {
-    const rk = safetyRankByIdx.get(idx) ?? 3; // 0..5
+    const rk = safetyRankByIdx.get(idx) ?? 3;
     const p1 = r.topHorses[0]?.fvPct ?? 0;
-    const fieldCount = Math.max(r.fieldSize, r.topHorses.length, 6);
+    const countEco = countsEco[idx];
+    const countMed = countsMed[idx];
+    const countBli = countsBli[idx];
+    const countPre = countsPre[idx];
 
-    // 1. CUADRO ECONÓMICO (144 comb = Bs. 5.040): 1 x 2 x 2 x 3 x 3 x 4
-    const countEco = rk === 0 ? 1 : rk === 1 ? 2 : rk === 2 ? 2 : rk === 3 ? 3 : rk === 4 ? 3 : 4;
-    const isAllEco = false;
     const badgeEco =
-      rk === 0
-        ? '📌 LÍNEA (1)'
-        : rk === 1 || rk === 2
-        ? '🔒 CANDADO (2)'
-        : rk === 3 || rk === 4
-        ? '🔱 TRILOGÍA (3)'
-        : '🚨 MULTIPLICAR (4)';
-
-    // 2. CUADRO MEDIO (432 comb = Bs. 15.120):
-    // Si hay Súper Fijo: 1(rk0) x 4(rk1) x 2(rk2) x 3(rk3) x 3(rk4) x 6/TODOS(rk5) = 432 comb.
-    // Si NO hay Súper Fijo (SIN LÍNEA): 2(rk0) x 4(rk1) x 2(rk2) x 3(rk3) x 3(rk4) x 3(rk5) = 432 comb.
-    let countMed = 3;
-    let isAllMed = false;
-    if (hasSuperFijo) {
-      if (rk === 0) countMed = 1;
-      else if (rk === 1) countMed = 4;
-      else if (rk === 2) countMed = 2;
-      else if (rk === 3 || rk === 4) countMed = 3;
-      else {
-        countMed = Math.min(fieldCount, 6);
-        if (countMed >= fieldCount) isAllMed = true;
-      }
-    } else {
-      if (rk === 0) countMed = 2;
-      else if (rk === 1) countMed = 4;
-      else if (rk === 2) countMed = 2;
-      else countMed = 3;
-    }
-
-    const badgeMed = isAllMed
-      ? `🌟 TODOS (${countMed})`
-      : countMed === 1
-      ? '📌 LÍNEA DE HIERRO (1)'
-      : countMed === 2
-      ? rk === 0
-        ? '🛡️ CANDADO SIN LÍNEA (2)'
-        : '🔒 CANDADO (2)'
-      : countMed === 3
-      ? '🔱 TRILOGÍA (3)'
-      : countMed === 4
-      ? rk === 1
-        ? '🛡️ CAZA FALSO FIJO (4)'
-        : '🚨 REFUERZO (4)'
-      : `🚨 SUPER MULTIPLICADOR (${countMed})`;
-
-    // 3. CUADRO BLINDADO (~972–1.080 comb = ~Bs. 34.020–37.800):
-    // Si hay Súper Fijo: 1(rk0) x 4(rk1) x 3(rk2) x 3(rk3) x 3(rk4) x TODOS(rk5)
-    // Si NO hay Súper Fijo (SIN LÍNEA): 3(rk0) x 4(rk1) x 3(rk2) x 3(rk3) x 3(rk4) x 3(rk5) = 972 comb.
-    let countBli = 3;
-    let isAllBli = false;
-    if (hasSuperFijo) {
-      if (rk === 0) countBli = 1;
-      else if (rk === 1) countBli = 4;
-      else if (rk === 2 || rk === 3 || rk === 4) countBli = 3;
-      else {
-        countBli = fieldCount;
-        isAllBli = true;
-      }
-    } else {
-      if (rk === 0) countBli = 3;
-      else if (rk === 1) countBli = 4;
-      else countBli = 3;
-    }
-
-    const badgeBli = isAllBli
-      ? `🌟 TODOS LOS INSCRITOS (${countBli})`
-      : countBli === 1
-      ? '📌 LÍNEA DE HIERRO (1)'
-      : countBli === 3 && rk === 0
-      ? '�️ SIN LÍNEA · TRILOGÍA (3)'
-      : countBli === 4
-      ? '🛡️ ANTI-SORPRESA (4)'
-      : `🔱 TRILOGÍA (${countBli})`;
+      countEco === 1 ? '📌 LÍNEA (1)' : countEco === 2 ? '🔒 CANDADO (2)' : countEco === 3 ? '🔱 TRILOGÍA (3)' : `🚨 MULTIPLICAR (${countEco})`;
+    const badgeMed =
+      countMed === 1 ? '📌 LÍNEA (1)' : countMed === 2 ? '🔒 CANDADO (2)' : countMed === 3 ? '🔱 TRILOGÍA (3)' : countMed === 4 ? '🛡️ ANTI-SORPRESA (4)' : `🚨 ABRE (${countMed})`;
+    const badgeBli =
+      countBli === 1 ? '📌 LÍNEA (1)' : countBli === 2 ? '🔒 CANDADO (2)' : countBli === 3 ? '🔱 TRILOGÍA (3)' : countBli === 4 ? '🛡️ BLINDAJE (4)' : `🚨 CAZA DIVIDENDO (${countBli})`;
+    const badgePre =
+      countPre === 1 ? '📌 LÍNEA (1)' : countPre === 2 ? '🔒 CANDADO (2)' : countPre === 3 ? '🔱 TRILOGÍA (3)' : countPre === 4 ? '👑 PREMIUM (4)' : `👑 COBERTURA FV (${countPre})`;
 
     const reasonText =
       rk === 0
-        ? hasSuperFijo
-          ? `Válida #1 en confianza (${p1}% FV · ${r.distance}m · ${r.fieldSize} ej.): califica como Súper Fijo.`
-          : `Válida #1 en confianza (${p1}% FV · ${r.distance}m · ${r.fieldSize} ej.): sin Súper Fijo claro, Medio y Blindado van SIN LÍNEA.`
+        ? `Válida #1 en confianza (${p1}% FV · ${r.distance}m · ${r.fieldSize} ej.).`
         : rk === 1
-        ? `2ª válida en confianza (${p1}% FV): históricamente es donde más cae el "2º fijo" ante el 3º/4º FV; Medio y Blindado cubren 4.`
-        : rk === 2
-        ? `3ª válida en confianza (1º+2º FV suman ${r.sumTop2Pct}%): alta efectividad de Candado/Trilogía.`
-        : rk === 5
-        ? `Válida más peligrosa del día (${r.distance}m · ${r.fieldSize} ej. · 1º FV ${p1}%): zona de batacazos (TODOS en Blindado con línea).`
-        : `Carrera intermedia (Suma Top 3: ${r.sumTop3Pct}% FV): cubierta con Trilogía.`;
+        ? `2ª válida en confianza (${p1}% FV): zona histórica de "falso 2º fijo" (cubierta con 4–5 ej. en Medio/Blindado/Premium).`
+        : countPre >= 5
+        ? `Alerta de dividendo (1º FV ${p1}% · ${r.fieldSize} ej.): 5º/6º FV con opción estadística activa.`
+        : `Suma Top 2: ${r.sumTop2Pct}% · Suma Top 3: ${r.sumTop3Pct}% FV.`;
 
-    const picksEco = r.topHorses.slice(0, Math.min(countEco, r.topHorses.length));
-    const picksMed = r.topHorses.slice(0, Math.min(countMed, r.topHorses.length));
-    const picksBlindado = r.topHorses.slice(0, Math.min(countBli, r.topHorses.length));
-
-    combinationsEco *= countEco;
-    combinationsMed *= countMed;
-    combinationsBlindado *= countBli;
+    const picksEco = r.topHorses.slice(0, countEco);
+    const picksMed = r.topHorses.slice(0, countMed);
+    const picksBlindado = r.topHorses.slice(0, countBli);
+    const picksPremium = r.topHorses.slice(0, countPre);
 
     let hitEco: boolean | undefined;
     let hitMed: boolean | undefined;
     let hitBlindado: boolean | undefined;
+    let hitPremium: boolean | undefined;
+
     if (r.winner) {
-      hitEco = isAllEco || (r.winner.fvRank !== null && r.winner.fvRank <= countEco);
-      hitMed = isAllMed || (r.winner.fvRank !== null && r.winner.fvRank <= countMed);
-      hitBlindado = isAllBli || (r.winner.fvRank !== null && r.winner.fvRank <= countBli);
+      const wRank = r.winner.fullFvRank ?? r.winner.fvRank;
+      hitEco = wRank !== null && wRank <= countEco;
+      hitMed = wRank !== null && wRank <= countMed;
+      hitBlindado = wRank !== null && wRank <= countBli;
+      hitPremium = wRank !== null && wRank <= countPre;
       if (hitEco) hitsEco++;
+      else missedIdxEco = idx;
       if (hitMed) hitsMed++;
+      else missedIdxMed = idx;
       if (hitBlindado) hitsBlindado++;
+      else missedIdxBli = idx;
+      if (hitPremium) hitsPremium++;
+      else missedIdxPre = idx;
     }
 
     return {
@@ -577,34 +702,58 @@ function buildMeetingValidasPicks(
       badgeEco,
       badgeMed,
       badgeBli,
+      badgePre,
       reasonText,
       countEco,
       countMed,
       countBli,
-      isAllEco,
-      isAllMed,
-      isAllBli,
+      countPre,
       picksEco,
       picksMed,
       picksBlindado,
+      picksPremium,
       winner: r.winner,
       hitEco,
       hitMed,
       hitBlindado,
+      hitPremium,
     };
   });
+
+  const combinationsEco = prod(countsEco);
+  const combinationsMed = prod(countsMed);
+  const combinationsBlindado = prod(countsBli);
+  const combinationsPremium = prod(countsPre);
+
+  function calcPrize(hits: number, counts: number[], missedIdx: number): number {
+    if (hits === 6) {
+      const mult5 = counts.reduce((s, c) => s + (c - 1), 0);
+      return Math.round(payout6Bs + mult5 * payout5Bs);
+    }
+    if (hits === 5 && missedIdx >= 0) {
+      return Math.round(counts[missedIdx] * payout5Bs);
+    }
+    return 0;
+  }
 
   return {
     hasSuperFijo,
     combinationsEco,
     combinationsMed,
     combinationsBlindado,
-    costBsEco: combinationsEco * FACTOR_5Y6_BS,
-    costBsMed: combinationsMed * FACTOR_5Y6_BS,
-    costBsBlindado: combinationsBlindado * FACTOR_5Y6_BS,
+    combinationsPremium,
+    costBsEco: combinationsEco * factorBs,
+    costBsMed: combinationsMed * factorBs,
+    costBsBlindado: combinationsBlindado * factorBs,
+    costBsPremium: combinationsPremium * factorBs,
+    prizeBsEco: calcPrize(hitsEco, countsEco, missedIdxEco),
+    prizeBsMed: calcPrize(hitsMed, countsMed, missedIdxMed),
+    prizeBsBlindado: calcPrize(hitsBlindado, countsBli, missedIdxBli),
+    prizeBsPremium: calcPrize(hitsPremium, countsPre, missedIdxPre),
     hitsEco,
     hitsMed,
     hitsBlindado,
+    hitsPremium,
     validas,
   };
 }
@@ -656,6 +805,9 @@ export async function getFvLabAnalytics(
     pct5Or6: 0,
     avgCombinations: 0,
     avgCostBs: 0,
+    totalCostBs: 0,
+    totalWonBs: 0,
+    netProfitBs: 0,
   };
 
   const emptyBacktest: FvFiveAndSixBacktestSummary = {
@@ -664,6 +816,7 @@ export async function getFvLabAnalytics(
     economico: emptyTier,
     medio: emptyTier,
     blindado: emptyTier,
+    premium: emptyTier,
     meetings: [],
   };
 
@@ -691,7 +844,7 @@ export async function getFvLabAnalytics(
   }
 
   const races = await Race.find({ meetingId: { $in: meetingIds }, hasResults: true })
-    .select('_id raceNumber distance meetingId')
+    .select('_id raceNumber distance meetingId payouts')
     .lean() as any[];
 
   if (!races.length) {
@@ -795,20 +948,24 @@ export async function getFvLabAnalytics(
       }
     }
 
+    let fullFvRank: number | null = null;
+    const foundFullIdx = fv.findIndex(h => {
+      const key = horseKey(h.horseName);
+      const dorsalMatch = winner.dorsalNumber != null && h.dorsalNumber != null && winner.dorsalNumber === h.dorsalNumber;
+      return key === winnerKey || dorsalMatch;
+    });
+    if (foundFullIdx >= 0) {
+      fullFvRank = foundFullIdx + 1;
+      winnerFvPct = Math.round(fv[foundFullIdx].factor * 1000) / 10;
+    }
+
     if (winnerRank === null) {
       batacazos++;
-      // Check if winner had any FV points outside top 5
-      const outside = fv.slice(5).find(h => {
-        const key = horseKey(h.horseName);
-        const dorsalMatch = winner.dorsalNumber != null && h.dorsalNumber != null && winner.dorsalNumber === h.dorsalNumber;
-        return key === winnerKey || dorsalMatch;
-      });
-      if (outside) winnerFvPct = Math.round(outside.factor * 1000) / 10;
     }
 
     const mId = race.meetingId.toString();
     const mInfo = meetingMap.get(mId) ?? { meetingNumber: 0, date: '', year: 2026 };
-    const topHorses = fv.slice(0, 6).map((h, idx) => ({
+    const topHorses = fv.slice(0, 7).map((h, idx) => ({
       pos: idx + 1,
       dorsalNumber: h.dorsalNumber,
       horseName: h.horseName,
@@ -836,6 +993,7 @@ export async function getFvLabAnalytics(
         dorsalNumber: winner.dorsalNumber,
         horseName: winner.horseName,
         fvRank: winnerRank,
+        fullFvRank,
         fvPct: winnerFvPct,
       },
     });
@@ -1254,6 +1412,14 @@ export async function getFvLabAnalytics(
 
   // ── 6. 5y6 Historical Backtesting across all meetings + Upcoming 5y6 ─────
   const isValencia = /valencia/i.test(track.name ?? trackNameQuery);
+  const rawRacesByMeeting = new Map<string, any[]>();
+  for (const r of races) {
+    const mId = r.meetingId.toString();
+    const arr = rawRacesByMeeting.get(mId) ?? [];
+    arr.push(r);
+    rawRacesByMeeting.set(mId, arr);
+  }
+
   const racesByMeeting = new Map<string, FvRaceAuditItem[]>();
   for (const r of racesAudit) {
     const arr = racesByMeeting.get(r.meetingId) ?? [];
@@ -1266,23 +1432,35 @@ export async function getFvLabAnalytics(
     if (mRaces.length < 6) continue;
     const sortedAsc = [...mRaces].sort((a, b) => a.raceNumber - b.raceNumber);
     const validas6 = sortedAsc.slice(-6);
-    const built = buildMeetingValidasPicks(validas6, isValencia);
     const first = validas6[0];
+    const factorBs = get5y6FactorBs(first.date);
+    const { payout6, payout5 } = extractMeeting5y6Payouts(rawRacesByMeeting.get(mId) ?? []);
+    const built = buildMeetingValidasPicks(validas6, isValencia, factorBs, payout6, payout5);
     backtestRows.push({
       meetingId: mId,
       meetingNumber: first.meetingNumber,
       date: first.date,
       year: first.year,
+      factorBs,
+      payout6Bs: payout6,
+      payout5Bs: payout5,
       hasSuperFijo: built.hasSuperFijo,
       combinationsEco: built.combinationsEco,
       combinationsMed: built.combinationsMed,
       combinationsBlindado: built.combinationsBlindado,
+      combinationsPremium: built.combinationsPremium,
       costBsEco: built.costBsEco,
       costBsMed: built.costBsMed,
       costBsBlindado: built.costBsBlindado,
+      costBsPremium: built.costBsPremium,
+      prizeBsEco: built.prizeBsEco,
+      prizeBsMed: built.prizeBsMed,
+      prizeBsBlindado: built.prizeBsBlindado,
+      prizeBsPremium: built.prizeBsPremium,
       hitsEco: built.hitsEco,
       hitsMed: built.hitsMed,
       hitsBlindado: built.hitsBlindado,
+      hitsPremium: built.hitsPremium,
       validas: built.validas,
     });
   }
@@ -1295,12 +1473,16 @@ export async function getFvLabAnalytics(
   const totalBt = backtestRows.length;
   function summarizeTier(
     getHits: (m: FvMeetingBacktestRow) => number,
-    getComb: (m: FvMeetingBacktestRow) => number
+    getComb: (m: FvMeetingBacktestRow) => number,
+    getCost: (m: FvMeetingBacktestRow) => number,
+    getPrize: (m: FvMeetingBacktestRow) => number
   ): FvTierSummary {
     const hits6 = backtestRows.filter(m => getHits(m) === 6).length;
     const hits5 = backtestRows.filter(m => getHits(m) === 5).length;
     const avgCombinations =
       totalBt > 0 ? Math.round(backtestRows.reduce((s, m) => s + getComb(m), 0) / totalBt) : 0;
+    const totalCostBs = Math.round(backtestRows.reduce((s, m) => s + getCost(m), 0));
+    const totalWonBs = Math.round(backtestRows.reduce((s, m) => s + getPrize(m), 0));
     return {
       hits6,
       hits5,
@@ -1309,15 +1491,29 @@ export async function getFvLabAnalytics(
       pct5Or6: round1(hits6 + hits5, totalBt),
       avgCombinations,
       avgCostBs: avgCombinations * FACTOR_5Y6_BS,
+      totalCostBs,
+      totalWonBs,
+      netProfitBs: totalWonBs - totalCostBs,
     };
   }
 
   const fiveAndSixBacktest: FvFiveAndSixBacktestSummary = {
     totalMeetings: totalBt,
     factorBs: FACTOR_5Y6_BS,
-    economico: summarizeTier(m => m.hitsEco, m => m.combinationsEco),
-    medio: summarizeTier(m => m.hitsMed, m => m.combinationsMed),
-    blindado: summarizeTier(m => m.hitsBlindado, m => m.combinationsBlindado),
+    economico: summarizeTier(m => m.hitsEco, m => m.combinationsEco, m => m.costBsEco, m => m.prizeBsEco),
+    medio: summarizeTier(m => m.hitsMed, m => m.combinationsMed, m => m.costBsMed, m => m.prizeBsMed),
+    blindado: summarizeTier(
+      m => m.hitsBlindado,
+      m => m.combinationsBlindado,
+      m => m.costBsBlindado,
+      m => m.prizeBsBlindado
+    ),
+    premium: summarizeTier(
+      m => m.hitsPremium,
+      m => m.combinationsPremium,
+      m => m.costBsPremium,
+      m => m.prizeBsPremium
+    ),
     meetings: backtestRows,
   };
 
@@ -1360,7 +1556,7 @@ export async function getFvLabAnalytics(
         const rid = r._id.toString();
         const fcs = fcMap[rid] ?? [];
         if (!fcs.length) return null;
-        const fv = calcFv(fcs).slice(0, 6);
+        const fv = calcFv(fcs).slice(0, 7);
         if (!fv.length) return null;
         const topHorses = fv.map((h, i) => ({
           pos: i + 1,
@@ -1383,7 +1579,7 @@ export async function getFvLabAnalytics(
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (validasInput.length === 6) {
-      const built = buildMeetingValidasPicks(validasInput, isValencia);
+      const built = buildMeetingValidasPicks(validasInput, isValencia, FACTOR_5Y6_BS, 0, 0);
       upcomingFiveAndSix = {
         meetingId: mId,
         meetingNumber: candMeeting.meetingNumber ?? 0,
@@ -1393,9 +1589,11 @@ export async function getFvLabAnalytics(
         combinationsEco: built.combinationsEco,
         combinationsMed: built.combinationsMed,
         combinationsBlindado: built.combinationsBlindado,
+        combinationsPremium: built.combinationsPremium,
         costBsEco: built.costBsEco,
         costBsMed: built.costBsMed,
         costBsBlindado: built.costBsBlindado,
+        costBsPremium: built.costBsPremium,
         validas: built.validas,
       };
       break;
@@ -1413,9 +1611,11 @@ export async function getFvLabAnalytics(
       combinationsEco: latest.combinationsEco,
       combinationsMed: latest.combinationsMed,
       combinationsBlindado: latest.combinationsBlindado,
+      combinationsPremium: latest.combinationsPremium,
       costBsEco: latest.costBsEco,
       costBsMed: latest.costBsMed,
       costBsBlindado: latest.costBsBlindado,
+      costBsPremium: latest.costBsPremium,
       validas: latest.validas,
     };
   }
