@@ -61,3 +61,17 @@ git config --global credential.helper  # debe decir "store"
 
 - Carrera individual: 2 Golds
 - Jornada completa: N° de carreras × 1 Gold
+
+## Inteligencia del Factor de Victoria — Informes Anuales Permanentes
+
+Los hallazgos estadísticos, leyes por distancia/tamaño de lote, umbrales (`+40%`, `+50%`, `+60%`) y el backtesting del 5y6 viven en:
+
+- `docs/fv-intelligence/INFORME_FV_2026.md` (y un archivo nuevo por cada año: `INFORME_FV_2027.md`, etc.)
+- Servicio en vivo (100% solo lectura): `src/services/fvAccuracyService.ts` (`getFvLabAnalytics`)
+- Vista Admin: `/admin` → pestaña `🧪 Laboratorio FV` (`src/app/admin/_components/LaboratorioFvTab.tsx`)
+
+**Reglas obligatorias para agentes:**
+1. **NUNCA borrar** los archivos dentro de `docs/fv-intelligence/`.
+2. **Actualizar, no sobrescribir años anteriores:** Debido al parón hípico de diciembre en Venezuela, cada temporada anual se archiva en su propio documento (`INFORME_FV_<AÑO>.md`) y el Laboratorio FV permite filtrar por año (`?year=2026`, etc.).
+3. Toda consulta analítica del Laboratorio FV debe ser estrictamente de solo lectura (`.lean()`), sin modificar ni corromper documentos de `Meeting`, `Race`, `Entry` o `Forecast`.
+

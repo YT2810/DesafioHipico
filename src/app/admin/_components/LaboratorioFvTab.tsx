@@ -13,9 +13,12 @@ type AuditFilter = 'all' | 'batacazo' | 'fav50_lost' | 'fav40_lost' | 'duo_win' 
 
 export default function LaboratorioFvTab() {
   const [track, setTrack] = useState<'rinconada' | 'valencia'>('rinconada');
+  const [year, setYear] = useState<number | 'all'>(2026);
   const [data, setData] = useState<FvLabAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
   const [thresholdMode, setThresholdMode] = useState<'cumulative' | 'band'>('cumulative');
+  const [ticketProfile, setTicketProfile] = useState<'estandar' | 'blindado'>('estandar');
+  const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<AuditFilter>('all');
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
   const [distanceFilter, setDistanceFilter] = useState<number | 'all'>('all');
@@ -23,7 +26,7 @@ export default function LaboratorioFvTab() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/admin/stats/fv-lab?track=${track}`)
+    fetch(`/api/admin/stats/fv-lab?track=${track}&year=${year}`)
       .then(r => r.json())
       .then((res: FvLabAnalytics) => {
         if (!cancelled) setData(res);
@@ -34,7 +37,7 @@ export default function LaboratorioFvTab() {
     return () => {
       cancelled = true;
     };
-  }, [track]);
+  }, [track, year]);
 
   const filteredThresholds = useMemo(
     () => (data?.thresholds ?? []).filter(t => t.mode === thresholdMode),
@@ -99,7 +102,20 @@ export default function LaboratorioFvTab() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={year}
+            onChange={e => setYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="bg-gray-950 border border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-yellow-400 focus:outline-none focus:border-yellow-500"
+          >
+            {(data?.availableYears?.length ? data.availableYears : [2026]).map(y => (
+              <option key={y} value={y}>
+                📅 Temporada {y}
+              </option>
+            ))}
+            <option value="all">📅 Histórico Completo</option>
+          </select>
+
           <button
             type="button"
             onClick={() => setTrack('rinconada')}
@@ -583,6 +599,238 @@ export default function LaboratorioFvTab() {
               </div>
             </div>
           </div>
+
+          {/* 3C. GENERADOR DE 5 Y 6 RECOMENDADO + BACKTESTING ANUAL DE TODAS LAS REUNIONES */}
+          {data.upcomingFiveAndSix && (
+            <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-green-950/20 border border-green-700/40 rounded-2xl p-4 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-extrabold text-white">
+                      🏆 5 y 6 Recomendado por Algoritmo FV — Reunión {data.upcomingFiveAndSix.meetingNumber} ({data.upcomingFiveAndSix.date})
+                    </h3>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        data.upcomingFiveAndSix.isHistoricalPreview
+                          ? 'bg-gray-800 text-gray-300 border-gray-700'
+                          : 'bg-green-950/80 text-green-300 border-green-700/60'
+                      }`}
+                    >
+                      {data.upcomingFiveAndSix.isHistoricalPreview ? 'Última reunión corrida' : '🟢 Reunión activa / Por correr'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Selección automática para las 6 válidas combinando consenso FV, distancia y tamaño de lote.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setTicketProfile('estandar')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                      ticketProfile === 'estandar'
+                        ? 'bg-yellow-500 text-black border-yellow-500'
+                        : 'bg-gray-950 text-gray-400 border-gray-800'
+                    }`}
+                  >
+                    Cuadro Estándar ({data.upcomingFiveAndSix.combinationsEst} comb.)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTicketProfile('blindado')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                      ticketProfile === 'blindado'
+                        ? 'bg-green-500 text-black border-green-500'
+                        : 'bg-gray-950 text-gray-400 border-gray-800'
+                    }`}
+                  >
+                    Cuadro Blindado ({data.upcomingFiveAndSix.combinationsBlindado} comb.)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {data.upcomingFiveAndSix.validas.map(v => {
+                  const picks = ticketProfile === 'estandar' ? v.picksEst : v.picksBlindado;
+                  const hit = ticketProfile === 'estandar' ? v.hitEst : v.hitBlindado;
+                  return (
+                    <div key={v.validaNumber} className="bg-gray-950/90 border border-gray-800 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-yellow-400">
+                          {v.validaNumber}ª Válida · C{v.raceNumber} ({v.distance}m · {v.fieldSize} ej.)
+                        </span>
+                        {hit !== undefined && (
+                          <span
+                            className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                              hit ? 'bg-green-950 text-green-400 border border-green-700/50' : 'bg-red-950 text-red-400 border border-red-700/50'
+                            }`}
+                          >
+                            {hit ? '✅ ACERTADA' : '❌ FALLÓ'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-bold text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded px-2 py-1">
+                        {v.ruleBadge} — <span className="font-normal text-gray-300">{v.ruleReason}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {picks.map(p => (
+                          <div key={p.pos} className="flex items-center justify-between text-xs bg-gray-900/90 rounded-lg px-2.5 py-1.5">
+                            <span className="font-semibold text-white truncate">
+                              #{p.dorsalNumber ?? '?'} {p.horseName}
+                            </span>
+                            <span className="text-[11px] font-bold text-yellow-300 shrink-0 ml-2">
+                              {p.pos}º FV ({p.fvPct}%)
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 3D. BACKTESTING HISTÓRICO ANUAL DE TODOS LOS 5 Y 6 */}
+          {data.fiveAndSixBacktest && data.fiveAndSixBacktest.totalMeetings > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    📊 3D. Verificador Anual de 5 y 6 ({data.fiveAndSixBacktest.totalMeetings} reuniones evaluadas)
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Simulación retrospectiva reunión por reunión para comprobar cuántos cuadros de 6 y de 5 aciertos habría pegado la fórmula en el año.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <KpiCard
+                  label="Estándar: 5 o 6 Aciertos"
+                  value={`${data.fiveAndSixBacktest.estandar.hits5Or6} de ${data.fiveAndSixBacktest.totalMeetings}`}
+                  sub={`${data.fiveAndSixBacktest.estandar.pct5Or6}% reuniones (${data.fiveAndSixBacktest.estandar.hits6} con 6 · ${data.fiveAndSixBacktest.estandar.hits5} con 5)`}
+                  color={GOLD}
+                />
+                <KpiCard
+                  label="Estándar: Comb. Promedio"
+                  value={`${data.fiveAndSixBacktest.estandar.avgCombinations}`}
+                  sub="combinaciones por jornada"
+                  color="white"
+                />
+                <KpiCard
+                  label="Blindado: 5 o 6 Aciertos"
+                  value={`${data.fiveAndSixBacktest.blindado.hits5Or6} de ${data.fiveAndSixBacktest.totalMeetings}`}
+                  sub={`${data.fiveAndSixBacktest.blindado.pct5Or6}% reuniones (${data.fiveAndSixBacktest.blindado.hits6} con 6 · ${data.fiveAndSixBacktest.blindado.hits5} con 5)`}
+                  color="#22c55e"
+                />
+                <KpiCard
+                  label="Blindado: Comb. Promedio"
+                  value={`${data.fiveAndSixBacktest.blindado.avgCombinations}`}
+                  sub="combinaciones por jornada"
+                  color="#38bdf8"
+                />
+              </div>
+
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="text-[11px] text-gray-500 uppercase border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
+                    <tr>
+                      <th className="py-2 pr-3 font-medium">Reunión / Fecha</th>
+                      <th className="py-2 px-2 font-medium text-center">Cuadro Estándar</th>
+                      <th className="py-2 px-2 font-medium text-center">Aciertos Estándar</th>
+                      <th className="py-2 px-2 font-medium text-center">Cuadro Blindado</th>
+                      <th className="py-2 px-2 font-medium text-center">Aciertos Blindado</th>
+                      <th className="py-2 pl-2 font-medium text-right">Detalle 6 Válidas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.fiveAndSixBacktest.meetings.map(m => {
+                      const isOpen = expandedMeetingId === m.meetingId;
+                      return (
+                        <>
+                          <tr key={m.meetingId} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                            <td className="py-2.5 pr-3 font-bold text-white whitespace-nowrap">
+                              Reunión {m.meetingNumber} <span className="text-gray-500 font-normal">· {m.date}</span>
+                            </td>
+                            <td className="py-2.5 px-2 text-center text-gray-300">{m.combinationsEst} comb.</td>
+                            <td className="py-2.5 px-2 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-extrabold ${
+                                  m.hitsEst === 6
+                                    ? 'bg-green-950 text-green-300 border border-green-600'
+                                    : m.hitsEst === 5
+                                    ? 'bg-yellow-950/80 text-yellow-300 border border-yellow-700/50'
+                                    : 'bg-gray-800 text-gray-400'
+                                }`}
+                              >
+                                {m.hitsEst} de 6 {m.hitsEst === 6 ? '🏆' : m.hitsEst === 5 ? '🎯' : ''}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-2 text-center text-gray-300">{m.combinationsBlindado} comb.</td>
+                            <td className="py-2.5 px-2 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-extrabold ${
+                                  m.hitsBlindado === 6
+                                    ? 'bg-green-950 text-green-300 border border-green-600'
+                                    : m.hitsBlindado === 5
+                                    ? 'bg-yellow-950/80 text-yellow-300 border border-yellow-700/50'
+                                    : 'bg-gray-800 text-gray-400'
+                                }`}
+                              >
+                                {m.hitsBlindado} de 6 {m.hitsBlindado === 6 ? '🏆' : m.hitsBlindado === 5 ? '🎯' : ''}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pl-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedMeetingId(isOpen ? null : m.meetingId)}
+                                className="text-xs font-bold text-yellow-400 hover:text-yellow-300"
+                              >
+                                {isOpen ? 'Ocultar ▲' : 'Ver 6 válidas ▼'}
+                              </button>
+                            </td>
+                          </tr>
+                          {isOpen && (
+                            <tr key={`${m.meetingId}-detail`} className="bg-gray-950/90 border-b border-gray-800">
+                              <td colSpan={6} className="p-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                  {m.validas.map(v => (
+                                    <div key={v.validaNumber} className="bg-gray-900 border border-gray-800 rounded-lg p-2.5 space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-bold text-white">
+                                          {v.validaNumber}ª Válida (C{v.raceNumber} · {v.distance}m)
+                                        </span>
+                                        <span className={v.hitBlindado ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                                          Est: {v.hitEst ? '✅' : '❌'} · Bli: {v.hitBlindado ? '✅' : '❌'}
+                                        </span>
+                                      </div>
+                                      <p className="text-[10px] text-gray-400">{v.ruleBadge}</p>
+                                      <p className="text-[11px] text-gray-300">
+                                        <strong>Seleccionados ({v.picksEst.length}/{v.picksBlindado.length}):</strong>{' '}
+                                        {v.picksBlindado.map(p => `#${p.dorsalNumber ?? '?'} (${p.fvPct}%)`).join(', ')}
+                                      </p>
+                                      {v.winner && (
+                                        <p className="text-[11px] text-yellow-300">
+                                          <strong>Ganó:</strong> #{v.winner.dorsalNumber ?? '?'} {v.winner.horseName} (
+                                          {v.winner.fvRank ? `${v.winner.fvRank}º FV` : 'Batacazo'})
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* 4. EXPLORADOR Y AUDITORÍA DE CARRERAS (SECCIÓN D) */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">

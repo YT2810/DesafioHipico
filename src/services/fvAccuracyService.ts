@@ -259,8 +259,10 @@ export interface FvComboRuleRow {
 
 export interface FvRaceAuditItem {
   raceId: string;
+  meetingId: string;
   meetingNumber: number;
   date: string;
+  year: number;
   raceNumber: number;
   distance: number;
   fieldSize: number;
@@ -288,9 +290,73 @@ export interface FvPatternInsight {
   metric: string;
 }
 
+export interface FvValidaPick {
+  validaNumber: number; // 1..6
+  raceNumber: number;
+  distance: number;
+  fieldSize: number;
+  ruleBadge: string;
+  ruleReason: string;
+  picksEst: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
+  picksBlindado: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
+  winner?: {
+    dorsalNumber?: number;
+    horseName: string;
+    fvRank: number | null;
+    fvPct: number;
+  };
+  hitEst?: boolean;
+  hitBlindado?: boolean;
+}
+
+export interface FvMeetingBacktestRow {
+  meetingId: string;
+  meetingNumber: number;
+  date: string;
+  year: number;
+  combinationsEst: number;
+  combinationsBlindado: number;
+  hitsEst: number; // 0..6
+  hitsBlindado: number; // 0..6
+  validas: FvValidaPick[];
+}
+
+export interface FvFiveAndSixBacktestSummary {
+  totalMeetings: number;
+  estandar: {
+    hits6: number;
+    hits5: number;
+    hits5Or6: number;
+    pct6: number;
+    pct5Or6: number;
+    avgCombinations: number;
+  };
+  blindado: {
+    hits6: number;
+    hits5: number;
+    hits5Or6: number;
+    pct6: number;
+    pct5Or6: number;
+    avgCombinations: number;
+  };
+  meetings: FvMeetingBacktestRow[];
+}
+
+export interface FvUpcomingFiveAndSix {
+  meetingId: string;
+  meetingNumber: number;
+  date: string;
+  isHistoricalPreview: boolean;
+  combinationsEst: number;
+  combinationsBlindado: number;
+  validas: FvValidaPick[];
+}
+
 export interface FvLabAnalytics {
   trackId: string;
   trackName: string;
+  availableYears: number[];
+  selectedYear: number | 'all';
   totalRaces: number;
   batacazos: number;
   batacazoPct: number;
@@ -301,6 +367,8 @@ export interface FvLabAnalytics {
   comboRules: FvComboRuleRow[];
   prescriptionRules: FvPrescriptionRule[];
   insights: FvPatternInsight[];
+  fiveAndSixBacktest: FvFiveAndSixBacktestSummary;
+  upcomingFiveAndSix: FvUpcomingFiveAndSix | null;
   racesAudit: FvRaceAuditItem[];
 }
 
@@ -308,30 +376,195 @@ function round1(num: number, den: number): number {
   return den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
 }
 
-export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAnalytics | null> {
+function buildMeetingValidasPicks(
+  validasRaces: {
+    raceNumber: number;
+    distance: number;
+    fieldSize: number;
+    topHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
+    sumTop2Pct: number;
+    sumTop3Pct: number;
+    winner?: { dorsalNumber?: number; horseName: string; fvRank: number | null; fvPct: number };
+  }[]
+): {
+  combinationsEst: number;
+  combinationsBlindado: number;
+  hitsEst: number;
+  hitsBlindado: number;
+  validas: FvValidaPick[];
+} {
+  // Score each of the 6 validas from highest confidence (Línea) to lowest confidence (Multiplicar)
+  // incorporating our empirical findings: FV%, sumTop2%, distance >= 1400/1500 bonus, large field penalty, 1100m penalty.
+  const scored = validasRaces.map((r, idx) => {
+    const p1 = r.topHorses[0]?.fvPct ?? 0;
+    const p2 = r.topHorses[1]?.fvPct ?? 0;
+    const gap12 = p1 - p2;
+    const distBonus = r.distance >= 1500 ? 12 : r.distance === 1400 ? 8 : r.distance === 1100 ? -6 : 0;
+    const lotPenalty = r.fieldSize >= 10 ? -12 : r.fieldSize === 9 ? -7 : r.fieldSize <= 6 ? 8 : 0;
+    const score = p1 * 1.15 + gap12 * 0.45 + r.sumTop2Pct * 0.25 + distBonus + lotPenalty;
+    return { idx, score, p1, p2, r };
+  });
+
+  // Rank 0 = highest confidence (best Línea), Rank 5 = most dangerous/open race
+  const sortedByConfidence = [...scored].sort((a, b) => b.score - a.score);
+  const confidenceRankByIdx = new Map<number, number>();
+  sortedByConfidence.forEach((item, rank) => {
+    confidenceRankByIdx.set(item.idx, rank);
+  });
+
+  let combinationsEst = 1;
+  let combinationsBlindado = 1;
+  let hitsEst = 0;
+  let hitsBlindado = 0;
+
+  const validas: FvValidaPick[] = validasRaces.map((r, idx) => {
+    const rank = confidenceRankByIdx.get(idx) ?? 3; // 0..5
+    const p1 = r.topHorses[0]?.fvPct ?? 0;
+    const p2 = r.topHorses[1]?.fvPct ?? 0;
+    const p3 = r.topHorses[2]?.fvPct ?? 0;
+
+    let countEst = 3;
+    let countBlindado = 3;
+    let ruleBadge = '🔱 TRILOGÍA (3)';
+    let ruleReason = '';
+
+    if (rank === 0) {
+      // #1 Most reliable race of the 6 validas → Primary Línea
+      countEst = 1;
+      countBlindado = 1;
+      ruleBadge = '📌 LÍNEA DEL 5Y6 (1)';
+      ruleReason = `Válida más sólida de la jornada (${p1}% FV · ${r.distance}m · ${r.fieldSize} ej.)`;
+    } else if (rank === 1) {
+      // #2 Second most reliable race → 2nd Línea if super strong (>=58% & lot<=8), otherwise Candado (2)
+      if (p1 >= 58 && r.fieldSize <= 8) {
+        countEst = 1;
+        countBlindado = 2;
+        ruleBadge = '📌 2ª LÍNEA (1) / CANDADO (2)';
+        ruleReason = `Favorito dominante ≥ 58% (${p1}% FV) en lote de ${r.fieldSize} ej.`;
+      } else {
+        countEst = 2;
+        countBlindado = 2;
+        ruleBadge = '🔒 CANDADO 1º+2º (2)';
+        ruleReason = `2ª válida más confiable (1º+2º suman ${r.sumTop2Pct}% FV)`;
+      }
+    } else if (rank === 2) {
+      // #3 Third most reliable race → Candado (2) in Estándar, Trilogía (3) in Blindado
+      countEst = 2;
+      countBlindado = 3;
+      ruleBadge = '� CANDADO (2) / TRILOGÍA (3)';
+      ruleReason =
+        r.distance >= 1500
+          ? `Tiro medio/largo (${r.distance}m · 0% batacazos): Candado (${r.sumTop2Pct}%) o Trilogía (${r.sumTop3Pct}%)`
+          : `Fuerte concentración en 1º y 2º FV (${p1}% + ${p2}% = ${r.sumTop2Pct}%)`;
+    } else if (rank === 3 || rank === 4) {
+      // #4 & #5 Medium complexity → Trilogía (3) in Estándar, 3 or 4 in Blindado
+      countEst = 3;
+      countBlindado = rank === 4 ? 4 : 3;
+      ruleBadge = rank === 4 ? '🔱 TRILOGÍA (3) / REFUERZO (4)' : '🔱 TRILOGÍA (3)';
+      ruleReason =
+        r.distance >= 1500
+          ? `En ${r.distance}m el Top 3 FV (${r.sumTop3Pct}%) cubre casi el 100% histórico`
+          : `Carrera pareja (${p1}% / ${p2}% / ${p3}%) — cubrir Top 3 FV`;
+    } else {
+      // rank === 5 (#6 Most dangerous/open race of the day) → Multiplicar (4 in Estándar, 5 in Blindado)
+      countEst = 4;
+      countBlindado = 5;
+      ruleBadge = '� MULTIPLICAR / ALERTA (4–5)';
+      ruleReason = `Válida más abierta/peligrosa (${r.distance}m · ${r.fieldSize} ej. · 1º FV ${p1}%) — abrir cuadro`;
+    }
+
+    const picksEst = r.topHorses.slice(0, Math.min(countEst, r.topHorses.length));
+    const picksBlindado = r.topHorses.slice(0, Math.min(countBlindado, r.topHorses.length));
+
+    combinationsEst *= Math.max(1, picksEst.length);
+    combinationsBlindado *= Math.max(1, picksBlindado.length);
+
+    let hitEst: boolean | undefined;
+    let hitBlindado: boolean | undefined;
+    if (r.winner) {
+      hitEst = r.winner.fvRank !== null && r.winner.fvRank <= picksEst.length;
+      hitBlindado = r.winner.fvRank !== null && r.winner.fvRank <= picksBlindado.length;
+      if (hitEst) hitsEst++;
+      if (hitBlindado) hitsBlindado++;
+    }
+
+    return {
+      validaNumber: idx + 1,
+      raceNumber: r.raceNumber,
+      distance: r.distance,
+      fieldSize: r.fieldSize,
+      ruleBadge,
+      ruleReason,
+      picksEst,
+      picksBlindado,
+      winner: r.winner,
+      hitEst,
+      hitBlindado,
+    };
+  });
+
+  return {
+    combinationsEst,
+    combinationsBlindado,
+    hitsEst,
+    hitsBlindado,
+    validas,
+  };
+}
+
+export async function getFvLabAnalytics(
+  trackNameQuery: string,
+  yearFilter?: number | 'all'
+): Promise<FvLabAnalytics | null> {
   await dbConnect();
   void Horse;
 
   const track = await Track.findOne({ name: { $regex: new RegExp(trackNameQuery, 'i') } }).lean() as any;
   if (!track) return null;
 
-  const meetings = await Meeting.find({ trackId: track._id })
+  const allMeetings = await Meeting.find({ trackId: track._id })
     .select('_id meetingNumber date')
     .lean() as any[];
 
-  const meetingMap = new Map<string, { meetingNumber: number; date: string }>();
+  const yearsSet = new Set<number>();
+  for (const m of allMeetings) {
+    if (m.date) {
+      const y = new Date(m.date).getUTCFullYear();
+      if (y >= 2020 && y <= 2035) yearsSet.add(y);
+    }
+  }
+  const availableYears = [...yearsSet].sort((a, b) => b - a);
+  const selectedYear: number | 'all' = yearFilter ?? 'all';
+
+  const meetings =
+    selectedYear === 'all'
+      ? allMeetings
+      : allMeetings.filter(m => m.date && new Date(m.date).getUTCFullYear() === selectedYear);
+
+  const meetingMap = new Map<string, { meetingNumber: number; date: string; year: number }>();
   for (const m of meetings) {
+    const dt = m.date ? new Date(m.date) : null;
     meetingMap.set(m._id.toString(), {
       meetingNumber: m.meetingNumber ?? 0,
-      date: m.date ? new Date(m.date).toISOString().slice(0, 10) : '',
+      date: dt ? dt.toISOString().slice(0, 10) : '',
+      year: dt ? dt.getUTCFullYear() : 2026,
     });
   }
+
+  const emptyBacktest: FvFiveAndSixBacktestSummary = {
+    totalMeetings: 0,
+    estandar: { hits6: 0, hits5: 0, hits5Or6: 0, pct6: 0, pct5Or6: 0, avgCombinations: 0 },
+    blindado: { hits6: 0, hits5: 0, hits5Or6: 0, pct6: 0, pct5Or6: 0, avgCombinations: 0 },
+    meetings: [],
+  };
 
   const meetingIds = meetings.map(m => m._id.toString());
   if (!meetingIds.length) {
     return {
       trackId: track._id.toString(),
       trackName: track.name,
+      availableYears,
+      selectedYear,
       totalRaces: 0,
       batacazos: 0,
       batacazoPct: 0,
@@ -342,6 +575,8 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
       comboRules: [],
       prescriptionRules: [],
       insights: [],
+      fiveAndSixBacktest: emptyBacktest,
+      upcomingFiveAndSix: null,
       racesAudit: [],
     };
   }
@@ -354,6 +589,8 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
     return {
       trackId: track._id.toString(),
       trackName: track.name,
+      availableYears,
+      selectedYear,
       totalRaces: 0,
       batacazos: 0,
       batacazoPct: 0,
@@ -364,6 +601,8 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
       comboRules: [],
       prescriptionRules: [],
       insights: [],
+      fiveAndSixBacktest: emptyBacktest,
+      upcomingFiveAndSix: null,
       racesAudit: [],
     };
   }
@@ -458,7 +697,8 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
       if (outside) winnerFvPct = Math.round(outside.factor * 1000) / 10;
     }
 
-    const mInfo = meetingMap.get(race.meetingId.toString()) ?? { meetingNumber: 0, date: '' };
+    const mId = race.meetingId.toString();
+    const mInfo = meetingMap.get(mId) ?? { meetingNumber: 0, date: '', year: 2026 };
     const topHorses = top5.map((h, idx) => ({
       pos: idx + 1,
       dorsalNumber: h.dorsalNumber,
@@ -472,8 +712,10 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
 
     racesAudit.push({
       raceId: rid,
+      meetingId: mId,
       meetingNumber: mInfo.meetingNumber,
       date: mInfo.date,
+      year: mInfo.year,
       raceNumber: race.raceNumber,
       distance: race.distance ?? 0,
       fieldSize: fieldSizeByRace[rid] ?? 0,
@@ -901,9 +1143,169 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
     });
   }
 
+  // ── 6. 5y6 Historical Backtesting across all meetings + Upcoming 5y6 ─────
+  const racesByMeeting = new Map<string, FvRaceAuditItem[]>();
+  for (const r of racesAudit) {
+    const arr = racesByMeeting.get(r.meetingId) ?? [];
+    arr.push(r);
+    racesByMeeting.set(r.meetingId, arr);
+  }
+
+  const backtestRows: FvMeetingBacktestRow[] = [];
+  for (const [mId, mRaces] of racesByMeeting.entries()) {
+    if (mRaces.length < 6) continue;
+    const sortedAsc = [...mRaces].sort((a, b) => a.raceNumber - b.raceNumber);
+    const validas6 = sortedAsc.slice(-6);
+    const built = buildMeetingValidasPicks(validas6);
+    const first = validas6[0];
+    backtestRows.push({
+      meetingId: mId,
+      meetingNumber: first.meetingNumber,
+      date: first.date,
+      year: first.year,
+      combinationsEst: built.combinationsEst,
+      combinationsBlindado: built.combinationsBlindado,
+      hitsEst: built.hitsEst,
+      hitsBlindado: built.hitsBlindado,
+      validas: built.validas,
+    });
+  }
+
+  backtestRows.sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return b.meetingNumber - a.meetingNumber;
+  });
+
+  const totalBt = backtestRows.length;
+  const estHits6 = backtestRows.filter(m => m.hitsEst === 6).length;
+  const estHits5 = backtestRows.filter(m => m.hitsEst === 5).length;
+  const estAvgComb =
+    totalBt > 0
+      ? Math.round(backtestRows.reduce((s, m) => s + m.combinationsEst, 0) / totalBt)
+      : 0;
+
+  const bliHits6 = backtestRows.filter(m => m.hitsBlindado === 6).length;
+  const bliHits5 = backtestRows.filter(m => m.hitsBlindado === 5).length;
+  const bliAvgComb =
+    totalBt > 0
+      ? Math.round(backtestRows.reduce((s, m) => s + m.combinationsBlindado, 0) / totalBt)
+      : 0;
+
+  const fiveAndSixBacktest: FvFiveAndSixBacktestSummary = {
+    totalMeetings: totalBt,
+    estandar: {
+      hits6: estHits6,
+      hits5: estHits5,
+      hits5Or6: estHits6 + estHits5,
+      pct6: round1(estHits6, totalBt),
+      pct5Or6: round1(estHits6 + estHits5, totalBt),
+      avgCombinations: estAvgComb,
+    },
+    blindado: {
+      hits6: bliHits6,
+      hits5: bliHits5,
+      hits5Or6: bliHits6 + bliHits5,
+      pct6: round1(bliHits6, totalBt),
+      pct5Or6: round1(bliHits6 + bliHits5, totalBt),
+      avgCombinations: bliAvgComb,
+    },
+    meetings: backtestRows,
+  };
+
+  // Look for an upcoming/active meeting without results yet (or fallback to latest backtested meeting)
+  let upcomingFiveAndSix: FvUpcomingFiveAndSix | null = null;
+  const sortedAllMeetingsDesc = [...allMeetings].sort(
+    (a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()
+  );
+  for (const candMeeting of sortedAllMeetingsDesc.slice(0, 4)) {
+    const mId = candMeeting._id.toString();
+    const candRaces = (await Race.find({ meetingId: candMeeting._id })
+      .select('_id raceNumber distance hasResults')
+      .sort({ raceNumber: 1 })
+      .lean()) as any[];
+    if (candRaces.length < 6) continue;
+    const hasPendingResults = candRaces.some(r => !r.hasResults);
+    if (!hasPendingResults) continue;
+
+    const validasRacesDocs = candRaces.slice(-6);
+    const vIds = validasRacesDocs.map(r => r._id.toString());
+    const [vForecasts, vEntries] = await Promise.all([
+      Forecast.find({ raceId: { $in: vIds }, isPublished: true }).select('raceId marks').lean() as any,
+      Entry.find({ raceId: { $in: vIds } }).select('raceId status result').lean() as any,
+    ]);
+    const fcMap: Record<string, any[]> = {};
+    for (const f of vForecasts) {
+      const rid = f.raceId.toString();
+      if (!fcMap[rid]) fcMap[rid] = [];
+      fcMap[rid].push(f);
+    }
+    const fsMap: Record<string, number> = {};
+    for (const e of vEntries) {
+      const rid = e.raceId.toString();
+      if (e.status !== 'scratched' && !e.result?.isScratched && !e.result?.isInvalidated) {
+        fsMap[rid] = (fsMap[rid] ?? 0) + 1;
+      }
+    }
+    const validasInput = validasRacesDocs
+      .map(r => {
+        const rid = r._id.toString();
+        const fcs = fcMap[rid] ?? [];
+        if (!fcs.length) return null;
+        const fv = calcFv(fcs).slice(0, 5);
+        if (!fv.length) return null;
+        const topHorses = fv.map((h, i) => ({
+          pos: i + 1,
+          dorsalNumber: h.dorsalNumber,
+          horseName: h.horseName,
+          fvPct: Math.round(h.factor * 1000) / 10,
+        }));
+        const p1 = topHorses[0]?.fvPct ?? 0;
+        const p2 = topHorses[1]?.fvPct ?? 0;
+        const p3 = topHorses[2]?.fvPct ?? 0;
+        return {
+          raceNumber: r.raceNumber,
+          distance: r.distance ?? 0,
+          fieldSize: fsMap[rid] ?? 8,
+          topHorses,
+          sumTop2Pct: Math.round((p1 + p2) * 10) / 10,
+          sumTop3Pct: Math.round((p1 + p2 + p3) * 10) / 10,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (validasInput.length === 6) {
+      const built = buildMeetingValidasPicks(validasInput);
+      upcomingFiveAndSix = {
+        meetingId: mId,
+        meetingNumber: candMeeting.meetingNumber ?? 0,
+        date: candMeeting.date ? new Date(candMeeting.date).toISOString().slice(0, 10) : '',
+        isHistoricalPreview: false,
+        combinationsEst: built.combinationsEst,
+        combinationsBlindado: built.combinationsBlindado,
+        validas: built.validas,
+      };
+      break;
+    }
+  }
+
+  if (!upcomingFiveAndSix && backtestRows.length > 0) {
+    const latest = backtestRows[0];
+    upcomingFiveAndSix = {
+      meetingId: latest.meetingId,
+      meetingNumber: latest.meetingNumber,
+      date: latest.date,
+      isHistoricalPreview: true,
+      combinationsEst: latest.combinationsEst,
+      combinationsBlindado: latest.combinationsBlindado,
+      validas: latest.validas,
+    };
+  }
+
   return {
     trackId: track._id.toString(),
     trackName: track.name,
+    availableYears,
+    selectedYear,
     totalRaces: countedRaces,
     batacazos,
     batacazoPct: round1(batacazos, countedRaces),
@@ -914,6 +1316,8 @@ export async function getFvLabAnalytics(trackNameQuery: string): Promise<FvLabAn
     comboRules,
     prescriptionRules,
     insights,
+    fiveAndSixBacktest,
+    upcomingFiveAndSix,
     racesAudit,
   };
 }

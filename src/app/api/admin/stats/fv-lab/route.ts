@@ -13,7 +13,12 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const track = searchParams.get('track') ?? 'rinconada';
-    const data = await getFvLabAnalytics(track);
+    const yearParam = searchParams.get('year');
+    const year: number | 'all' =
+      yearParam && yearParam !== 'all' && !isNaN(Number(yearParam))
+        ? Number(yearParam)
+        : 'all';
+    const data = await getFvLabAnalytics(track, year);
 
     if (!data) {
       return NextResponse.json({ error: 'Hipódromo no encontrado.' }, { status: 404 });
