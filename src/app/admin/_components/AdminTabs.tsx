@@ -1,10 +1,11 @@
 const TABS = [
-  { id: 'dashboard',    label: 'Dashboard',    icon: '📊' },
-  { id: 'carreras',     label: 'Carreras',     icon: '🏇' },
-  { id: 'pronosticos',  label: 'Pronósticos',  icon: '🎯' },
-  { id: 'usuarios',     label: 'Usuarios',     icon: '👤' },
-  { id: 'finanzas',     label: 'Finanzas',     icon: '💰' },
-  { id: 'config',       label: 'Config',       icon: '⚙️' },
+  { id: 'dashboard',    label: 'Dashboard',      icon: '📊' },
+  { id: 'carreras',     label: 'Carreras',       icon: '🏇' },
+  { id: 'pronosticos',  label: 'Pronósticos',    icon: '🎯' },
+  { id: 'laboratorio',  label: 'Laboratorio FV', icon: '🧪' },
+  { id: 'usuarios',     label: 'Usuarios',       icon: '👤' },
+  { id: 'finanzas',     label: 'Finanzas',       icon: '💰' },
+  { id: 'config',       label: 'Config',         icon: '⚙️' },
 ] as const;
 
 export type TabId = (typeof TABS)[number]['id'];

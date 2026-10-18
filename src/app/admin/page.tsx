@@ -6,6 +6,7 @@ import AdminTabs, { type TabId } from './_components/AdminTabs';
 import DashboardTab from './_components/DashboardTab';
 import CarrerasTab from './_components/CarrerasTab';
 import PronosticosTab from './_components/PronosticosTab';
+import LaboratorioFvTab from './_components/LaboratorioFvTab';
 import UsuariosTab from './_components/UsuariosTab';
 import FinanzasTab from './_components/FinanzasTab';
 import ConfigTab from './_components/ConfigTab';
@@ -49,7 +50,8 @@ export default function AdminPage() {
 
         {tab === 'dashboard' && <DashboardTab stats={stats} loading={statsLoading} />}
         {tab === 'carreras' && <CarrerasTab stats={stats} />}
-        {tab === 'pronosticos' && <PronosticosTab stats={stats} />}
+        {tab === 'pronosticos' && <PronosticosTab stats={stats} onOpenLab={() => setTab('laboratorio')} />}
+        {tab === 'laboratorio' && <LaboratorioFvTab />}
         {tab === 'usuarios' && <UsuariosTab stats={stats} />}
         {tab === 'finanzas' && <FinanzasTab stats={stats} loading={statsLoading} />}
         {tab === 'config' && <ConfigTab bcv={bcv} />}
