@@ -228,6 +228,55 @@ export interface FvDistanceRow {
   shareOfAllBatacazosPct: number;
 }
 
+export interface FvConditionRow {
+  label: string;
+  totalRaces: number;
+  posWins: {
+    pos1: number;
+    pos2: number;
+    pos3: number;
+    pos4: number;
+    pos5: number;
+    pos6To8: number;
+    noFv: number;
+  };
+  posPcts: {
+    pos1: number;
+    pos2: number;
+    pos3: number;
+    pos4: number;
+    pos5: number;
+    pos6To8: number;
+    noFv: number;
+  };
+}
+
+export function classifyRaceCondition(condRaw: string): { category: string; ageGroup: string } {
+  const c = (condRaw || '')
+    .toUpperCase()
+    .replace(/\(?\s*A\s+EXCEPCI[OÓ]N\s+DE\s+CARRERAS?\s+DE\s+RECLAMO[^)]*\)?/g, '');
+  let category = 'Handicap / Otros';
+  if (/CLASICO|CL[AÁ]SICO|COPA\b/.test(c)) category = 'Clásicos y Copas';
+  else if (/DE\s+RECLAMO|RECLAMO\s+LIBRE|VALOR\s+DE\s+RECLAMO/.test(c)) category = 'Reclamo';
+  else if (/PERDEDOR|NO\s+GANADOR|NO\s+HAYAN\s+GANADO|DEBUTANTES/.test(c)) category = 'Perdedores / Debutantes';
+  else if (/GANADORES?\s+DE\s+1(\s+O\s+2)?\b|GANADOR\s+DE\s+1\b/.test(c)) category = 'Ganadores de 1 (o 1-2)';
+  else if (/GANADORES?\s+DE\s+2(\s+O\s+3)?\b/.test(c)) category = 'Ganadores de 2 (o 2-3)';
+  else if (/GANADORES?\s+DE\s+(3\s+O\s+4|3\b|4\b)/.test(c)) category = 'Ganadores de 3 o 4';
+  else if (/GANADORES?\s+DE\s+(4\s+O\s+5|5|6|\d+\s+O\s+M[AÁ]S)/.test(c)) category = 'Ganadores de 5 o más';
+
+  let ageGroup = 'Sin edad especificada';
+  if (/6\s+Y\s+M[AÁ]S\s+A[ÑN]OS|6\s+A\s+\d+\s+A[ÑN]OS/.test(c)) ageGroup = '6 y más años';
+  else if (/5\s+Y\s+M[AÁ]S\s+A[ÑN]OS|5\s+A\s+\d+\s+A[ÑN]OS/.test(c)) ageGroup = '5 y más años';
+  else if (/4\s+Y\s+M[AÁ]S\s+A[ÑN]OS/.test(c)) ageGroup = '4 y más años';
+  else if (/3\s+Y\s+M[AÁ]S\s+A[ÑN]OS/.test(c)) ageGroup = '3 y más años';
+  else if (/4\s+A\s+5\s+A[ÑN]OS|3\s+Y\s+4\s+A[ÑN]OS|4\s+Y\s+5\s+A[ÑN]OS/.test(c)) ageGroup = '3 y 4 / 4 y 5 años';
+  else if (/\b4\s+A[ÑN]OS\b/.test(c)) ageGroup = '4 años exclusivos';
+  else if (/\b3\s+A[ÑN]OS\b/.test(c)) ageGroup = '3 años exclusivos';
+  else if (/\b2\s+A[ÑN]OS\b/.test(c)) ageGroup = '2 años (Potros)';
+
+  return { category, ageGroup };
+}
+
 export interface FvPrescriptionRule {
   id: string;
   actionBadge: string;
@@ -266,6 +315,8 @@ export interface FvRaceAuditItem {
   raceNumber: number;
   distance: number;
   fieldSize: number;
+  category?: string;
+  ageGroup?: string;
   forecasterCount: number;
   topHorses: {
     pos: number;
@@ -325,6 +376,8 @@ export interface FvValidaPick {
   raceNumber: number;
   distance: number;
   fieldSize: number;
+  category?: string;
+  ageGroup?: string;
   safetyRank: number; // 1..6 (1 = más confiable, 6 = más peligrosa)
   vacioType: 'bloque_compacto_3' | 'bloque_compacto_4' | 'fijo_o_candado' | 'vacio_explosion' | 'normal';
   vacioLabel: string;
@@ -345,6 +398,7 @@ export interface FvValidaPick {
   isAllBli?: boolean;
   isAllPre?: boolean;
   isAllCazador?: boolean;
+  allFvHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksEco: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksMed: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksBlindado: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
@@ -451,6 +505,8 @@ export interface FvLabAnalytics {
   thresholds: FvThresholdBreakdown[];
   byFieldSize: FvFieldSizeRow[];
   byDistance: FvDistanceRow[];
+  byCategory: FvConditionRow[];
+  byAgeGroup: FvConditionRow[];
   comboRules: FvComboRuleRow[];
   prescriptionRules: FvPrescriptionRule[];
   insights: FvPatternInsight[];
@@ -468,6 +524,8 @@ function buildMeetingValidasPicks(
     raceNumber: number;
     distance: number;
     fieldSize: number;
+    category?: string;
+    ageGroup?: string;
     topHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
     sumTop2Pct: number;
     sumTop3Pct: number;
@@ -663,97 +721,133 @@ function buildMeetingValidasPicks(
     missedIdxCaz = -1;
 
   // ── 5. CUADRO CAZADOR DE BATACAZOS Y MILLONES (Exclusivo Admin) ───────────
-  // Clasifica cada válida en Bloque Compacto vs. Vacío de 3º FV / Falso Fijo (48.5–55.5%)
+  // Clasifica cada válida combinando Bloque Compacto vs. Vacío en 3º/4º FV + Llamado/Edad
   const explosionAnalysis = validasRaces.map((r, idx) => {
     const rk = safetyRankByIdx.get(idx) ?? 3;
     const p1 = r.topHorses[0]?.fvPct ?? 0;
     const p3 = r.topHorses[2]?.fvPct ?? 0;
     const p4 = r.topHorses[3]?.fvPct ?? 0;
+    const p5 = r.topHorses[4]?.fvPct ?? 0;
+    const p6 = r.topHorses[5]?.fvPct ?? 0;
     const sumTop4 = Math.round((r.sumTop3Pct + p4) * 10) / 10;
+    const cat = r.category ?? '';
+    const age = r.ageGroup ?? '';
 
-    const isCompact3 = r.sumTop3Pct >= 91 && p3 >= 20;
-    const isCompact4 = !isCompact3 && sumTop4 >= 91 && p4 >= 15;
+    const isNobleLlamado =
+      cat === 'Reclamo' || cat === 'Ganadores de 1 (o 1-2)' || age === '3 y 4 / 4 y 5 años';
+    const isPerdedoresOr5Plus =
+      cat === 'Perdedores / Debutantes' || cat === 'Ganadores de 2 (o 2-3)' || age === '5 y más años';
+
+    // Compact Póker (4 co-favorites >= 18% or sumTop4 >= 92% with 5th dropping below 7%, e.g. V1 with Río Bravo 20.5%)
+    const isCompact4 = p4 >= 18 || (sumTop4 >= 91 && p4 >= 14.5 && p5 < 7.5);
+    const isCompact3 = !isCompact4 && r.sumTop3Pct >= 90 && p3 >= 19 && p4 < 11;
     const isFalsoFijoBand = p1 >= 48.5 && p1 <= 55.5 && (r.distance <= 1300 || r.fieldSize >= 9);
+    // Vacio / Cola Larga: either 3rd FV drops low (<= 14.5%) OR 5th/6th FV have strong live points (>= 5.5%) in a 10+ horse sprint / Perdedores
+    const hasLive5th6th = (p5 >= 5.5 || p6 >= 3.5) && (r.distance <= 1300 || isPerdedoresOr5Plus) && r.fieldSize >= 9;
     const isVacio3rd =
       !isCompact3 &&
       !isCompact4 &&
-      p3 <= 14.5 &&
-      100 - r.sumTop2Pct >= 24 &&
+      ((p3 <= 14.5 && 100 - r.sumTop2Pct >= 24) || hasLive5th6th) &&
       (r.distance <= 1300 || r.fieldSize >= 9);
 
     let vacioType: FvValidaPick['vacioType'] = 'normal';
-    let vacioLabel = 'Estructura Normal';
+    let vacioLabel = `${cat ? `${cat} · ` : ''}${age}`;
     let explosionScore = 0;
 
-    if (isCompact3) {
-      vacioType = 'bloque_compacto_3';
-      vacioLabel = `🔱 Bloque Compacto Top 3 (${r.sumTop3Pct}% FV)`;
-      explosionScore = -30;
+    if (rk === 0 && ((r.distance >= 1400 && p1 >= 47) || p1 >= 58 || (isNobleLlamado && p1 >= 45))) {
+      vacioType = 'fijo_o_candado';
+      vacioLabel = `📌 Fijo Noble (${p1}% FV · ${cat || `${r.distance}m`})`;
+      explosionScore = -35;
+    } else if (isNobleLlamado && r.distance >= 1400 && r.sumTop2Pct >= 70) {
+      vacioType = 'fijo_o_candado';
+      vacioLabel = `� Llamado Noble (${cat} · ${age} · 1º+2º=${r.sumTop2Pct}%)`;
+      explosionScore = -25;
     } else if (isCompact4) {
       vacioType = 'bloque_compacto_4';
-      vacioLabel = `🛡️ Póker Compacto Top 4 (${sumTop4}% FV)`;
+      vacioLabel = `🛡️ Póker Compacto (4º FV con ${p4}% · Top 4=${sumTop4}%)`;
       explosionScore = -20;
-    } else if (rk === 0 && ((r.distance >= 1400 && p1 >= 47) || p1 >= 58)) {
-      vacioType = 'fijo_o_candado';
-      vacioLabel = `📌 Fijo / Candado en ${r.distance}m (${p1}% FV)`;
+    } else if (isCompact3) {
+      vacioType = 'bloque_compacto_3';
+      vacioLabel = `� Trilogía Compacta (Top 3=${r.sumTop3Pct}% FV)`;
       explosionScore = -25;
     } else if (isVacio3rd || isFalsoFijoBand) {
       vacioType = 'vacio_explosion';
       vacioLabel = isFalsoFijoBand
-        ? `💣 Trampa Falso Fijo (${p1}% FV · ${r.distance}m · ${r.fieldSize} ej.)`
-        : `💣 Vacío en 3º FV (${p3}% · Cola dispersa ${(100 - r.sumTop2Pct).toFixed(1)}%)`;
+        ? `💣 Trampa Falso Fijo (${p1}% FV · ${cat || `${r.distance}m`})`
+        : p3 <= 14.5
+        ? `💣 Vacío en 3º FV (${p3}% · ${cat} · ${r.fieldSize} ej.)`
+        : `💣 Cola Larga 5º–6º FV (${p5}%/${p6}% · ${cat})`;
       explosionScore =
-        (isVacio3rd ? 30 : 0) +
-        (isFalsoFijoBand ? 25 : 0) +
-        (r.distance <= 1200 ? 15 : r.distance === 1300 ? 10 : 0) +
-        (r.fieldSize >= 10 ? 18 : r.fieldSize === 9 ? 10 : 0) +
-        (15 - p3);
-    } else if (r.sumTop2Pct >= 74 && r.distance >= 1400) {
-      vacioType = 'fijo_o_candado';
-      vacioLabel = `🔒 Candado Sólido (${r.sumTop2Pct}% FV en ${r.distance}m)`;
-      explosionScore = -15;
+        (isVacio3rd ? 28 : 0) +
+        (isFalsoFijoBand ? 24 : 0) +
+        (isPerdedoresOr5Plus ? 14 : 0) +
+        (r.distance <= 1200 ? 14 : r.distance === 1300 ? 8 : 0) +
+        (r.fieldSize >= 10 ? 16 : r.fieldSize === 9 ? 8 : 0) +
+        (p5 + p6);
     } else {
-      explosionScore = (r.distance <= 1300 ? 10 : 0) + (r.fieldSize >= 10 ? 12 : 0) + (45 - p1) * 0.5;
+      explosionScore =
+        (isPerdedoresOr5Plus ? 10 : 0) +
+        (r.distance <= 1300 ? 8 : 0) +
+        (r.fieldSize >= 10 ? 10 : 0) +
+        (p5 + p6);
     }
 
-    return { idx, vacioType, vacioLabel, explosionScore, sumTop4, p1, p3, p4 };
+    return { idx, vacioType, vacioLabel, explosionScore, sumTop4, p1, p3, p4, p5, p6 };
   });
 
   // Identify #1 and #2 highest explosion score races for the Cazador ticket
+  // Instead of multiplying by all 13/14 horses (0% FV), Cazador covers positions 5–6–7 of the FV (horses with real FV points)!
   const sortedByExplosion = [...explosionAnalysis].sort((a, b) => b.explosionScore - a.explosionScore);
   const primaryBombIdx = sortedByExplosion[0]?.idx ?? 5;
   const secondaryBombIdx =
     sortedByExplosion[1] && sortedByExplosion[1].explosionScore > 0 ? sortedByExplosion[1].idx : -1;
 
-  const isAllCazadorArr = validasRaces.map((_, idx) => idx === primaryBombIdx);
+  const isAllCazadorArr = validasRaces.map(() => false);
   const countsCazador = validasRaces.map((r, idx) => {
     const rk = safetyRankByIdx.get(idx) ?? 3;
     const exp = explosionAnalysis[idx];
+    const fvWithOption = r.topHorses.filter(h => h.fvPct >= 2.2).length;
     const fvLen = Math.max(r.topHorses.length, 4);
+
     if (idx === primaryBombIdx) {
-      return Math.max(r.fieldSize, fvLen, 6); // TODOS los inscritos
+      return Math.min(Math.max(fvWithOption, 6), 7, fvLen); // Posiciones 1º a 6º/7º del FV
     }
     if (idx === secondaryBombIdx) {
-      return Math.min(5, fvLen);
+      return Math.min(Math.max(fvWithOption, 5), 6, fvLen); // Posiciones 1º a 5º/6º del FV
     }
-    if (exp.vacioType === 'bloque_compacto_3') return 3;
-    if (exp.vacioType === 'bloque_compacto_4') return 4;
+    if (exp.vacioType === 'bloque_compacto_4') return Math.min(4, fvLen);
+    if (exp.vacioType === 'bloque_compacto_3') return Math.min(3, fvLen);
     if (rk === 0) return (r.distance >= 1400 && exp.p1 >= 47) || exp.p1 >= 58 ? 1 : 2;
     if (rk === 1 || exp.vacioType === 'fijo_o_candado') return 2;
-    return 3;
+    return exp.p4 >= 12 ? 4 : 3;
   });
 
-  while (prod(countsCazador) > 1440) {
+  while (prod(countsCazador) > 1350) {
     let trimmed = false;
-    // Trim non-bomb races that have 3 or 4 down by 1 (starting from safest rank)
+    // Trim non-bomb races that don't have a strong 4th favorite (p4 >= 18%)
     for (const s of sortedBySafety) {
-      if (s.idx !== primaryBombIdx && countsCazador[s.idx] > 2) {
+      const exp = explosionAnalysis[s.idx];
+      if (
+        s.idx !== primaryBombIdx &&
+        s.idx !== secondaryBombIdx &&
+        countsCazador[s.idx] > 2 &&
+        !(countsCazador[s.idx] === 4 && exp.p4 >= 18)
+      ) {
         countsCazador[s.idx]--;
         trimmed = true;
         break;
       }
     }
-    if (!trimmed) break;
+    if (trimmed) continue;
+    if (secondaryBombIdx >= 0 && countsCazador[secondaryBombIdx] > 5) {
+      countsCazador[secondaryBombIdx]--;
+      continue;
+    }
+    if (countsCazador[primaryBombIdx] > 6) {
+      countsCazador[primaryBombIdx]--;
+      continue;
+    }
+    break;
   }
 
   const validas: FvValidaPick[] = validasRaces.map((r, idx) => {
@@ -776,16 +870,16 @@ function buildMeetingValidasPicks(
     const badgePre =
       countPre === 1 ? '📌 LÍNEA (1)' : countPre === 2 ? '🔒 CANDADO (2)' : countPre === 3 ? '🔱 TRILOGÍA (3)' : countPre === 4 ? '👑 PREMIUM (4)' : `👑 COBERTURA FV (${countPre})`;
     const badgeCazador = isAllCazador
-      ? `🌟 TODOS LOS INSCRITOS (${countCazador})`
+      ? `🌟 TODOS (${countCazador})`
       : countCazador === 1
       ? '📌 LÍNEA CAZADORA (1)'
       : countCazador === 2
-      ? '🔒 CANDADO COMPACTO (2)'
+      ? '🔒 CANDADO NOBLE (2)'
       : countCazador === 3
       ? '🔱 BLOQUE TRILOGÍA (3)'
       : countCazador === 4
       ? '🛡️ PÓKER COMPACTO (4)'
-      : `💣 CAZA VACÍO (${countCazador})`;
+      : `💣 CAZA 5º–${countCazador}º FV (${countCazador})`;
 
     const reasonText =
       rk === 0
@@ -796,9 +890,10 @@ function buildMeetingValidasPicks(
         ? `Alerta de dividendo (1º FV ${p1}% · ${r.fieldSize} ej.): 5º/6º FV con opción estadística activa.`
         : `Suma Top 2: ${r.sumTop2Pct}% · Suma Top 3: ${r.sumTop3Pct}% FV.`;
 
-    const cazadorReason = isAllCazador
-      ? `${exp.vacioLabel} → Se juegan TODOS los ${countCazador} ejemplares (incluye 6º–8º FV y 0% FV).`
-      : `${exp.vacioLabel} → Se cierra en ${countCazador} ejemplar(es) del bloque superior.`;
+    const cazadorReason =
+      countCazador >= 5
+        ? `${exp.vacioLabel} → Se cubren los ${countCazador} ejemplares con opción en el FV (hasta el ${countCazador}º puesto FV, sin gastar en 0%).`
+        : `${exp.vacioLabel} → Se cierra en ${countCazador} ejemplar(es) del bloque superior.`;
 
     const picksEco = r.topHorses.slice(0, countEco);
     const picksMed = r.topHorses.slice(0, countMed);
@@ -836,6 +931,8 @@ function buildMeetingValidasPicks(
       raceNumber: r.raceNumber,
       distance: r.distance,
       fieldSize: r.fieldSize,
+      category: r.category,
+      ageGroup: r.ageGroup,
       safetyRank: rk + 1,
       vacioType: exp.vacioType,
       vacioLabel: exp.vacioLabel,
@@ -852,6 +949,7 @@ function buildMeetingValidasPicks(
       countPre,
       countCazador,
       isAllCazador,
+      allFvHorses: r.topHorses,
       picksEco,
       picksMed,
       picksBlindado,
@@ -986,6 +1084,8 @@ export async function getFvLabAnalytics(
       thresholds: [],
       byFieldSize: [],
       byDistance: [],
+      byCategory: [],
+      byAgeGroup: [],
       comboRules: [],
       prescriptionRules: [],
       insights: [],
@@ -996,7 +1096,7 @@ export async function getFvLabAnalytics(
   }
 
   const races = await Race.find({ meetingId: { $in: meetingIds }, hasResults: true })
-    .select('_id raceNumber distance meetingId payouts')
+    .select('_id raceNumber distance conditions meetingId payouts')
     .lean() as any[];
 
   if (!races.length) {
@@ -1012,6 +1112,8 @@ export async function getFvLabAnalytics(
       thresholds: [],
       byFieldSize: [],
       byDistance: [],
+      byCategory: [],
+      byAgeGroup: [],
       comboRules: [],
       prescriptionRules: [],
       insights: [],
@@ -1042,18 +1144,22 @@ export async function getFvLabAnalytics(
 
   const winnerByRace: Record<string, { dorsalNumber?: number; horseName: string }> = {};
   const fieldSizeByRace: Record<string, number> = {};
+  const activeEntriesByRace: Record<string, { dorsalNumber?: number; horseName: string }[]> = {};
 
   for (const e of allEntries) {
     const rid = e.raceId.toString();
     const isScratched = e.status === 'scratched' || e.result?.isScratched === true;
     const isInvalidated = e.result?.isInvalidated === true;
+    const hName = (e.horseId as any)?.name ?? '';
     if (!isScratched && !isInvalidated) {
       fieldSizeByRace[rid] = (fieldSizeByRace[rid] ?? 0) + 1;
+      if (!activeEntriesByRace[rid]) activeEntriesByRace[rid] = [];
+      activeEntriesByRace[rid].push({ dorsalNumber: e.dorsalNumber, horseName: hName });
     }
     if (e.result?.finishPosition === 1 && !isScratched && !isInvalidated) {
       winnerByRace[rid] = {
         dorsalNumber: e.dorsalNumber,
-        horseName: (e.horseId as any)?.name ?? '',
+        horseName: hName,
       };
     }
   }
@@ -1117,16 +1223,35 @@ export async function getFvLabAnalytics(
 
     const mId = race.meetingId.toString();
     const mInfo = meetingMap.get(mId) ?? { meetingNumber: 0, date: '', year: 2026 };
-    const topHorses = fv.slice(0, 7).map((h, idx) => ({
+    const fvRanked = fv.map((h, idx) => ({
       pos: idx + 1,
       dorsalNumber: h.dorsalNumber,
       horseName: h.horseName,
       fvPct: Math.round(h.factor * 1000) / 10,
     }));
+    // Append 0% FV active entries so the interactive builder can also pick non-FV horses (stud/yunta/corazonada)
+    const zeroFvEntries = (activeEntriesByRace[rid] ?? [])
+      .filter(
+        ae =>
+          !fvRanked.some(
+            f =>
+              horseKey(f.horseName) === horseKey(ae.horseName) ||
+              (ae.dorsalNumber != null && f.dorsalNumber === ae.dorsalNumber)
+          )
+      )
+      .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
+      .map(ae => ({
+        pos: 0,
+        dorsalNumber: ae.dorsalNumber,
+        horseName: ae.horseName,
+        fvPct: 0,
+      }));
+    const topHorses = [...fvRanked, ...zeroFvEntries];
 
-    const p1 = topHorses[0]?.fvPct ?? 0;
-    const p2 = topHorses[1]?.fvPct ?? 0;
-    const p3 = topHorses[2]?.fvPct ?? 0;
+    const p1 = fvRanked[0]?.fvPct ?? 0;
+    const p2 = fvRanked[1]?.fvPct ?? 0;
+    const p3 = fvRanked[2]?.fvPct ?? 0;
+    const { category, ageGroup } = classifyRaceCondition(race.conditions ?? '');
 
     racesAudit.push({
       raceId: rid,
@@ -1137,6 +1262,8 @@ export async function getFvLabAnalytics(
       raceNumber: race.raceNumber,
       distance: race.distance ?? 0,
       fieldSize: fieldSizeByRace[rid] ?? 0,
+      category,
+      ageGroup,
       forecasterCount: raceForecasts.length,
       topHorses,
       sumTop2Pct: Math.round((p1 + p2) * 10) / 10,
@@ -1301,6 +1428,50 @@ export async function getFvLabAnalytics(
       shareOfAllBatacazosPct: round1(posWins.batacazo, batacazos),
     };
   });
+
+  // ── 2C. Category (Llamado) & Age Group Matrices ───────────────────────────
+  function buildConditionRows(getKey: (r: FvRaceAuditItem) => string): FvConditionRow[] {
+    const map = new Map<string, FvRaceAuditItem[]>();
+    for (const r of racesAudit) {
+      const k = getKey(r);
+      const list = map.get(k) ?? [];
+      list.push(r);
+      map.set(k, list);
+    }
+    return [...map.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([label, list]) => {
+        const totalRaces = list.length;
+        const posWins = { pos1: 0, pos2: 0, pos3: 0, pos4: 0, pos5: 0, pos6To8: 0, noFv: 0 };
+        for (const r of list) {
+          const rk = r.winner.fullFvRank ?? r.winner.fvRank;
+          if (rk === 1) posWins.pos1++;
+          else if (rk === 2) posWins.pos2++;
+          else if (rk === 3) posWins.pos3++;
+          else if (rk === 4) posWins.pos4++;
+          else if (rk === 5) posWins.pos5++;
+          else if (rk !== null && rk >= 6) posWins.pos6To8++;
+          else posWins.noFv++;
+        }
+        return {
+          label,
+          totalRaces,
+          posWins,
+          posPcts: {
+            pos1: round1(posWins.pos1, totalRaces),
+            pos2: round1(posWins.pos2, totalRaces),
+            pos3: round1(posWins.pos3, totalRaces),
+            pos4: round1(posWins.pos4, totalRaces),
+            pos5: round1(posWins.pos5, totalRaces),
+            pos6To8: round1(posWins.pos6To8, totalRaces),
+            noFv: round1(posWins.noFv, totalRaces),
+          },
+        };
+      });
+  }
+
+  const byCategory = buildConditionRows(r => r.category ?? 'Handicap / Otros');
+  const byAgeGroup = buildConditionRows(r => r.ageGroup ?? 'Sin edad especificada');
 
   // ── 3. Combo Rules (Candados 1º+2º & Trilogías 1º+2º+3º) ──────────────────
   const comboDefs: {
@@ -1687,7 +1858,7 @@ export async function getFvLabAnalytics(
   for (const candMeeting of sortedAllMeetingsDesc.slice(0, 4)) {
     const mId = candMeeting._id.toString();
     const candRaces = (await Race.find({ meetingId: candMeeting._id })
-      .select('_id raceNumber distance hasResults')
+      .select('_id raceNumber distance conditions hasResults')
       .sort({ raceNumber: 1 })
       .lean()) as any[];
     if (candRaces.length < 6) continue;
@@ -1698,7 +1869,10 @@ export async function getFvLabAnalytics(
     const vIds = validasRacesDocs.map(r => r._id.toString());
     const [vForecasts, vEntries] = await Promise.all([
       Forecast.find({ raceId: { $in: vIds }, isPublished: true }).select('raceId marks').lean() as any,
-      Entry.find({ raceId: { $in: vIds } }).select('raceId status result').lean() as any,
+      Entry.find({ raceId: { $in: vIds } })
+        .populate('horseId', 'name')
+        .select('raceId dorsalNumber horseId status result')
+        .lean() as any,
     ]);
     const fcMap: Record<string, any[]> = {};
     for (const f of vForecasts) {
@@ -1707,10 +1881,13 @@ export async function getFvLabAnalytics(
       fcMap[rid].push(f);
     }
     const fsMap: Record<string, number> = {};
+    const aeMap: Record<string, { dorsalNumber?: number; horseName: string }[]> = {};
     for (const e of vEntries) {
       const rid = e.raceId.toString();
       if (e.status !== 'scratched' && !e.result?.isScratched && !e.result?.isInvalidated) {
         fsMap[rid] = (fsMap[rid] ?? 0) + 1;
+        if (!aeMap[rid]) aeMap[rid] = [];
+        aeMap[rid].push({ dorsalNumber: e.dorsalNumber, horseName: (e.horseId as any)?.name ?? '' });
       }
     }
     const validasInput = validasRacesDocs
@@ -1718,21 +1895,36 @@ export async function getFvLabAnalytics(
         const rid = r._id.toString();
         const fcs = fcMap[rid] ?? [];
         if (!fcs.length) return null;
-        const fv = calcFv(fcs).slice(0, 7);
+        const fv = calcFv(fcs);
         if (!fv.length) return null;
-        const topHorses = fv.map((h, i) => ({
+        const fvRanked = fv.map((h, i) => ({
           pos: i + 1,
           dorsalNumber: h.dorsalNumber,
           horseName: h.horseName,
           fvPct: Math.round(h.factor * 1000) / 10,
         }));
-        const p1 = topHorses[0]?.fvPct ?? 0;
-        const p2 = topHorses[1]?.fvPct ?? 0;
-        const p3 = topHorses[2]?.fvPct ?? 0;
+        const zeroFv = (aeMap[rid] ?? [])
+          .filter(
+            ae =>
+              !fvRanked.some(
+                f =>
+                  horseKey(f.horseName) === horseKey(ae.horseName) ||
+                  (ae.dorsalNumber != null && f.dorsalNumber === ae.dorsalNumber)
+              )
+          )
+          .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
+          .map(ae => ({ pos: 0, dorsalNumber: ae.dorsalNumber, horseName: ae.horseName, fvPct: 0 }));
+        const topHorses = [...fvRanked, ...zeroFv];
+        const p1 = fvRanked[0]?.fvPct ?? 0;
+        const p2 = fvRanked[1]?.fvPct ?? 0;
+        const p3 = fvRanked[2]?.fvPct ?? 0;
+        const { category, ageGroup } = classifyRaceCondition(r.conditions ?? '');
         return {
           raceNumber: r.raceNumber,
           distance: r.distance ?? 0,
           fieldSize: fsMap[rid] ?? 8,
+          category,
+          ageGroup,
           topHorses,
           sumTop2Pct: Math.round((p1 + p2) * 10) / 10,
           sumTop3Pct: Math.round((p1 + p2 + p3) * 10) / 10,
@@ -1798,6 +1990,8 @@ export async function getFvLabAnalytics(
     thresholds,
     byFieldSize,
     byDistance,
+    byCategory,
+    byAgeGroup,
     comboRules,
     prescriptionRules,
     insights,

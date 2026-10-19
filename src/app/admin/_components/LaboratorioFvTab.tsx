@@ -22,6 +22,10 @@ export default function LaboratorioFvTab() {
   const [auditFilter, setAuditFilter] = useState<AuditFilter>('all');
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
   const [distanceFilter, setDistanceFilter] = useState<number | 'all'>('all');
+  const [cazadorMeetingId, setCazadorMeetingId] = useState<string>('upcoming');
+  const [cazadorVariant, setCazadorVariant] = useState<'cazador_fv' | 'top5_abierto' | 'bomba_todos'>('cazador_fv');
+  // Map key: `${validaNumber}` -> array of horse keys (`#${dorsal}_${horseName}`)
+  const [customSelectedByValida, setCustomSelectedByValida] = useState<Record<number, string[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +42,133 @@ export default function LaboratorioFvTab() {
       cancelled = true;
     };
   }, [track, year]);
+
+  const activeCazadorMeeting = useMemo(() => {
+    if (!data) return null;
+    if (cazadorMeetingId !== 'upcoming') {
+      const found = data.fiveAndSixBacktest?.meetings.find(m => m.meetingId === cazadorMeetingId);
+      if (found) return found;
+    }
+    if (data.upcomingFiveAndSix) {
+      // Check if this upcoming meeting is already in backtest meetings (has payouts)
+      const inBt = data.fiveAndSixBacktest?.meetings.find(
+        m => m.meetingId === data.upcomingFiveAndSix?.meetingId
+      );
+      if (inBt) return inBt;
+      return {
+        meetingId: data.upcomingFiveAndSix.meetingId,
+        meetingNumber: data.upcomingFiveAndSix.meetingNumber,
+        date: data.upcomingFiveAndSix.date,
+        year: 2026,
+        factorBs: 35,
+        payout6Bs: 0,
+        payout5Bs: 0,
+        hasSuperFijo: data.upcomingFiveAndSix.hasSuperFijo,
+        combinationsEco: data.upcomingFiveAndSix.combinationsEco,
+        combinationsMed: data.upcomingFiveAndSix.combinationsMed,
+        combinationsBlindado: data.upcomingFiveAndSix.combinationsBlindado,
+        combinationsPremium: data.upcomingFiveAndSix.combinationsPremium,
+        combinationsCazador: data.upcomingFiveAndSix.combinationsCazador,
+        costBsEco: data.upcomingFiveAndSix.costBsEco,
+        costBsMed: data.upcomingFiveAndSix.costBsMed,
+        costBsBlindado: data.upcomingFiveAndSix.costBsBlindado,
+        costBsPremium: data.upcomingFiveAndSix.costBsPremium,
+        costBsCazador: data.upcomingFiveAndSix.costBsCazador,
+        prizeBsEco: 0,
+        prizeBsMed: 0,
+        prizeBsBlindado: 0,
+        prizeBsPremium: 0,
+        prizeBsCazador: 0,
+        hitsEco: 0,
+        hitsMed: 0,
+        hitsBlindado: 0,
+        hitsPremium: 0,
+        hitsCazador: 0,
+        validas: data.upcomingFiveAndSix.validas,
+      };
+    }
+    return data.fiveAndSixBacktest?.meetings[0] ?? null;
+  }, [data, cazadorMeetingId]);
+
+  const horseIdKey = (h: { dorsalNumber?: number; horseName: string }) =>
+    `${h.dorsalNumber ?? '?'}_${h.horseName.toUpperCase().trim()}`;
+
+  // Apply preset variant whenever meeting or variant changes
+  useEffect(() => {
+    if (!activeCazadorMeeting) return;
+    const nextMap: Record<number, string[]> = {};
+    const validas = activeCazadorMeeting.validas;
+
+    // Find bomb race index for 'bomba_todos'
+    let bombValidaNum = validas[validas.length - 1]?.validaNumber ?? 6;
+    for (const v of validas) {
+      if (v.vacioType === 'vacio_explosion' || v.countCazador >= 6) {
+        bombValidaNum = v.validaNumber;
+      }
+    }
+
+    for (const v of validas) {
+      const allH = v.allFvHorses?.length ? v.allFvHorses : v.picksPremium;
+      const fvOnly = allH.filter(h => h.pos > 0);
+      if (cazadorVariant === 'cazador_fv') {
+        nextMap[v.validaNumber] = v.picksCazador.map(horseIdKey);
+      } else if (cazadorVariant === 'top5_abierto') {
+        // Variante B: Top 5 FV Abierto (para jornadas donde los 6 ganadores están en el Top 4/5 FV sin súper fijo)
+        const p1 = fvOnly[0]?.fvPct ?? 0;
+        const p4 = fvOnly[3]?.fvPct ?? 0;
+        const p5 = fvOnly[4]?.fvPct ?? 0;
+        const take =
+          v.safetyRank === 1 && p1 >= 54
+            ? 1
+            : v.safetyRank === 1
+            ? 2
+            : p5 >= 6.5
+            ? 5
+            : p4 >= 10
+            ? 4
+            : 3;
+        nextMap[v.validaNumber] = fvOnly.slice(0, Math.min(take, fvOnly.length)).map(horseIdKey);
+      } else {
+        // Variante C: Bomba con TODOS (incluyendo 0% FV / Corazonadas) en la válida trampa + candados/trilogías
+        if (v.validaNumber === bombValidaNum) {
+          nextMap[v.validaNumber] = allH.map(horseIdKey);
+        } else {
+          const take = v.safetyRank === 1 ? 1 : v.safetyRank <= 3 ? 2 : 3;
+          nextMap[v.validaNumber] = fvOnly.slice(0, Math.min(take, fvOnly.length)).map(horseIdKey);
+        }
+      }
+    }
+    setCustomSelectedByValida(nextMap);
+  }, [activeCazadorMeeting, cazadorVariant]);
+
+  const toggleCustomHorse = (validaNumber: number, key: string) => {
+    setCustomSelectedByValida(prev => {
+      const current = prev[validaNumber] ?? [];
+      const exists = current.includes(key);
+      if (exists && current.length <= 1) return prev; // keep at least 1 horse per valida
+      return {
+        ...prev,
+        [validaNumber]: exists ? current.filter(k => k !== key) : [...current, key],
+      };
+    });
+  };
+
+  const setValidaQuickPreset = (
+    v: NonNullable<typeof activeCazadorMeeting>['validas'][number],
+    mode: 'top2' | 'top3' | 'top5' | 'all_fv' | 'all_lote'
+  ) => {
+    const allH = v.allFvHorses?.length ? v.allFvHorses : v.picksPremium;
+    const fvOnly = allH.filter(h => h.pos > 0);
+    let picked = allH;
+    if (mode === 'top2') picked = fvOnly.slice(0, 2);
+    else if (mode === 'top3') picked = fvOnly.slice(0, 3);
+    else if (mode === 'top5') picked = fvOnly.slice(0, 5);
+    else if (mode === 'all_fv') picked = fvOnly;
+    setCustomSelectedByValida(prev => ({
+      ...prev,
+      [v.validaNumber]: picked.map(horseIdKey),
+    }));
+  };
 
   const filteredThresholds = useMemo(
     () => (data?.thresholds ?? []).filter(t => t.mode === thresholdMode),
@@ -477,6 +608,125 @@ export default function LaboratorioFvTab() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* 2C y 2D. MATRICES POR CATEGORÍA / LLAMADO DEL LOTE Y POR EDAD */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* 2C. Por Categoría / Llamado */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-bold text-white">
+                  2C. Efectividad y Batacazos por Categoría / Llamado del Lote
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Compara Perdedores, Reclamo, Ganadores de 1, 2, 3–4, 5+ y Clásicos (separa 6º–8º FV vs. 0% Sin FV).
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-gray-800 text-[10px] uppercase">
+                      <th className="pb-2 pr-2">Llamado / Lote</th>
+                      <th className="pb-2 px-1.5 text-center">Carr.</th>
+                      <th className="pb-2 px-1.5 text-center text-green-400">1º FV</th>
+                      <th className="pb-2 px-1.5 text-center text-sky-400">2º FV</th>
+                      <th className="pb-2 px-1.5 text-center text-indigo-400">3º FV</th>
+                      <th className="pb-2 px-1.5 text-center text-purple-400">4º–5º</th>
+                      <th className="pb-2 px-1.5 text-center text-amber-400">6º–8º FV</th>
+                      <th className="pb-2 pl-1.5 text-center text-red-400">0% Sin FV</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.byCategory ?? []).map(row => (
+                      <tr key={row.label} className="border-b border-gray-800/50 last:border-0">
+                        <td className="py-2 pr-2 font-bold text-white whitespace-nowrap">{row.label}</td>
+                        <td className="py-2 px-1.5 text-center text-gray-400 font-semibold">{row.totalRaces}</td>
+                        <td className="py-2 px-1.5 text-center text-gray-200">
+                          {row.posWins.pos1} <span className="text-[10px] text-gray-500">({row.posPcts.pos1}%)</span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center text-gray-200">
+                          {row.posWins.pos2} <span className="text-[10px] text-gray-500">({row.posPcts.pos2}%)</span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center text-gray-200">
+                          {row.posWins.pos3} <span className="text-[10px] text-gray-500">({row.posPcts.pos3}%)</span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center text-purple-300">
+                          {row.posWins.pos4 + row.posWins.pos5}{' '}
+                          <span className="text-[10px] text-gray-500">
+                            ({(row.posPcts.pos4 + row.posPcts.pos5).toFixed(1)}%)
+                          </span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center font-semibold text-amber-300">
+                          {row.posWins.pos6To8}{' '}
+                          <span className="text-[10px] text-amber-400/70">({row.posPcts.pos6To8}%)</span>
+                        </td>
+                        <td className="py-2 pl-1.5 text-center font-bold text-red-400">
+                          {row.posWins.noFv} <span className="text-[10px] text-red-400/70">({row.posPcts.noFv}%)</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 2D. Por Edad del Lote */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-bold text-white">
+                  2D. Efectividad y Batacazos por Edad del Lote (2a, 3a, 3–4a, 4a, 4+, 5+, 6+)
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Muestra cómo cambia la nobleza del favorito según la edad o cruce de edades del llamado.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-gray-800 text-[10px] uppercase">
+                      <th className="pb-2 pr-2">Edad del Lote</th>
+                      <th className="pb-2 px-1.5 text-center">Carr.</th>
+                      <th className="pb-2 px-1.5 text-center text-green-400">1º FV</th>
+                      <th className="pb-2 px-1.5 text-center text-sky-400">2º FV</th>
+                      <th className="pb-2 px-1.5 text-center text-indigo-400">3º FV</th>
+                      <th className="pb-2 px-1.5 text-center text-purple-400">4º–5º</th>
+                      <th className="pb-2 px-1.5 text-center text-amber-400">6º–8º FV</th>
+                      <th className="pb-2 pl-1.5 text-center text-red-400">0% Sin FV</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.byAgeGroup ?? []).map(row => (
+                      <tr key={row.label} className="border-b border-gray-800/50 last:border-0">
+                        <td className="py-2 pr-2 font-bold text-white whitespace-nowrap">{row.label}</td>
+                        <td className="py-2 px-1.5 text-center text-gray-400 font-semibold">{row.totalRaces}</td>
+                        <td className="py-2 px-1.5 text-center text-gray-200">
+                          {row.posWins.pos1} <span className="text-[10px] text-gray-500">({row.posPcts.pos1}%)</span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center text-gray-200">
+                          {row.posWins.pos2} <span className="text-[10px] text-gray-500">({row.posPcts.pos2}%)</span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center text-gray-200">
+                          {row.posWins.pos3} <span className="text-[10px] text-gray-500">({row.posPcts.pos3}%)</span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center text-purple-300">
+                          {row.posWins.pos4 + row.posWins.pos5}{' '}
+                          <span className="text-[10px] text-gray-500">
+                            ({(row.posPcts.pos4 + row.posPcts.pos5).toFixed(1)}%)
+                          </span>
+                        </td>
+                        <td className="py-2 px-1.5 text-center font-semibold text-amber-300">
+                          {row.posWins.pos6To8}{' '}
+                          <span className="text-[10px] text-amber-400/70">({row.posPcts.pos6To8}%)</span>
+                        </td>
+                        <td className="py-2 pl-1.5 text-center font-bold text-red-400">
+                          {row.posWins.noFv} <span className="text-[10px] text-red-400/70">({row.posPcts.noFv}%)</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -926,196 +1176,301 @@ export default function LaboratorioFvTab() {
             </div>
           )}
 
-          {/* 3E. SECCIÓN PRIVADA ADMIN: CUADRO CAZADOR DE BATACAZOS Y DIVIDENDOS MILLONARIOS */}
-          {data.upcomingFiveAndSix && data.fiveAndSixBacktest && (
-            <div className="bg-gradient-to-br from-gray-900 via-[#1a0f1e] to-gray-900 border-2 border-rose-600/50 rounded-2xl p-4 space-y-4 shadow-[0_0_35px_rgba(225,29,72,0.12)]">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-rose-900/40 pb-3">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
-                      <span>💣</span>
-                      <span>3E. Laboratorio Privado — Cuadro Cazador de Batacazos y Millones</span>
-                    </h3>
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-600">
-                      🔒 Uso Exclusivo Admin
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Distingue entre <strong>Bloques Compactos (Top 3/4 ≥ 91% FV)</strong> y <strong>Carreras con Vacío en 3º FV (≤ 14.5%) o Trampa Falso Fijo (48.5%–55.5%)</strong> para meter <strong>TODOS los inscritos</strong> donde explota el dividendo millonario.
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs font-extrabold px-3 py-1.5 rounded-xl bg-rose-600 text-white shadow">
-                    Reunión {data.upcomingFiveAndSix.meetingNumber}: {data.upcomingFiveAndSix.combinationsCazador} comb. · Bs. {data.upcomingFiveAndSix.costBsCazador.toLocaleString('es-VE')}
-                  </span>
-                </div>
-              </div>
+          {/* 3E. SECCIÓN PRIVADA ADMIN: ARMADOR INTERACTIVO DE VARIANTES Y CAZA-BATACAZOS */}
+          {activeCazadorMeeting && data.fiveAndSixBacktest && (() => {
+            const countsCustom = activeCazadorMeeting.validas.map(
+              v => (customSelectedByValida[v.validaNumber] ?? []).length || 1
+            );
+            const combCustom = countsCustom.reduce((a, b) => a * b, 1);
+            const factorCustom = activeCazadorMeeting.factorBs || 35;
+            const costCustomBs = combCustom * factorCustom;
 
-              {/* Diagnóstico de las 6 Válidas de la Reunión Activa para el Cazador */}
-              <div>
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-rose-300 mb-2.5">
-                  🎯 Tu Cuadro Cazador Personal — Reunión {data.upcomingFiveAndSix.meetingNumber} ({data.upcomingFiveAndSix.date})
-                </h4>
+            let customHits = 0;
+            let missedIdx = -1;
+            let hasResults = false;
+            const warnings: string[] = [];
+
+            activeCazadorMeeting.validas.forEach((v, idx) => {
+              const selectedKeys = customSelectedByValida[v.validaNumber] ?? [];
+              const allH = v.allFvHorses?.length ? v.allFvHorses : v.picksPremium;
+              for (const h of allH) {
+                if (h.pos >= 1 && h.pos <= 4 && h.fvPct >= 18 && !selectedKeys.includes(horseIdKey(h))) {
+                  warnings.push(
+                    `Válida ${v.validaNumber}: Dejaste fuera al ${h.pos}º FV (#${h.dorsalNumber} ${h.horseName} con ${h.fvPct}% FV).`
+                  );
+                }
+              }
+              if (v.winner) {
+                hasResults = true;
+                const wKey = horseIdKey(v.winner);
+                const hit = selectedKeys.some(
+                  k =>
+                    k === wKey ||
+                    (v.winner?.dorsalNumber != null && k.startsWith(`${v.winner.dorsalNumber}_`))
+                );
+                if (hit) customHits++;
+                else missedIdx = idx;
+              }
+            });
+
+            let customPrizeBs = 0;
+            if (hasResults && activeCazadorMeeting.payout6Bs > 0) {
+              if (customHits === 6) {
+                const mult5 = countsCustom.reduce((s, c) => s + (c - 1), 0);
+                customPrizeBs = Math.round(
+                  activeCazadorMeeting.payout6Bs + mult5 * activeCazadorMeeting.payout5Bs
+                );
+              } else if (customHits === 5 && missedIdx >= 0) {
+                customPrizeBs = Math.round(countsCustom[missedIdx] * activeCazadorMeeting.payout5Bs);
+              }
+            }
+
+            return (
+              <div className="bg-gradient-to-br from-gray-900 via-[#1a0f1e] to-gray-900 border-2 border-rose-600/50 rounded-2xl p-4 space-y-4 shadow-[0_0_35px_rgba(225,29,72,0.12)]">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-rose-900/40 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
+                        <span>💣</span>
+                        <span>3E. Laboratorio Privado — Armador de Variantes y Caza-Batacazos (1º–8º FV + 0% Stud/Yunta)</span>
+                      </h3>
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-600">
+                        🔒 Uso Exclusivo Admin
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Alterna entre las <strong>3 Variantes de Dividendos Grandes</strong> o toca cualquier ejemplar inscrito (incluyendo los de <strong>0% Sin FV por Stud, Yunta o Corazonada</strong>) para armar y probar tu cuadro en vivo.
+                    </p>
+                  </div>
+
+                  {/* Selector de Reunión a Simular */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={cazadorMeetingId}
+                      onChange={e => setCazadorMeetingId(e.target.value)}
+                      className="bg-gray-950 border border-rose-700/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white"
+                    >
+                      <option value="upcoming">
+                        Reunión Activa / Más Reciente (R{data.upcomingFiveAndSix?.meetingNumber ?? ''})
+                      </option>
+                      {data.fiveAndSixBacktest.meetings.map(m => (
+                        <option key={m.meetingId} value={m.meetingId}>
+                          Reunión {m.meetingNumber} · {m.date}{' '}
+                          {m.payout6Bs > 0 ? `(Div. 6: Bs. ${Math.round(m.payout6Bs).toLocaleString('es-VE')})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Botones de las 3 Variantes + Resumen en Vivo del Cuadro Armado */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gray-950/90 border border-rose-900/50 rounded-xl p-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCazadorVariant('cazador_fv')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${
+                        cazadorVariant === 'cazador_fv'
+                          ? 'bg-rose-600 text-white border-rose-500'
+                          : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
+                      }`}
+                    >
+                      🎯 Variante 1: Caza 5º–7º FV (Por Lote/Vacío)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCazadorVariant('top5_abierto')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${
+                        cazadorVariant === 'top5_abierto'
+                          ? 'bg-amber-500 text-black border-amber-400'
+                          : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
+                      }`}
+                    >
+                      🔥 Variante 2: Top 5 FV Abierto (Tipo R41 / R34 / R24)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCazadorVariant('bomba_todos')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${
+                        cazadorVariant === 'bomba_todos'
+                          ? 'bg-purple-600 text-white border-purple-400'
+                          : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
+                      }`}
+                    >
+                      🌟 Variante 3: 1 Carrera con TODOS (Incluye 0% FV)
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-white">
+                      {countsCustom.join(' × ')} = <span className="text-yellow-400">{combCustom} comb.</span> ·{' '}
+                      <span className="text-green-400">Bs. {costCustomBs.toLocaleString('es-VE')}</span>
+                    </span>
+                    {hasResults && (
+                      <span
+                        className={`text-xs font-black px-3 py-1.5 rounded-lg border ${
+                          customHits === 6
+                            ? 'bg-green-950 text-green-300 border-green-600'
+                            : customHits === 5
+                            ? 'bg-yellow-950 text-yellow-300 border-yellow-600'
+                            : 'bg-gray-900 text-gray-400 border-gray-700'
+                        }`}
+                      >
+                        Resultado Tu Selección: {customHits}/6{' '}
+                        {customPrizeBs > 0 ? `→ Cobró Bs. ${customPrizeBs.toLocaleString('es-VE')}` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {warnings.length > 0 && (
+                  <div className="bg-amber-950/30 border border-amber-700/50 rounded-xl px-3.5 py-2 text-xs text-amber-200 space-y-0.5">
+                    {warnings.map((w, i) => (
+                      <div key={i}>⚠️ {w}</div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Las 6 Válidas Interactivas con TODOS los inscritos (1º-8º FV + 0% Sin FV) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {data.upcomingFiveAndSix.validas.map(v => {
-                    const isBomb = v.isAllCazador || v.vacioType === 'vacio_explosion';
+                  {activeCazadorMeeting.validas.map(v => {
+                    const selectedKeys = customSelectedByValida[v.validaNumber] ?? [];
+                    const allH = v.allFvHorses?.length ? v.allFvHorses : v.picksPremium;
+                    const winnerKey = v.winner ? horseIdKey(v.winner) : null;
+                    const validaHit =
+                      v.winner &&
+                      selectedKeys.some(
+                        k =>
+                          k === winnerKey ||
+                          (v.winner?.dorsalNumber != null && k.startsWith(`${v.winner.dorsalNumber}_`))
+                      );
+
                     return (
                       <div
                         key={v.validaNumber}
-                        className={`rounded-xl p-3 space-y-2 border ${
-                          v.isAllCazador
-                            ? 'bg-rose-950/30 border-rose-500/70'
-                            : isBomb
-                            ? 'bg-amber-950/20 border-amber-600/50'
-                            : 'bg-gray-950/90 border-gray-800'
-                        }`}
+                        className="rounded-xl p-3 space-y-2 border bg-gray-950/90 border-gray-800"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-extrabold text-white">
                             {v.validaNumber}ª Válida · C{v.raceNumber} ({v.distance}m · {v.fieldSize} ej.)
                           </span>
-                          {v.hitCazador !== undefined && (
+                          <span className="text-[11px] font-black px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700/60">
+                            {selectedKeys.length} sel.
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
+                          <span className="text-[10px] font-bold text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded px-2 py-0.5">
+                            {v.category ?? 'Lote'} · {v.ageGroup ?? ''}
+                          </span>
+                          {v.winner && (
                             <span
                               className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
-                                v.hitCazador
+                                validaHit
                                   ? 'bg-green-950 text-green-400 border border-green-700/50'
                                   : 'bg-red-950 text-red-400 border border-red-700/50'
                               }`}
                             >
-                              {v.hitCazador ? '✅ ACERTADA' : '❌ FALLÓ'}
+                              {validaHit ? '✅ PEGÓ' : '❌ FALLÓ'} (#{v.winner.dorsalNumber}{' '}
+                              {v.winner.fullFvRank ? `${v.winner.fullFvRank}º FV` : '0% Sin FV'})
                             </span>
                           )}
                         </div>
 
-                        <div className="text-[10px] font-bold text-rose-200 bg-rose-950/50 border border-rose-800/50 rounded px-2 py-1">
-                          {v.badgeCazador}
+                        {/* Botones rápidos por válida */}
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setValidaQuickPreset(v, 'top2')}
+                            className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700"
+                          >
+                            Candado (2)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setValidaQuickPreset(v, 'top3')}
+                            className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700"
+                          >
+                            Top 3
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setValidaQuickPreset(v, 'top5')}
+                            className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-yellow-300 border border-gray-700"
+                          >
+                            Top 5 FV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setValidaQuickPreset(v, 'all_fv')}
+                            className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-rose-300 border border-gray-700"
+                          >
+                            Todos con FV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setValidaQuickPreset(v, 'all_lote')}
+                            className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-purple-300 border border-gray-700"
+                          >
+                            TODOS ({allH.length})
+                          </button>
                         </div>
 
-                        <p className="text-[11px] text-gray-300 leading-snug">{v.cazadorReason}</p>
-
-                        {v.isAllCazador ? (
-                          <div className="text-xs font-extrabold text-rose-200 bg-rose-900/40 border border-rose-500/60 rounded-lg px-2.5 py-2 text-center">
-                            🌟 TODOS LOS {v.fieldSize} EJEMPLARES (Atrapa 6º–8º FV y 0% FV)
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {v.picksCazador.map(p => (
-                              <div
-                                key={p.pos}
-                                className="flex items-center justify-between text-xs bg-gray-900/90 rounded-lg px-2.5 py-1"
+                        {/* Lista clicable de TODOS los ejemplares inscritos (con FV y 0% Sin FV) */}
+                        <div className="space-y-1 max-h-56 overflow-y-auto pr-0.5">
+                          {allH.map(h => {
+                            const hKey = horseIdKey(h);
+                            const isSelected = selectedKeys.includes(hKey);
+                            const isWinner =
+                              v.winner &&
+                              (hKey === winnerKey ||
+                                (v.winner.dorsalNumber != null && h.dorsalNumber === v.winner.dorsalNumber));
+                            return (
+                              <button
+                                key={hKey}
+                                type="button"
+                                onClick={() => toggleCustomHorse(v.validaNumber, hKey)}
+                                className={`w-full flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5 border text-left transition-all ${
+                                  isSelected
+                                    ? 'bg-rose-950/60 border-rose-500 text-white'
+                                    : 'bg-gray-900/50 border-gray-800/80 text-gray-500 hover:text-gray-300'
+                                }`}
                               >
-                                <span className="font-semibold text-white truncate">
-                                  #{p.dorsalNumber ?? '?'} {p.horseName}
+                                <span className="font-semibold truncate flex items-center gap-1.5">
+                                  <span
+                                    className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black ${
+                                      isSelected ? 'bg-rose-500 text-white' : 'bg-gray-800 text-gray-500'
+                                    }`}
+                                  >
+                                    {isSelected ? '✓' : ''}
+                                  </span>
+                                  <span>
+                                    #{h.dorsalNumber ?? '?'} {h.horseName}
+                                  </span>
+                                  {isWinner && <span className="text-yellow-400 font-black">🏆</span>}
                                 </span>
-                                <span className="text-[11px] font-bold text-yellow-300 shrink-0 ml-2">
-                                  {p.pos}º FV ({p.fvPct}%)
+                                <span
+                                  className={`text-[10px] font-bold shrink-0 ml-2 ${
+                                    h.pos === 0
+                                      ? 'text-purple-400'
+                                      : h.pos <= 3
+                                      ? 'text-yellow-300'
+                                      : 'text-amber-300'
+                                  }`}
+                                >
+                                  {h.pos > 0 ? `${h.pos}º FV (${h.fvPct}%)` : '⚡ 0% (Stud/Yunta)'}
                                 </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
-
-              {/* KPIs Anuales del Cazador + Tabla de Jornadas Millonarias */}
-              {data.fiveAndSixBacktest.cazador && (
-                <div className="space-y-3 pt-2 border-t border-rose-900/40">
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <KpiCard
-                      label="Cazador: Cuadros con 6"
-                      value={`${data.fiveAndSixBacktest.cazador.hits6} de ${data.fiveAndSixBacktest.totalMeetings}`}
-                      sub={`${data.fiveAndSixBacktest.cazador.pct6}% reuniones (+${data.fiveAndSixBacktest.cazador.hits5} con 5)`}
-                      color="#fb7185"
-                    />
-                    <KpiCard
-                      label="Comb. Promedio Cazador"
-                      value={`${data.fiveAndSixBacktest.cazador.avgCombinations} comb.`}
-                      sub="1 carrera con TODOS + bloques compactos"
-                      color="white"
-                    />
-                    <KpiCard
-                      label="Total Cobrado por Cazador"
-                      value={`Bs. ${data.fiveAndSixBacktest.cazador.totalWonBs.toLocaleString('es-VE')}`}
-                      sub={`Invertido: Bs. ${data.fiveAndSixBacktest.cazador.totalCostBs.toLocaleString('es-VE')}`}
-                      color="#22c55e"
-                    />
-                    <KpiCard
-                      label="Ganancia Neta Cazador"
-                      value={`Bs. ${data.fiveAndSixBacktest.cazador.netProfitBs.toLocaleString('es-VE')}`}
-                      sub="Un solo dividendo millonario paga todo el año"
-                      color={GOLD}
-                    />
-                  </div>
-
-                  {/* Tabla filtrada de las Jornadas Millonarias (> Bs. 500.000) */}
-                  <div className="bg-gray-950/90 border border-gray-800 rounded-xl p-3 space-y-2">
-                    <h5 className="text-xs font-bold text-rose-300">
-                      💰 Desempeño del Cuadro Cazador en las Jornadas de Mayor Dividendo (&gt; Bs. 500.000 con 6)
-                    </h5>
-                    <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                      <table className="w-full text-xs text-left">
-                        <thead className="text-[11px] text-gray-500 uppercase border-b border-gray-800">
-                          <tr>
-                            <th className="py-1.5 pr-2">Reunión</th>
-                            <th className="py-1.5 px-2 text-right">Dividendo 6 Ac.</th>
-                            <th className="py-1.5 px-2">Puestos FV Ganadores (V1 a V6)</th>
-                            <th className="py-1.5 px-2 text-center">Comb. Cazador</th>
-                            <th className="py-1.5 px-2 text-center">Aciertos Cazador</th>
-                            <th className="py-1.5 pl-2 text-right">Cobrado Cazador</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.fiveAndSixBacktest.meetings
-                            .filter(m => m.payout6Bs >= 500000)
-                            .map(m => (
-                              <tr key={`${m.meetingId}-caz`} className="border-b border-gray-800/40">
-                                <td className="py-2 pr-2 font-bold text-white whitespace-nowrap">
-                                  R{m.meetingNumber} <span className="text-gray-500 font-normal">· {m.date}</span>
-                                </td>
-                                <td className="py-2 px-2 text-right font-extrabold text-yellow-400 whitespace-nowrap">
-                                  Bs. {Math.round(m.payout6Bs).toLocaleString('es-VE')}
-                                </td>
-                                <td className="py-2 px-2 text-[11px] text-gray-300">
-                                  {m.validas
-                                    .map(v =>
-                                      v.winner?.fullFvRank
-                                        ? `${v.winner.fullFvRank}º(${v.winner.fvPct}%)`
-                                        : '🔥0%_NO_FV'
-                                    )
-                                    .join(' · ')}
-                                </td>
-                                <td className="py-2 px-2 text-center text-gray-300">{m.combinationsCazador}c</td>
-                                <td className="py-2 px-2 text-center">
-                                  <span
-                                    className={`px-2 py-0.5 rounded font-extrabold ${
-                                      m.hitsCazador === 6
-                                        ? 'bg-rose-950 text-rose-200 border border-rose-500'
-                                        : m.hitsCazador === 5
-                                        ? 'bg-yellow-950/80 text-yellow-300 border border-yellow-700/50'
-                                        : 'bg-gray-800 text-gray-400'
-                                    }`}
-                                  >
-                                    {m.hitsCazador}/6 {m.hitsCazador === 6 ? '💣🏆' : m.hitsCazador === 5 ? '🎯' : ''}
-                                  </span>
-                                </td>
-                                <td className="py-2 pl-2 text-right font-bold text-green-400 whitespace-nowrap">
-                                  {m.prizeBsCazador > 0
-                                    ? `Bs. ${Math.round(m.prizeBsCazador).toLocaleString('es-VE')}`
-                                    : '—'}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* 4. EXPLORADOR Y AUDITORÍA DE CARRERAS (SECCIÓN D) */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">

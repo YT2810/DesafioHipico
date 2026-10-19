@@ -174,3 +174,36 @@ Para no meter `TODOS` en varias carreras el mismo día:
 - El widget flotante `👑 5y6 Algoritmo` (`src/components/VipFiveAndSixWidget.tsx` y `GET /api/vip-5y6`) desbloquea los cuadros **Económico** y **Medio** únicamente para usuarios con recarga aprobada dentro de la **semana calendario en curso (`Lunes 00:00:00 a Domingo 23:59:59`, hora de Venezuela `UTC-4`)**.
 - Los ejemplares se muestran **ordenados estrictamente por número de dorsal de menor a mayor (`#1, #4, #9`) sin revelar el `% FV`**, protegiendo el consumo de Golds carrera por carrera.
 
+---
+
+## 7. Efectividad por Categoría / Llamado del Lote, Edad y Estudio del 4º Favorito
+
+### A. Matriz por Categoría / Llamado del Lote (La Rinconada)
+
+| Llamado / Categoría | Carreras | Ganó 1º o 2º FV (Candado) | Ganó Top 3 FV | Ganó 4º o 5º FV | Ganó 6º–8º FV | Ganó `0% Sin FV` | Diagnóstico |
+|---|---|---|---|---|---|---|---|
+| **Reclamo Real** | 16 | **15 de 16 (`93.8%`)** | **93.8%** | 1 (`6.2%`) | **0 (`0%`)** | **0 (`0%`)** | **🔒 Candado Absoluto (`1º+2º FV`).** |
+| **Ganadores de 1 (y 1–2)** | 51 | **40 de 51 (`78.4%`)** | **86.3%** | 6 (`11.8%`) | 1 (`2.0%`) | **0 (`0%`)** | **📌 Línea o Candado (`0%` fuera del FV).** |
+| **Clásicos y Copas** | 47 | **32 de 47 (`68.1%`)** | **80.9%** | 6 (`12.8%`) | 3 (`6.4%`) | **0 (`0%`)** | **Cero ganadores de `0% Sin FV`.** |
+| **Ganadores de 3 o 4** | 21 | **14 de 21 (`66.7%`)** | **76.2%** | 4 (`19.0%`) | 1 (`4.8%`) | **0 (`0%`)** | **Cero ganadores de `0% Sin FV`.** |
+| **Ganadores de 2** | 23 | 14 de 23 (`60.9%`) | 73.9% | 1 (`4.3%`) | **4 (`17.4%`)** | 1 (`4.3%`) | **⚠️ Alerta de `6º–8º FV` (`17.4%`).** |
+| **Perdedores / Debutantes** | 121 | 79 de 121 (`65.3%`) | 79.3% | **14 (`11.6%`)** | **6 (`5.0%`)** | **5 (`4.1%`)** | **💣 Concentra casi la mitad de los `0% Sin FV` del año.** |
+
+### B. Matriz por Edad del Lote (La Rinconada)
+
+| Edad del Lote | Carreras | Ganó 1º o 2º FV (Candado) | Ganó Top 3 FV | Ganó 4º o 5º FV | Ganó 6º–8º FV | Ganó `0% Sin FV` |
+|---|---|---|---|---|---|---|
+| **`3 y 4 / 4 y 5 años`** | 27 | **23 de 27 (`85.2%`)** | **92.6%** | 1 (`3.7%`) | 1 (`3.7%`) | **0 (`0%`)** |
+| **`4 y más años`** | 51 | **39 de 51 (`76.5%`)** | **86.3%** | 1 (`2.0%`) | 5 (`9.8%`) | 1 (`2.0%`) |
+| **`6 y más años`** | 55 | 35 de 55 (`63.6%`) | **83.6%** | 7 (`12.7%`) | **0 (`0%`)** | 2 (`3.6%`) |
+| **`3 años exclusivos`** | 69 | 42 de 69 (`60.9%`) | 72.5% | **13 (`18.8%`)** | 3 (`4.3%`) | 3 (`4.3%`) |
+| **`5 y más años` (Lote más peligroso)** | 47 | **24 de 47 (`51.1%`)** | **68.1%** | **8 (`17.0%`)** | **5 (`10.6%`)** | **2 (`4.3%`)** |
+
+### C. Verificación Empírica del `4º Favorito con ≥ 15%–20% FV` y las 3 Variantes de Sellar
+- En La Rinconada, cuando el `4º FV` tuvo `≥ 16%` (31 carreras), el `4º FV` ganó solo **2 veces (`6.5%`)**, pero en esas carreras abiertas **del `5º al 8º del FV` ganaron 7 veces (`22.6%`)** y `0% Sin FV` ganó **0 veces**. Cuando el `4º FV` llegó a `≥ 20%` (13 carreras), ganó **2 de 13 (`15.4%`)** y el Top 3 ganó **10 de 13 (`76.9%`)**.
+- Por ello, la sección privada **`3E. Armador de Variantes y Caza-Batacazos`** permite alternar en vivo entre:
+  1. **Variante 1 (`Caza 5º–7º FV`):** Abre hasta el 5º–7º puesto del FV en las carreras con Vacío / Perdedores / 5+ años.
+  2. **Variante 2 (`Top 5 FV Abierto`):** Para domingos donde ningún favorito supera el 52% y los 6 ganadores están dentro del Top 5 del FV (como en `R41`, `R34` y `R24`).
+  3. **Variante 3 (`Bomba con TODOS / Stud / Yunta 0% FV`):** Permite incluir todos los inscritos o encender manualmente cualquier ejemplar de `0% Sin FV` por Stud, Yunta o Corazonada.
+
+
