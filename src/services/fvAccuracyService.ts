@@ -5,6 +5,7 @@ import Race from '@/models/Race';
 import Track from '@/models/Track';
 import Entry from '@/models/Entry';
 import Horse from '@/models/Horse';
+import Person from '@/models/Person';
 import Forecast from '@/models/Forecast';
 
 export interface FvAccuracyRow {
@@ -61,6 +62,7 @@ function calcFv(forecasts: { marks: { preferenceOrder: number; horseName: string
 export async function getFvAccuracy(trackNameQuery: string): Promise<FvTrackAccuracy | null> {
   await dbConnect();
   void Horse;
+  void Person;
 
   const track = await Track.findOne({ name: { $regex: new RegExp(trackNameQuery, 'i') } }).lean() as any;
   if (!track) return null;
@@ -417,6 +419,53 @@ export function classifyPreFvRaceRisk(
   };
 }
 
+export interface FvValidaFactor {
+  id: string;
+  phase: 1 | 2;
+  label: string;
+  active: boolean;
+  pendingFv?: boolean;
+  tone: 'green' | 'purple' | 'amber' | 'red' | 'rose';
+}
+
+export interface FvHorseItem {
+  pos: number;
+  dorsalNumber?: number;
+  horseName: string;
+  fvPct: number;
+  weight?: number;
+  jockeyName?: string;
+  trainerName?: string;
+  hunterTags?: string[];
+  isHunterCandidate?: boolean;
+}
+
+export function buildHorseHunterTags(
+  weight?: number,
+  jockeyName?: string,
+  trainerName?: string
+): { hunterTags: string[]; isHunterCandidate: boolean } {
+  const tags: string[] = [];
+  if (weight && weight >= 48 && weight <= 52) {
+    tags.push(`🪶 ${weight}kg`);
+  }
+  const tr = (trainerName ?? '').toUpperCase();
+  if (/UZCATEGUI/.test(tr)) tags.push('🔥 E:Uzcátegui');
+  else if (/GARCIA\s+M\s+JUAN|JUAN\s+C.*GARCIA/.test(tr)) tags.push('🔥 E:J.C.García');
+  else if (/PERAZA/.test(tr)) tags.push('🔥 E:Peraza');
+  else if (/TRAVERSA/.test(tr)) tags.push('🔥 E:Traversa');
+  else if (/LANDINEZ/.test(tr)) tags.push('🔥 E:Landínez');
+  else if (/CALDERON/.test(tr)) tags.push('🔥 E:Calderón');
+
+  const jk = (jockeyName ?? '').toUpperCase();
+  if (/MARQUEZ.*FELIX|FELIX.*MARQUEZ/.test(jk)) tags.push('⚡ J:F.Márquez');
+  else if (/CALICHO/.test(jk)) tags.push('⚡ J:Calicho');
+  else if (/YANEZ\s+SAMUEL|SAMUEL\s+YANEZ/.test(jk)) tags.push('⚡ J:S.Yánez');
+  else if (/RIJO\s+JONAS/.test(jk)) tags.push('⚡ J:Rijo');
+
+  return { hunterTags: tags, isHunterCandidate: tags.length > 0 };
+}
+
 export interface FvValidaPick {
   validaNumber: number; // 1..6
   raceNumber: number;
@@ -424,8 +473,11 @@ export interface FvValidaPick {
   fieldSize: number;
   category?: string;
   ageGroup?: string;
+  forecasterCount?: number;
   preFvLevel: 'noble' | 'intermedio' | 'explosivo';
   preFvLabel: string;
+  factors: FvValidaFactor[];
+  canDropFirstFv: boolean;
   safetyRank: number; // 1..6 (1 = más confiable, 6 = más peligrosa)
   vacioType: 'bloque_compacto_3' | 'bloque_compacto_4' | 'fijo_o_candado' | 'vacio_explosion' | 'normal';
   vacioLabel: string;
@@ -447,12 +499,12 @@ export interface FvValidaPick {
   isAllPre?: boolean;
   isAllCazador?: boolean;
   sinPrimeroCazador?: boolean;
-  allFvHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
-  picksEco: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
-  picksMed: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
-  picksBlindado: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
-  picksPremium: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
-  picksCazador: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
+  allFvHorses: FvHorseItem[];
+  picksEco: FvHorseItem[];
+  picksMed: FvHorseItem[];
+  picksBlindado: FvHorseItem[];
+  picksPremium: FvHorseItem[];
+  picksCazador: FvHorseItem[];
   winner?: {
     dorsalNumber?: number;
     horseName: string;
@@ -575,7 +627,8 @@ function buildMeetingValidasPicks(
     fieldSize: number;
     category?: string;
     ageGroup?: string;
-    topHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
+    forecasterCount?: number;
+    topHorses: FvHorseItem[];
     sumTop2Pct: number;
     sumTop3Pct: number;
     winner?: {
@@ -860,32 +913,73 @@ function buildMeetingValidasPicks(
   });
 
   // Identify #1 and #2 highest explosion score races for the Cazador ticket
+  // Keep solid Base (1º-2º or 1º-3º FV) + add 4º-5º FV on open races + add Hunter-tagged 6º-8º / 0% FV horses on bomb races!
   const sortedByDropFirst = [...explosionAnalysis].sort((a, b) => b.explosionScore - a.explosionScore);
-  const sinPrimeroSet = new Set<number>(sortedByDropFirst.slice(0, 3).map(x => x.idx));
   const topBombIdx = sortedByDropFirst[0]?.idx ?? -1;
-  const nobleThree = sortedByDropFirst.slice(3).sort((a, b) => a.explosionScore - b.explosionScore);
-  const trilogiaNobleIdx = nobleThree[nobleThree.length - 1]?.idx ?? -1;
+  const secondBombIdx = sortedByDropFirst[1]?.idx ?? -1;
 
   const isAllCazadorArr = validasRaces.map(() => false);
-  const sinPrimeroArr = validasRaces.map((_, idx) => sinPrimeroSet.has(idx));
+  const sinPrimeroArr = validasRaces.map((r, idx) => {
+    const fvOnly = r.topHorses.filter(h => h.pos > 0);
+    const p1 = fvOnly[0]?.fvPct ?? 0;
+    const p3 = fvOnly[2]?.fvPct ?? 0;
+    const preFv = classifyPreFvRaceRisk(r.distance, r.fieldSize, r.category, r.ageGroup);
+    const isCleanCandado = p1 >= 44 && (fvOnly[1]?.fvPct ?? 0) >= 23 && p3 < 13;
+    // Flag race as candidate to drop 1st FV to lower cost when it has risk factors and is not a clean candado/fijo
+    return (
+      !isCleanCandado &&
+      p1 < 56 &&
+      (p1 < 41 || preFv.preFvLevel === 'explosivo' || (p1 >= 48.5 && p1 <= 55.5 && r.distance <= 1300))
+    );
+  });
+
   const picksCazadorByIdx = validasRaces.map((r, idx) => {
     const fvOnly = r.topHorses.filter(h => h.pos > 0);
     if (!fvOnly.length) return r.topHorses.slice(0, 3);
-    if (sinPrimeroSet.has(idx)) {
-      const takeCount = idx === topBombIdx && fvOnly.length >= 6 ? 5 : 4; // 2º..6º (5) or 2º..5º (4)
-      const withoutFirst = fvOnly.slice(1, 1 + takeCount);
-      return withoutFirst.length >= 2 ? withoutFirst : fvOnly.slice(0, takeCount);
-    } else {
-      const takeCount = idx === trilogiaNobleIdx ? 3 : 2; // 2 Dobles Líneas (2) + 1 Trilogía (3)
-      return fvOnly.slice(0, Math.min(takeCount, fvOnly.length));
+    const p1 = fvOnly[0]?.fvPct ?? 0;
+    const p6 = fvOnly[5]?.fvPct ?? 0;
+
+    // Base Cazador starts from the validated Premium base
+    let baseTake = countsPre[idx];
+    // If Falso Fijo (48.5-55.5%) in short sprint with 10+ horses and 6th FV >= 3.3% (like R39 V1), open to 6th FV
+    if (!isValencia && p1 >= 48.5 && p1 <= 55.5 && r.fieldSize >= 10 && r.distance <= 1300 && p6 >= 3.3) {
+      baseTake = Math.max(baseTake, 6);
     }
+    return [...fvOnly.slice(0, Math.min(baseTake, fvOnly.length))];
   });
+
+  while (picksCazadorByIdx.reduce((a, b) => a * b.length, 1) > 2160) {
+    let minPct = 999;
+    let trimIdx = -1;
+    for (let i = 0; i < 6; i++) {
+      const r = validasRaces[i];
+      const p1 = r.topHorses[0]?.fvPct ?? 0;
+      const isProtectedFalsoFijo = p1 >= 48.5 && p1 <= 55.5 && r.fieldSize >= 10 && r.distance <= 1300;
+      if (!isProtectedFalsoFijo && picksCazadorByIdx[i].length > 3) {
+        const lastH = picksCazadorByIdx[i][picksCazadorByIdx[i].length - 1];
+        const pct = lastH?.fvPct ?? 0;
+        if (pct < minPct) {
+          minPct = pct;
+          trimIdx = i;
+        }
+      }
+    }
+    if (trimIdx >= 0) {
+      picksCazadorByIdx[trimIdx].pop();
+    } else break;
+  }
   const countsCazador = picksCazadorByIdx.map(list => Math.max(list.length, 1));
 
   const validas: FvValidaPick[] = validasRaces.map((r, idx) => {
     const rk = safetyRankByIdx.get(idx) ?? 3;
     const fvOnly = r.topHorses.filter(h => h.pos > 0);
+    const hasFv = fvOnly.length > 0;
     const p1 = fvOnly[0]?.fvPct ?? 0;
+    const p2 = fvOnly[1]?.fvPct ?? 0;
+    const p3 = fvOnly[2]?.fvPct ?? 0;
+    const p4 = fvOnly[3]?.fvPct ?? 0;
+    const p5 = fvOnly[4]?.fvPct ?? 0;
+    const p6 = fvOnly[5]?.fvPct ?? 0;
     const exp = explosionAnalysis[idx];
     const preFv = classifyPreFvRaceRisk(r.distance, r.fieldSize, r.category, r.ageGroup);
     const countEco = countsEco[idx];
@@ -894,7 +988,84 @@ function buildMeetingValidasPicks(
     const countPre = countsPre[idx];
     const countCazador = countsCazador[idx];
     const isAllCazador = isAllCazadorArr[idx];
-    const sinPrimeroCazador = sinPrimeroArr[idx];
+    const canDropFirstFv = sinPrimeroArr[idx];
+
+    const cat = r.category ?? '';
+    const age = r.ageGroup ?? '';
+    const isRiskyLote =
+      cat === 'Perdedores / Debutantes' ||
+      cat === 'Ganadores de 2 (o 2-3)' ||
+      cat === 'Ganadores de 5 o más' ||
+      age === '5 y más años';
+    const isCleanCut =
+      hasFv && ((p1 >= 44 && p2 >= 23 && p3 < 13) || (p1 >= 37 && p2 >= 20 && p3 >= 19.5 && p4 < 13.5));
+    const isNoFav = hasFv && p1 < 40;
+    const isFalsoFijo = hasFv && p1 >= 48.5 && p1 <= 55.5 && (r.distance <= 1300 || r.fieldSize >= 9);
+    const isColaViva = hasFv && (p5 >= 5.5 || p6 >= 3.5);
+
+    const factors: FvValidaFactor[] = [
+      {
+        id: 'tiro_corto',
+        phase: 1,
+        label: `📏 Tiro Corto (${r.distance}m ≤ 1300m)`,
+        active: r.distance <= 1300,
+        tone: 'red',
+      },
+      {
+        id: 'lote_grande',
+        phase: 1,
+        label: `🐎 Lote Grande (${r.fieldSize} ej. ≥ 10)`,
+        active: r.fieldSize >= 10,
+        tone: 'red',
+      },
+      {
+        id: 'llamado_riesgo',
+        phase: 1,
+        label: `🏷️ Lote Riesgo (Perdedores / Gan.2 / 5+a)`,
+        active: isRiskyLote,
+        tone: 'amber',
+      },
+      {
+        id: 'corte_limpio',
+        phase: 2,
+        label: `🔒 Corte Limpio (Candado/Trilogía)`,
+        active: isCleanCut,
+        pendingFv: !hasFv,
+        tone: 'green',
+      },
+      {
+        id: 'sin_favorito',
+        phase: 2,
+        label: `🟣 Sin Favorito (1º FV < 40%)`,
+        active: isNoFav,
+        pendingFv: !hasFv,
+        tone: 'purple',
+      },
+      {
+        id: 'falso_fijo',
+        phase: 2,
+        label: `🟠 Falso Fijo (48.5%–55.5% FV)`,
+        active: isFalsoFijo,
+        pendingFv: !hasFv,
+        tone: 'amber',
+      },
+      {
+        id: 'cola_viva',
+        phase: 2,
+        label: `⚡ Cola 5º–8º FV Viva (≥ 3.5%)`,
+        active: isColaViva,
+        pendingFv: !hasFv,
+        tone: 'amber',
+      },
+      {
+        id: 'quitar_1fv',
+        phase: 2,
+        label: `✂️ Candidata a QUITAR 1º FV (Bajar Costo)`,
+        active: canDropFirstFv,
+        pendingFv: !hasFv,
+        tone: 'rose',
+      },
+    ];
 
     const badgeEco =
       countEco === 1 ? '📌 LÍNEA (1)' : countEco === 2 ? '🔒 CANDADO (2)' : countEco === 3 ? '🔱 TRILOGÍA (3)' : `🚨 MULTIPLICAR (${countEco})`;
@@ -904,11 +1075,16 @@ function buildMeetingValidasPicks(
       countBli === 1 ? '📌 LÍNEA (1)' : countBli === 2 ? '🔒 CANDADO (2)' : countBli === 3 ? '🔱 TRILOGÍA (3)' : countBli === 4 ? '🛡️ BLINDAJE (4)' : `🚨 CAZA DIVIDENDO (${countBli})`;
     const badgePre =
       countPre === 1 ? '📌 LÍNEA (1)' : countPre === 2 ? '🔒 CANDADO (2)' : countPre === 3 ? '🔱 TRILOGÍA (3)' : countPre === 4 ? '👑 PREMIUM (4)' : `👑 COBERTURA FV (${countPre})`;
-    const badgeCazador = sinPrimeroCazador
-      ? `💣 SIN 1º FV: 2º al ${countCazador + 1}º FV (${countCazador})`
-      : countCazador === 2
-      ? '🔒 DOBLE LÍNEA 1º+2º (2)'
-      : '🔱 TRILOGÍA 1º+2º+3º (3)';
+    const badgeCazador =
+      countCazador === 1
+        ? '� BASE LÍNEA (1)'
+        : countCazador === 2
+        ? '🔒 BASE CANDADO (2)'
+        : countCazador === 3
+        ? '� BASE TRILOGÍA (3)'
+        : canDropFirstFv
+        ? `� CAZADOR (${countCazador} ej. · ✂️ Opción Quitar 1º FV)`
+        : `🛡️ CAZADOR ABIERTO (${countCazador} ej.)`;
 
     const reasonText =
       rk === 0
@@ -919,9 +1095,9 @@ function buildMeetingValidasPicks(
         ? `Alerta Fase 1+2 (${r.category ?? ''} · ${r.ageGroup ?? ''} · 1º FV ${p1}% · ${r.fieldSize} ej.): abre a ${countPre} ej. del FV.`
         : `Suma Top 2: ${r.sumTop2Pct}% · Suma Top 3: ${r.sumTop3Pct}% FV.`;
 
-    const cazadorReason = sinPrimeroCazador
-      ? `${preFv.preFvLabel} → Se elimina al 1º FV (${p1}%) y se juega del 2º al ${countCazador + 1}º del FV.`
-      : `${preFv.preFvLabel} → Lote noble/corto: se mantiene al 1º FV en ${countCazador === 2 ? 'Doble Línea (1º+2º)' : 'Trilogía (1º+2º+3º)'}.`;
+    const cazadorReason = canDropFirstFv
+      ? `${preFv.preFvLabel} → Base + sorpresa cubierta (${countCazador} ej.). Alerta activa: puedes quitar al 1º FV (${p1}%) para abaratar el cuadro.`
+      : `${preFv.preFvLabel} → Carrera noble/corte limpio: mantener al 1º FV en la base (${countCazador} ej.).`;
 
     const picksEco = (fvOnly.length ? fvOnly : r.topHorses).slice(0, countEco);
     const picksMed = (fvOnly.length ? fvOnly : r.topHorses).slice(0, countMed);
@@ -941,7 +1117,11 @@ function buildMeetingValidasPicks(
       hitMed = wRank !== null && wRank <= countMed;
       hitBlindado = wRank !== null && wRank <= countBli;
       hitPremium = wRank !== null && wRank <= countPre;
-      hitCazador = picksCazador.some(p => p.pos === wRank);
+      hitCazador = picksCazador.some(
+        p =>
+          (wRank !== null && p.pos === wRank) ||
+          (r.winner?.dorsalNumber != null && p.dorsalNumber === r.winner.dorsalNumber)
+      );
       if (hitEco) hitsEco++;
       else missedIdxEco = idx;
       if (hitMed) hitsMed++;
@@ -961,8 +1141,11 @@ function buildMeetingValidasPicks(
       fieldSize: r.fieldSize,
       category: r.category,
       ageGroup: r.ageGroup,
+      forecasterCount: r.forecasterCount,
       preFvLevel: preFv.preFvLevel,
       preFvLabel: preFv.preFvLabel,
+      factors,
+      canDropFirstFv,
       safetyRank: rk + 1,
       vacioType: exp.vacioType,
       vacioLabel: exp.vacioLabel,
@@ -979,7 +1162,7 @@ function buildMeetingValidasPicks(
       countPre,
       countCazador,
       isAllCazador,
-      sinPrimeroCazador,
+      sinPrimeroCazador: canDropFirstFv,
       allFvHorses: r.topHorses,
       picksEco,
       picksMed,
@@ -1001,13 +1184,14 @@ function buildMeetingValidasPicks(
   const combinationsPremium = prod(countsPre);
   const combinationsCazador = prod(countsCazador);
 
-  function calcPrize(hits: number, counts: number[], missedIdx: number): number {
+  // REGLA OFICIAL INH: Los cuadros con 6 cobran únicamente 1 vez el dividendo de 6 (sin sumar combinaciones con 5).
+  // Los cuadros con 5 cobran únicamente 1 vez el dividendo de 5.
+  function calcPrize(hits: number, _counts: number[], _missedIdx: number): number {
     if (hits === 6) {
-      const mult5 = counts.reduce((s, c) => s + (c - 1), 0);
-      return Math.round(payout6Bs + mult5 * payout5Bs);
+      return Math.round(payout6Bs);
     }
-    if (hits === 5 && missedIdx >= 0) {
-      return Math.round(counts[missedIdx] * payout5Bs);
+    if (hits === 5) {
+      return Math.round(payout5Bs);
     }
     return 0;
   }
@@ -1044,6 +1228,7 @@ export async function getFvLabAnalytics(
 ): Promise<FvLabAnalytics | null> {
   await dbConnect();
   void Horse;
+  void Person;
 
   const track = await Track.findOne({ name: { $regex: new RegExp(trackNameQuery, 'i') } }).lean() as any;
   if (!track) return null;
@@ -1162,7 +1347,9 @@ export async function getFvLabAnalytics(
       .lean() as any,
     Entry.find({ raceId: { $in: raceIds } })
       .populate('horseId', 'name')
-      .select('raceId dorsalNumber horseId status result')
+      .populate('jockeyId', 'name')
+      .populate('trainerId', 'name')
+      .select('raceId dorsalNumber horseId jockeyId trainerId weight status result')
       .lean() as any,
   ]);
 
@@ -1175,17 +1362,29 @@ export async function getFvLabAnalytics(
 
   const winnerByRace: Record<string, { dorsalNumber?: number; horseName: string }> = {};
   const fieldSizeByRace: Record<string, number> = {};
-  const activeEntriesByRace: Record<string, { dorsalNumber?: number; horseName: string }[]> = {};
+  const activeEntriesByRace: Record<
+    string,
+    { dorsalNumber?: number; horseName: string; weight?: number; jockeyName?: string; trainerName?: string }[]
+  > = {};
 
   for (const e of allEntries) {
     const rid = e.raceId.toString();
     const isScratched = e.status === 'scratched' || e.result?.isScratched === true;
     const isInvalidated = e.result?.isInvalidated === true;
     const hName = (e.horseId as any)?.name ?? '';
+    const jName = (e.jockeyId as any)?.name ?? '';
+    const tName = (e.trainerId as any)?.name ?? '';
+    const kg = typeof e.weight === 'number' ? e.weight : undefined;
     if (!isScratched && !isInvalidated) {
       fieldSizeByRace[rid] = (fieldSizeByRace[rid] ?? 0) + 1;
       if (!activeEntriesByRace[rid]) activeEntriesByRace[rid] = [];
-      activeEntriesByRace[rid].push({ dorsalNumber: e.dorsalNumber, horseName: hName });
+      activeEntriesByRace[rid].push({
+        dorsalNumber: e.dorsalNumber,
+        horseName: hName,
+        weight: kg,
+        jockeyName: jName,
+        trainerName: tName,
+      });
     }
     if (e.result?.finishPosition === 1 && !isScratched && !isInvalidated) {
       winnerByRace[rid] = {
@@ -1254,14 +1453,35 @@ export async function getFvLabAnalytics(
 
     const mId = race.meetingId.toString();
     const mInfo = meetingMap.get(mId) ?? { meetingNumber: 0, date: '', year: 2026 };
-    const fvRanked = fv.map((h, idx) => ({
-      pos: idx + 1,
-      dorsalNumber: h.dorsalNumber,
-      horseName: h.horseName,
-      fvPct: Math.round(h.factor * 1000) / 10,
-    }));
+    const raceEntriesList = activeEntriesByRace[rid] ?? [];
+    const findEntryMeta = (hName: string, dorsal?: number) =>
+      raceEntriesList.find(
+        ae =>
+          horseKey(ae.horseName) === horseKey(hName) ||
+          (dorsal != null && ae.dorsalNumber === dorsal)
+      );
+
+    const fvRanked: FvHorseItem[] = fv.map((h, idx) => {
+      const meta = findEntryMeta(h.horseName, h.dorsalNumber);
+      const { hunterTags, isHunterCandidate } = buildHorseHunterTags(
+        meta?.weight,
+        meta?.jockeyName,
+        meta?.trainerName
+      );
+      return {
+        pos: idx + 1,
+        dorsalNumber: h.dorsalNumber ?? meta?.dorsalNumber,
+        horseName: h.horseName,
+        fvPct: Math.round(h.factor * 1000) / 10,
+        weight: meta?.weight,
+        jockeyName: meta?.jockeyName,
+        trainerName: meta?.trainerName,
+        hunterTags,
+        isHunterCandidate,
+      };
+    });
     // Append 0% FV active entries so the interactive builder can also pick non-FV horses (stud/yunta/corazonada)
-    const zeroFvEntries = (activeEntriesByRace[rid] ?? [])
+    const zeroFvEntries: FvHorseItem[] = raceEntriesList
       .filter(
         ae =>
           !fvRanked.some(
@@ -1271,12 +1491,24 @@ export async function getFvLabAnalytics(
           )
       )
       .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
-      .map(ae => ({
-        pos: 0,
-        dorsalNumber: ae.dorsalNumber,
-        horseName: ae.horseName,
-        fvPct: 0,
-      }));
+      .map(ae => {
+        const { hunterTags, isHunterCandidate } = buildHorseHunterTags(
+          ae.weight,
+          ae.jockeyName,
+          ae.trainerName
+        );
+        return {
+          pos: 0,
+          dorsalNumber: ae.dorsalNumber,
+          horseName: ae.horseName,
+          fvPct: 0,
+          weight: ae.weight,
+          jockeyName: ae.jockeyName,
+          trainerName: ae.trainerName,
+          hunterTags,
+          isHunterCandidate,
+        };
+      });
     const topHorses = [...fvRanked, ...zeroFvEntries];
 
     const p1 = fvRanked[0]?.fvPct ?? 0;
@@ -1902,7 +2134,9 @@ export async function getFvLabAnalytics(
       Forecast.find({ raceId: { $in: vIds }, isPublished: true }).select('raceId marks').lean() as any,
       Entry.find({ raceId: { $in: vIds } })
         .populate('horseId', 'name')
-        .select('raceId dorsalNumber horseId status result')
+        .populate('jockeyId', 'name')
+        .populate('trainerId', 'name')
+        .select('raceId dorsalNumber horseId jockeyId trainerId weight status result')
         .lean() as any,
     ]);
     const fcMap: Record<string, any[]> = {};
@@ -1912,13 +2146,22 @@ export async function getFvLabAnalytics(
       fcMap[rid].push(f);
     }
     const fsMap: Record<string, number> = {};
-    const aeMap: Record<string, { dorsalNumber?: number; horseName: string }[]> = {};
+    const aeMap: Record<
+      string,
+      { dorsalNumber?: number; horseName: string; weight?: number; jockeyName?: string; trainerName?: string }[]
+    > = {};
     for (const e of vEntries) {
       const rid = e.raceId.toString();
       if (e.status !== 'scratched' && !e.result?.isScratched && !e.result?.isInvalidated) {
         fsMap[rid] = (fsMap[rid] ?? 0) + 1;
         if (!aeMap[rid]) aeMap[rid] = [];
-        aeMap[rid].push({ dorsalNumber: e.dorsalNumber, horseName: (e.horseId as any)?.name ?? '' });
+        aeMap[rid].push({
+          dorsalNumber: e.dorsalNumber,
+          horseName: (e.horseId as any)?.name ?? '',
+          weight: typeof e.weight === 'number' ? e.weight : undefined,
+          jockeyName: (e.jockeyId as any)?.name ?? '',
+          trainerName: (e.trainerId as any)?.name ?? '',
+        });
       }
     }
     const validasInput = validasRacesDocs
@@ -1926,13 +2169,33 @@ export async function getFvLabAnalytics(
         const rid = r._id.toString();
         const fcs = fcMap[rid] ?? [];
         const fv = fcs.length ? calcFv(fcs) : [];
-        const fvRanked = fv.map((h, i) => ({
-          pos: i + 1,
-          dorsalNumber: h.dorsalNumber,
-          horseName: h.horseName,
-          fvPct: Math.round(h.factor * 1000) / 10,
-        }));
-        const zeroFv = (aeMap[rid] ?? [])
+        const rEntries = aeMap[rid] ?? [];
+        const findMeta = (hName: string, dorsal?: number) =>
+          rEntries.find(
+            ae =>
+              horseKey(ae.horseName) === horseKey(hName) ||
+              (dorsal != null && ae.dorsalNumber === dorsal)
+          );
+        const fvRanked: FvHorseItem[] = fv.map((h, i) => {
+          const meta = findMeta(h.horseName, h.dorsalNumber);
+          const { hunterTags, isHunterCandidate } = buildHorseHunterTags(
+            meta?.weight,
+            meta?.jockeyName,
+            meta?.trainerName
+          );
+          return {
+            pos: i + 1,
+            dorsalNumber: h.dorsalNumber ?? meta?.dorsalNumber,
+            horseName: h.horseName,
+            fvPct: Math.round(h.factor * 1000) / 10,
+            weight: meta?.weight,
+            jockeyName: meta?.jockeyName,
+            trainerName: meta?.trainerName,
+            hunterTags,
+            isHunterCandidate,
+          };
+        });
+        const zeroFv: FvHorseItem[] = rEntries
           .filter(
             ae =>
               !fvRanked.some(
@@ -1942,7 +2205,24 @@ export async function getFvLabAnalytics(
               )
           )
           .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
-          .map(ae => ({ pos: 0, dorsalNumber: ae.dorsalNumber, horseName: ae.horseName, fvPct: 0 }));
+          .map(ae => {
+            const { hunterTags, isHunterCandidate } = buildHorseHunterTags(
+              ae.weight,
+              ae.jockeyName,
+              ae.trainerName
+            );
+            return {
+              pos: 0,
+              dorsalNumber: ae.dorsalNumber,
+              horseName: ae.horseName,
+              fvPct: 0,
+              weight: ae.weight,
+              jockeyName: ae.jockeyName,
+              trainerName: ae.trainerName,
+              hunterTags,
+              isHunterCandidate,
+            };
+          });
         const topHorses = [...fvRanked, ...zeroFv];
         if (!topHorses.length) return null;
         const p1 = fvRanked[0]?.fvPct ?? 0;
@@ -1955,6 +2235,7 @@ export async function getFvLabAnalytics(
           fieldSize: fsMap[rid] ?? 8,
           category,
           ageGroup,
+          forecasterCount: fcs.length,
           topHorses,
           sumTop2Pct: Math.round((p1 + p2) * 10) / 10,
           sumTop3Pct: Math.round((p1 + p2 + p3) * 10) / 10,
@@ -2065,6 +2346,7 @@ export async function getPublicVipFiveAndSix(
 ): Promise<PublicVipFiveAndSixResponse | null> {
   await dbConnect();
   void Horse;
+  void Person;
 
   const track = (await Track.findOne({
     name: { $regex: new RegExp(trackNameQuery, 'i') },

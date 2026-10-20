@@ -23,7 +23,9 @@ export default function LaboratorioFvTab() {
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
   const [distanceFilter, setDistanceFilter] = useState<number | 'all'>('all');
   const [cazadorMeetingId, setCazadorMeetingId] = useState<string>('upcoming');
-  const [cazadorVariant, setCazadorVariant] = useState<'cazador_fv' | 'top5_abierto' | 'bomba_todos'>('cazador_fv');
+  const [cazadorVariant, setCazadorVariant] = useState<
+    'cazador_fv' | 'quitar_1fv' | 'top5_abierto' | 'bomba_todos'
+  >('cazador_fv');
   // Map key: `${validaNumber}` -> array of horse keys (`#${dorsal}_${horseName}`)
   const [customSelectedByValida, setCustomSelectedByValida] = useState<Record<number, string[]>>({});
 
@@ -112,6 +114,16 @@ export default function LaboratorioFvTab() {
       const fvOnly = allH.filter(h => h.pos > 0);
       if (cazadorVariant === 'cazador_fv') {
         nextMap[v.validaNumber] = v.picksCazador.map(horseIdKey);
+      } else if (cazadorVariant === 'quitar_1fv') {
+        // Quita el 1º FV únicamente en las válidas marcadas con la alerta canDropFirstFv
+        if (v.canDropFirstFv && fvOnly.length >= 3) {
+          const withoutFirst = v.picksCazador.filter(p => p.pos !== 1);
+          nextMap[v.validaNumber] = (withoutFirst.length >= 2 ? withoutFirst : fvOnly.slice(1, 5)).map(
+            horseIdKey
+          );
+        } else {
+          nextMap[v.validaNumber] = v.picksCazador.map(horseIdKey);
+        }
       } else if (cazadorVariant === 'top5_abierto') {
         // Variante B: Top 5 FV Abierto (para jornadas donde los 6 ganadores están en el Top 4/5 FV sin súper fijo)
         const p1 = fvOnly[0]?.fvPct ?? 0;
@@ -1217,12 +1229,9 @@ export default function LaboratorioFvTab() {
             let customPrizeBs = 0;
             if (hasResults && activeCazadorMeeting.payout6Bs > 0) {
               if (customHits === 6) {
-                const mult5 = countsCustom.reduce((s, c) => s + (c - 1), 0);
-                customPrizeBs = Math.round(
-                  activeCazadorMeeting.payout6Bs + mult5 * activeCazadorMeeting.payout5Bs
-                );
+                customPrizeBs = Math.round(activeCazadorMeeting.payout6Bs);
               } else if (customHits === 5 && missedIdx >= 0) {
-                customPrizeBs = Math.round(countsCustom[missedIdx] * activeCazadorMeeting.payout5Bs);
+                customPrizeBs = Math.round(activeCazadorMeeting.payout5Bs);
               }
             }
 
@@ -1233,14 +1242,14 @@ export default function LaboratorioFvTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
                         <span>💣</span>
-                        <span>3E. Laboratorio Privado — Armador de Variantes y Caza-Batacazos (1º–8º FV + 0% Stud/Yunta)</span>
+                        <span>3E. Laboratorio Privado — Tablero de 8 Factores y Cuadro Cazador Potencial</span>
                       </h3>
                       <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-600">
                         🔒 Uso Exclusivo Admin
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
-                      Alterna entre las <strong>3 Variantes de Dividendos Grandes</strong> o toca cualquier ejemplar inscrito (incluyendo los de <strong>0% Sin FV por Stud, Yunta o Corazonada</strong>) para armar y probar tu cuadro en vivo.
+                      Mantiene la <strong>Base Fija (1º–3º FV)</strong>, enciende o apaga en vivo los <strong>8 factores de cada carrera</strong> (incluyendo la alerta <strong>✂️ Quitar 1º FV para bajar costo</strong> y las etiquetas <strong>🪶 50–52kg / 🔥 Entrenador / ⚡ Jinete</strong>) y te permite meter o sacar cualquier ejemplar con un clic.
                     </p>
                   </div>
 
@@ -1264,7 +1273,37 @@ export default function LaboratorioFvTab() {
                   </div>
                 </div>
 
-                {/* Botones de las 3 Variantes + Resumen en Vivo del Cuadro Armado */}
+                {/* KPIs Anuales del Cuadro Cazador Potencial */}
+                {data.fiveAndSixBacktest.cazador && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <KpiCard
+                      label="Cazador Potencial: 6 de 6"
+                      value={`${data.fiveAndSixBacktest.cazador.hits6} de ${data.fiveAndSixBacktest.totalMeetings}`}
+                      sub={`${data.fiveAndSixBacktest.cazador.pct6}% (+${data.fiveAndSixBacktest.cazador.hits5} con 5 = ${data.fiveAndSixBacktest.cazador.pct5Or6}%)`}
+                      color="#fb7185"
+                    />
+                    <KpiCard
+                      label="Comb. Promedio Cazador"
+                      value={`${data.fiveAndSixBacktest.cazador.avgCombinations} comb.`}
+                      sub="Base + Alertas + 50kg/Yuntas"
+                      color="white"
+                    />
+                    <KpiCard
+                      label="Total Cobrado (1 pago INH)"
+                      value={`Bs. ${data.fiveAndSixBacktest.cazador.totalWonBs.toLocaleString('es-VE')}`}
+                      sub={`Costo: Bs. ${data.fiveAndSixBacktest.cazador.totalCostBs.toLocaleString('es-VE')}`}
+                      color="#22c55e"
+                    />
+                    <KpiCard
+                      label="Ganancia Neta Cazador"
+                      value={`Bs. ${data.fiveAndSixBacktest.cazador.netProfitBs.toLocaleString('es-VE')}`}
+                      sub="Sin sumar múltiplos de 5"
+                      color={GOLD}
+                    />
+                  </div>
+                )}
+
+                {/* Botones de las 4 Variantes + Resumen en Vivo del Cuadro Armado */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gray-950/90 border border-rose-900/50 rounded-xl p-3">
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -1276,7 +1315,18 @@ export default function LaboratorioFvTab() {
                           : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
                       }`}
                     >
-                      🎯 Variante 1: Sin 1º FV en 3 Bravas (2 Dobles + 1 Trilogía + 3 del 2º–5º/6º FV)
+                      🎯 1. Cuadro Cazador Potencial (Base + Alertas + 50kg/Yunta)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCazadorVariant('quitar_1fv')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${
+                        cazadorVariant === 'quitar_1fv'
+                          ? 'bg-pink-600 text-white border-pink-400'
+                          : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
+                      }`}
+                    >
+                      ✂️ 2. Quitar 1º FV en Carreras con Alerta (Bajar Costo)
                     </button>
                     <button
                       type="button"
@@ -1287,7 +1337,7 @@ export default function LaboratorioFvTab() {
                           : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
                       }`}
                     >
-                      🔥 Variante 2: Top 5 FV Abierto (Tipo R41 / R34 / R24)
+                      🔥 3. Top 5 FV Abierto
                     </button>
                     <button
                       type="button"
@@ -1298,7 +1348,7 @@ export default function LaboratorioFvTab() {
                           : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
                       }`}
                     >
-                      🌟 Variante 3: 1 Carrera con TODOS (Incluye 0% FV)
+                      🌟 4. 1 Carrera con TODOS (0% FV)
                     </button>
                   </div>
 
@@ -1332,7 +1382,7 @@ export default function LaboratorioFvTab() {
                   </div>
                 )}
 
-                {/* Las 6 Válidas Interactivas con TODOS los inscritos (1º-8º FV + 0% Sin FV) */}
+                {/* Las 6 Válidas Interactivas con Tablero de 8 Factores Encendidos/Apagados */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {activeCazadorMeeting.validas.map(v => {
                     const selectedKeys = customSelectedByValida[v.validaNumber] ?? [];
@@ -1349,7 +1399,11 @@ export default function LaboratorioFvTab() {
                     return (
                       <div
                         key={v.validaNumber}
-                        className="rounded-xl p-3 space-y-2 border bg-gray-950/90 border-gray-800"
+                        className={`rounded-xl p-3 space-y-2 border ${
+                          v.canDropFirstFv
+                            ? 'bg-gray-950/95 border-rose-500/60'
+                            : 'bg-gray-950/90 border-gray-800'
+                        }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-extrabold text-white">
@@ -1361,21 +1415,9 @@ export default function LaboratorioFvTab() {
                         </div>
 
                         <div className="flex items-center justify-between gap-1 flex-wrap">
-                          <span
-                            className={`text-[10px] font-bold rounded px-2 py-0.5 border ${
-                              v.preFvLevel === 'explosivo'
-                                ? 'bg-red-950/60 text-red-300 border-red-700/60'
-                                : v.preFvLevel === 'noble'
-                                ? 'bg-green-950/60 text-green-300 border-green-700/60'
-                                : 'bg-sky-950/40 text-sky-300 border-sky-800/40'
-                            }`}
-                          >
-                            {v.preFvLevel === 'explosivo'
-                              ? '🔴 Fase 1 Explosiva'
-                              : v.preFvLevel === 'noble'
-                              ? '🟢 Fase 1 Noble'
-                              : '🟡 Fase 1 Intermedia'}{' '}
-                            · {v.category ?? 'Lote'} ({v.ageGroup ?? ''})
+                          <span className="text-[10px] font-bold text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded px-2 py-0.5">
+                            {v.category ?? 'Lote'} · {v.ageGroup ?? ''}{' '}
+                            {v.forecasterCount != null ? `(${v.forecasterCount} pron.)` : ''}
                           </span>
                           {v.winner && (
                             <span
@@ -1390,6 +1432,39 @@ export default function LaboratorioFvTab() {
                             </span>
                           )}
                         </div>
+
+                        {/* TABLERO DE LOS 8 FACTORES (Siempre visibles: Encendidos en color / Apagados en gris) */}
+                        {v.factors && v.factors.length > 0 && (
+                          <div className="grid grid-cols-2 gap-1 pt-0.5">
+                            {v.factors.map(f => {
+                              const activeStyle =
+                                f.tone === 'green'
+                                  ? 'bg-emerald-950/70 border-emerald-500/70 text-emerald-200 font-extrabold'
+                                  : f.tone === 'purple'
+                                  ? 'bg-purple-950/70 border-purple-500/70 text-purple-200 font-extrabold'
+                                  : f.tone === 'rose'
+                                  ? 'bg-rose-950/80 border-rose-500 text-rose-200 font-extrabold'
+                                  : f.tone === 'amber'
+                                  ? 'bg-amber-950/70 border-amber-500/70 text-amber-200 font-extrabold'
+                                  : 'bg-red-950/70 border-red-500/70 text-red-200 font-extrabold';
+                              return (
+                                <div
+                                  key={f.id}
+                                  className={`text-[9.5px] px-1.5 py-1 rounded border flex items-center justify-between gap-1 ${
+                                    f.active
+                                      ? activeStyle
+                                      : 'bg-gray-900/40 border-gray-800/60 text-gray-600'
+                                  }`}
+                                >
+                                  <span className="truncate">{f.label}</span>
+                                  <span className="shrink-0 font-black">
+                                    {f.pendingFv ? '⏳' : f.active ? 'ON' : 'OFF'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         <div className="text-[10px] font-semibold text-rose-200 bg-rose-950/40 border border-rose-800/40 rounded px-2 py-1">
                           {v.badgeCazador}
@@ -1416,7 +1491,7 @@ export default function LaboratorioFvTab() {
                             onClick={() => setValidaQuickPreset(v, 'sin_1fv')}
                             className="text-[10px] px-2 py-0.5 rounded bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600 font-bold"
                           >
-                            💣 Sin 1º (2º–5º)
+                            ✂️ Sin 1º (2º–5º)
                           </button>
                           <button
                             type="button"
@@ -1441,8 +1516,8 @@ export default function LaboratorioFvTab() {
                           </button>
                         </div>
 
-                        {/* Lista clicable de TODOS los ejemplares inscritos (con FV y 0% Sin FV) */}
-                        <div className="space-y-1 max-h-56 overflow-y-auto pr-0.5">
+                        {/* Lista clicable de TODOS los ejemplares inscritos (con FV y 0% Sin FV + etiquetas 50kg/Entrenador/Jinete) */}
+                        <div className="space-y-1 max-h-60 overflow-y-auto pr-0.5">
                           {allH.map(h => {
                             const hKey = horseIdKey(h);
                             const isSelected = selectedKeys.includes(hKey);
@@ -1455,15 +1530,15 @@ export default function LaboratorioFvTab() {
                                 key={hKey}
                                 type="button"
                                 onClick={() => toggleCustomHorse(v.validaNumber, hKey)}
-                                className={`w-full flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5 border text-left transition-all ${
+                                className={`w-full flex items-center justify-between text-xs rounded-lg px-2 py-1.5 border text-left transition-all ${
                                   isSelected
                                     ? 'bg-rose-950/60 border-rose-500 text-white'
                                     : 'bg-gray-900/50 border-gray-800/80 text-gray-500 hover:text-gray-300'
                                 }`}
                               >
-                                <span className="font-semibold truncate flex items-center gap-1.5">
+                                <span className="font-semibold truncate flex items-center gap-1.5 flex-wrap">
                                   <span
-                                    className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black ${
+                                    className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black shrink-0 ${
                                       isSelected ? 'bg-rose-500 text-white' : 'bg-gray-800 text-gray-500'
                                     }`}
                                   >
@@ -1472,10 +1547,18 @@ export default function LaboratorioFvTab() {
                                   <span>
                                     #{h.dorsalNumber ?? '?'} {h.horseName}
                                   </span>
+                                  {h.hunterTags?.map((tg, tIdx) => (
+                                    <span
+                                      key={tIdx}
+                                      className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    >
+                                      {tg}
+                                    </span>
+                                  ))}
                                   {isWinner && <span className="text-yellow-400 font-black">🏆</span>}
                                 </span>
                                 <span
-                                  className={`text-[10px] font-bold shrink-0 ml-2 ${
+                                  className={`text-[10px] font-bold shrink-0 ml-1.5 ${
                                     h.pos === 0
                                       ? 'text-purple-400'
                                       : h.pos <= 3
@@ -1483,7 +1566,7 @@ export default function LaboratorioFvTab() {
                                       : 'text-amber-300'
                                   }`}
                                 >
-                                  {h.pos > 0 ? `${h.pos}º FV (${h.fvPct}%)` : '⚡ 0% (Stud/Yunta)'}
+                                  {h.pos > 0 ? `${h.pos}º FV (${h.fvPct}%)` : '0% Sin FV'}
                                 </span>
                               </button>
                             );
