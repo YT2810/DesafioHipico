@@ -17,7 +17,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const today = new Date().toISOString().slice(0, 10);
 
   const [step, setStep] = useState<'package' | 'destination' | 'form' | 'success'>('package');
-  const [selectedPkgId, setSelectedPkgId] = useState<TopUpPackageId>('jinete');
+  const [selectedPkgId, setSelectedPkgId] = useState<TopUpPackageId>('arranque');
   const [livePackages, setLivePackages] = useState<LivePackage[]>([...TOPUP_PACKAGES]);
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);

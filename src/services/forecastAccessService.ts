@@ -45,14 +45,12 @@ export function getCurrentWeekMondayStartUTC(): Date {
 /**
  * Checks if user has an active National Pass:
  * - Weekly Pass (any approved topup/purchase since Monday 00:00 UTC-4 of current week)
- * - 15-Day Pass ('jinete' or >= 40 Golds / >= Bs 10,000 in last 15 days)
  * - 30-Day Monthly Pass ('padrillo' or >= 50 Golds / >= Bs 18,000 in last 30 days)
  */
 export async function hasActiveNationalPass(userId: string): Promise<boolean> {
   if (!userId || !Types.ObjectId.isValid(userId)) return false;
   const uObjId = new Types.ObjectId(userId);
   const weekStart = getCurrentWeekMondayStartUTC();
-  const days15Ago = new Date(Date.now() - 15 * 24 * 3600 * 1000);
   const days30Ago = new Date(Date.now() - 30 * 24 * 3600 * 1000);
 
   const [approvedTopUp, purchaseTx] = await Promise.all([
@@ -62,8 +60,6 @@ export async function hasActiveNationalPass(userId: string): Promise<boolean> {
       $or: [
         { reviewedAt: { $gte: weekStart } },
         { createdAt: { $gte: weekStart } },
-        { packageId: 'jinete', reviewedAt: { $gte: days15Ago } },
-        { amountBs: { $gte: 10000 }, reviewedAt: { $gte: days15Ago } },
         { packageId: 'padrillo', reviewedAt: { $gte: days30Ago } },
         { amountBs: { $gte: 18000 }, reviewedAt: { $gte: days30Ago } },
       ],
@@ -73,7 +69,6 @@ export async function hasActiveNationalPass(userId: string): Promise<boolean> {
       type: 'purchase',
       $or: [
         { createdAt: { $gte: weekStart } },
-        { amount: { $gte: 40 }, createdAt: { $gte: days15Ago } },
         { amount: { $gte: 50 }, createdAt: { $gte: days30Ago } },
       ],
     }),
