@@ -275,7 +275,22 @@ Cuando contamos **cuántos de los 6 chips de peligro están encendidos (`ON`) al
 | **Subtotal `0 a 2 chips ON`** | **74 válidas** | **63 de 74 (`85.1%`)** | **Solo 11 (`14.9%`)** | Solo 3 de `6º–8º` en todo el año | **En 0–2 chips ON no se buscan batacazos.** |
 | **`3 chips ON`** | 47 válidas | 32 (`68.1%`) | **15 (`31.9%` — El Doble)** | **`4º–5º`: 9** · `6º–8º`: 5 · `0%`: 1 | **🟠 Alerta de `4º y 5º FV`** |
 | **`4 o más chips ON`** | 71 válidas | 47 (`66.2%`) | **24 (`33.8%` — 1 de cada 3)** | `4º–5º`: 8 · **`6º–8º`: 13** · **`0%`: 3** | **🔴 Alerta de `6º–8º FV` y `0% Sin FV`** |
-| **Subtotal `3 o más chips ON`** | **118 válidas** | 79 de 118 (`66.9%`) | **39 de 50 (`78.0%` de todas las sorpresas)** | **18 de los 21 ganadores `6º–8º FV` salieron aquí** | **Aquí se activa `✂️ Candidata a QUITAR 1º FV`.** |
+| **Subtotal `3 o más chips ON`** | **118 válidas** | 79 de 118 (`66.9%`) | **39 de las 50 (`78.0%` de todas las sorpresas)** | **18 de los 21 ganadores `6º–8º FV` salieron aquí** | **Aquí se activa `✂️ Candidata a QUITAR 1º FV`.** |
+
+### C. ¿Qué pasa cuando chocan `🔒 Corte Limpio: ON` contra `Chips de Peligro: ON`? (47 Válidas Auditadas)
+
+| Condición Cruzada en la Válida | Válidas | Ganó Candado (`1º–2º FV`) | Ganó Trilogía (`1º–3º FV`) | Ganó `4º–5º FV` | Ganó `6º–8º FV` o `0%` | Quién Manda |
+|---|---|---|---|---|---|---|
+| **`🔒 Corte Limpio: ON` + `0 a 3 chips de peligro ON`** | **31 válidas** | **22 (`71.0%`)** | **26 de 31 (`83.9%`)** | 3 (`9.7%`) | **Solo 2 (`6.5%`)** | **🟢 MANDA EL CORTE LIMPIO (`83.9%` Top 3).** Cerrar en 2 o 3 caballos. |
+| **`🔒 Corte Limpio: ON` + `4 o 5 chips de peligro ON`** | **16 válidas** | **Solo 9 (`56.3%`)** | 12 de 16 (`75.0%`) | 0 (`0%`) | **4 (`25.0%` — 1 de cada 4!)** | **🔴 MANDAN LOS 4+ CHIPS DE PELIGRO.** Aquí explotaron `R26 V1` (`0% FV`, Bs. 5,3M), `R20 V1` (`7º FV`, Bs. 1,46M), `R33 V3` (`7º FV`) y `R23 V2` (`7º FV`). |
+
+### D. Jerarquía de Mando de los Indicadores al Momento de Sellar (Orden de Prioridad)
+1. **Prioridad #1 (`Distancia ≥ 1.500m` — `📏 Tiro Corto: OFF`):** En las 68 carreras de `1.500m a 3.200m` del año hubo **`0.0%` de batacazos fuera del Top 5** (`100%` ganó en el Top 5 y en `1.800m+` el **`100%` ganó en la Trilogía `1º–3º FV`**). Jamás buscar `6º–8º FV` ni `0% FV` en `1.500m+`.
+2. **Prioridad #2 (`Llamado Noble` — `🏷️ Lote Riesgo: OFF`):** En *Reclamo*, *Ganadores de 1*, *Ganadores de 3 o 4*, *Clásicos* y lotes de *3 y 4 años* (135 carreras) hubo **`0.0%` de ganadores con `0% Sin FV`**. Jamás buscar un `0% Sin FV` cuando este chip está en `OFF`.
+3. **Prioridad #3 (`🔒 Corte Limpio: ON` con `≤ 3 chips de peligro`):** El `83.9%` gana en el Top 3 (`71%` en el Candado `1º+2º`). Cerrar en 2 o 3 ejemplares.
+4. **Prioridad #4 (`3 chips de peligro ON` o `🟣 Sin Favorito < 40%: ON`):** Duplica la tasa de victoria del **`4º y 5º FV`**. Abrir a 4 o 5 ejemplares del FV.
+5. **Prioridad #5 (`4 o 5 chips de peligro ON juntos` — incluso si aparenta Corte Limpio):** Concentra la mayoría de los ganadores de **`6º–8º FV` y `0% Sin FV`**. Aquí se activa la alerta `✂️ Quitar 1º FV` y la búsqueda de ejemplares con `🪶 50–52kg` o entrenadores/jinetes cazadores.
+
 
 
 

@@ -943,8 +943,9 @@ function buildMeetingValidasPicks(
       (p1 > 0 && p1 < 40 ? 1 : 0) +
       (p1 >= 48.5 && p1 <= 55.5 && (r.distance <= 1300 || r.fieldSize >= 9) ? 1 : 0) +
       (p5 >= 5.5 || p6 >= 3.5 ? 1 : 0);
-    // Only flag race when 3+ danger chips are ON (where 78% of all out-of-Top-3 winners occur) and it has no Clean Cut
-    return !isCleanCut && p1 < 56 && dangerCount >= 3;
+    // Only flag race when 3+ danger chips are ON (where 78% of all out-of-Top-3 winners occur)
+    // If dangerCount >= 4, even a seemingly "Clean Cut" race stays flagged (R26 V1, R20 V1, R33 V3, R23 V2)
+    return (!isCleanCut || dangerCount >= 4) && p1 < 56 && dangerCount >= 3;
   });
 
   const picksCazadorByIdx = validasRaces.map((r, idx) => {
