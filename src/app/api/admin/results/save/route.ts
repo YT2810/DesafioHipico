@@ -6,6 +6,7 @@ import Entry from '@/models/Entry';
 import Forecast from '@/models/Forecast';
 import Meeting from '@/models/Meeting';
 import Track from '@/models/Track';
+import ActivityEvent from '@/models/ActivityEvent';
 import { recalcHandicapperStats } from '@/services/handicapperStatsService';
 
 export type FinishVerdict = 'normal' | 'DST' | 'DQ' | 'INV' | 'SUB';
@@ -208,6 +209,56 @@ export async function POST(req: NextRequest) {
       await Race.db.model('Meeting').findByIdAndUpdate(meetingId, { status: 'finished' });
     } else if (finishedRaces > 0) {
       await Race.db.model('Meeting').findByIdAndUpdate(meetingId, { status: 'active' });
+    }
+
+    // Publish race_result ActivityEvent for social proof feed
+    // Compute FV consensus rank of the winning horse (1st official position)
+    try {
+      const winnerDorsal = winner1st ? parseInt(winner1st, 10) : null;
+      if (winnerDorsal && forecasts.length >= 3) {
+        // Build dorsal → scores map (lower preferenceOrder = better = lower score)
+        const scoreMap: Record<number, number[]> = {};
+        for (const fc of forecasts) {
+          const sorted = [...fc.marks]
+            .sort((a: { preferenceOrder: number }, b: { preferenceOrder: number }) => a.preferenceOrder - b.preferenceOrder);
+          sorted.forEach((m: { dorsalNumber?: number }, idx: number) => {
+            if (m.dorsalNumber == null) return;
+            if (!scoreMap[m.dorsalNumber]) scoreMap[m.dorsalNumber] = [];
+            scoreMap[m.dorsalNumber].push(idx + 1);
+          });
+        }
+        // Average score per dorsal, sorted ascending → that's the FV rank
+        const ranked = Object.entries(scoreMap)
+          .map(([d, scores]) => ({ dorsal: parseInt(d, 10), avg: scores.reduce((s, v) => s + v, 0) / scores.length }))
+          .sort((a, b) => a.avg - b.avg);
+        const fvRank = ranked.findIndex(r => r.dorsal === winnerDorsal) + 1;
+
+        // Resolve winner horse name from Entry
+        const winnerEntry = await Entry.findOne({ raceId: race._id, dorsalNumber: winnerDorsal }, { horseName: 1 }).lean() as any;
+        const horseName: string = winnerEntry?.horseName ?? `#${winnerDorsal}`;
+
+        // Build a human-readable message
+        const meetingDoc = await Meeting.findById(meetingId, { meetingNumber: 1 }).lean() as any;
+        const meetingRef = meetingDoc?.meetingNumber ? `R${meetingDoc.meetingNumber}` : 'Reunión';
+        let message: string;
+        if (fvRank === 0) {
+          message = `${meetingRef} · C${raceNumber}: ${horseName} (#${winnerDorsal}) ganó 🏆`;
+        } else if (fvRank <= 3) {
+          message = `${meetingRef} · C${raceNumber}: ${horseName} ganó — estaba ${fvRank === 1 ? 'primero' : fvRank === 2 ? '2do' : '3ro'} en el Factor de Victoria 🎯`;
+        } else if (fvRank <= 5) {
+          message = `${meetingRef} · C${raceNumber}: ${horseName} ganó — estaba en el Top 5 del Factor de Victoria`;
+        } else {
+          message = `${meetingRef} · C${raceNumber}: ${horseName} (#${winnerDorsal}) ganó — sorpresa en el Factor de Victoria 🔴`;
+        }
+
+        await ActivityEvent.create({
+          type: 'race_result',
+          message,
+          meta: { raceId: race._id, meetingId, raceNumber, winnerDorsal, horseName, fvRank, forecasterCount: forecasts.length },
+        });
+      }
+    } catch (actErr) {
+      console.error('[results/save] ActivityEvent error (non-critical):', actErr);
     }
 
     return NextResponse.json({

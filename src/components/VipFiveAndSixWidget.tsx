@@ -60,12 +60,12 @@ export default function VipFiveAndSixWidget() {
   return (
     <>
       {/* FLOATING GOLD BADGE — follows scroll on all public pages */}
-      <div className="fixed right-3 bottom-20 z-40">
+      <div className="fixed right-3 bottom-32 z-40">
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Abrir Cuadro 5y6 VIP del Algoritmo"
-          className="group relative flex items-center gap-2 rounded-full p-1 pr-3.5 bg-gradient-to-r from-[#1a1405] via-[#2b2108] to-[#1a1405] border-2 border-[#D4AF37] shadow-[0_0_24px_rgba(212,175,55,0.45)] hover:shadow-[0_0_32px_rgba(212,175,55,0.75)] hover:scale-105 active:scale-95 transition-all"
+          className="group relative flex items-center gap-2 rounded-full p-1 pr-4 bg-gradient-to-r from-[#1a1405] via-[#2b2108] to-[#1a1405] border-2 border-[#D4AF37] shadow-[0_0_24px_rgba(212,175,55,0.45)] hover:shadow-[0_0_32px_rgba(212,175,55,0.75)] hover:scale-105 active:scale-95 transition-all"
         >
           <span
             className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-black text-black shadow-inner shrink-0"
@@ -76,11 +76,11 @@ export default function VipFiveAndSixWidget() {
             👑
           </span>
           <div className="text-left leading-tight">
-            <span className="block text-[9px] font-extrabold uppercase tracking-widest text-yellow-400">
+            <span className="block text-[9px] font-extrabold uppercase tracking-widest text-yellow-400/80">
               Club VIP
             </span>
-            <span className="block text-xs font-black text-white whitespace-nowrap">
-              5y6 Algoritmo
+            <span className="block text-lg font-black text-white tracking-tight whitespace-nowrap" style={{ lineHeight: 1 }}>
+              5y6
             </span>
           </div>
           <span className="absolute -top-1.5 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-red-600 text-white border border-yellow-400 animate-pulse">
@@ -119,7 +119,7 @@ export default function VipFiveAndSixWidget() {
                           : 'bg-yellow-950/80 text-yellow-300 border-yellow-700/60'
                       }`}
                     >
-                      {isUnlocked ? '🔓 ACTIVO ESTA SEMANA' : '🔒 EXCLUSIVO RECARGAS'}
+                      {isUnlocked ? '🔓 ACTIVO ESTA SEMANA' : '🔒 EXCLUSIVO PASE VIP'}
                     </span>
                   </div>
                   <p className="text-xs text-yellow-200/70">
@@ -292,7 +292,7 @@ export default function VipFiveAndSixWidget() {
                         🔓 Cómo desbloquear el Cuadro 5y6 VIP de esta semana
                       </p>
                       <p className="text-xs text-gray-300 leading-relaxed">
-                        El Cuadro 5y6 VIP se activa <strong>gratis y automáticamente</strong> de lunes a domingo para todo usuario que realice cualquier recarga de Golds durante la semana en curso (desde <strong>Bs. 3.000</strong>), y además conservas todos tus Golds para desbloquear carreras.
+                        El Cuadro 5y6 VIP se activa automáticamente de lunes a domingo para todo usuario con un <strong>Pase Nacional activo esta semana</strong>. Incluye además todas las carreras desbloqueadas y el diagnóstico completo de cada carrera.
                       </p>
                       {isLoggedIn ? (
                         <button
@@ -304,7 +304,7 @@ export default function VipFiveAndSixWidget() {
                           className="w-full py-3 rounded-xl text-sm font-black text-black shadow-lg hover:brightness-110 transition-all"
                           style={{ backgroundColor: GOLD }}
                         >
-                          🪙 Recargar Golds y Desbloquear 5y6 VIP →
+                          🎟️ Activar Pase Semanal (Bs. 6.000) →
                         </button>
                       ) : (
                         <Link
@@ -313,7 +313,7 @@ export default function VipFiveAndSixWidget() {
                           className="block w-full py-3 rounded-xl text-sm font-black text-black shadow-lg"
                           style={{ backgroundColor: GOLD }}
                         >
-                          🔑 Inicia sesión y recarga para desbloquear →
+                          🔑 Inicia sesión y activa tu Pase para desbloquear →
                         </Link>
                       )}
                     </div>

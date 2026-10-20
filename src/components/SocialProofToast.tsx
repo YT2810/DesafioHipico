@@ -83,7 +83,8 @@ export default function SocialProofToast({
 
   if (!events.length || !visible) return null;
   const ev = events[index];
-  const isPurchase = ev.type === 'purchase' || ev.type === 'meeting_pass';
+  const isPurchase = ev.type === 'purchase' || ev.type === 'meeting_pass' || ev.type === 'pass_activation';
+  const isResult = ev.type === 'race_result';
   const showCta = isPurchase || isGuest || pronosticosLink;
 
   return (
@@ -102,20 +103,36 @@ export default function SocialProofToast({
         className="rounded-2xl overflow-hidden shadow-2xl"
         style={{
           background: '#0f0f0f',
-          border: '1px solid rgba(212,175,55,0.35)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(212,175,55,0.15)',
+          border: isResult ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(212,175,55,0.35)',
+          boxShadow: isResult
+            ? '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(34,197,94,0.15)'
+            : '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(212,175,55,0.15)',
         }}
       >
-        {/* Gold accent bar top */}
-        <div className="h-[3px] w-full" style={{ background: 'linear-gradient(90deg, #D4AF37, #F5D76E, #D4AF37)' }} />
+        {/* Accent bar top */}
+        <div className="h-[3px] w-full" style={{
+          background: isResult
+            ? 'linear-gradient(90deg, #16a34a, #4ade80, #16a34a)'
+            : 'linear-gradient(90deg, #D4AF37, #F5D76E, #D4AF37)'
+        }} />
 
         <div className="flex items-center gap-3 px-4 py-3">
           <Avatar alias={ev.alias} />
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white leading-tight truncate">{ev.alias}</p>
-            <p className="text-sm text-gray-300 leading-snug mt-0.5">{ev.emoji} {ev.action}</p>
-            <p className="text-xs text-yellow-500/80 mt-1 font-medium">{timeLabel(ev.minutesAgo)}</p>
+            {isResult ? (
+              <>
+                <p className="text-xs font-extrabold text-green-400 uppercase tracking-wide">Factor de Victoria · Resultado</p>
+                <p className="text-sm text-white leading-snug mt-0.5 font-medium">{ev.action}</p>
+                <p className="text-xs text-green-400/70 mt-1 font-medium">{timeLabel(ev.minutesAgo)}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold text-white leading-tight truncate">{ev.alias}</p>
+                <p className="text-sm text-gray-300 leading-snug mt-0.5">{ev.emoji} {ev.action}</p>
+                <p className="text-xs text-yellow-500/80 mt-1 font-medium">{timeLabel(ev.minutesAgo)}</p>
+              </>
+            )}
           </div>
 
           {showCta && (
