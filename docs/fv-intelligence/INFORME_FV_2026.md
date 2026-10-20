@@ -202,8 +202,32 @@ Para no meter `TODOS` en varias carreras el mismo día:
 ### C. Verificación Empírica del `4º Favorito con ≥ 15%–20% FV` y las 3 Variantes de Sellar
 - En La Rinconada, cuando el `4º FV` tuvo `≥ 16%` (31 carreras), el `4º FV` ganó solo **2 veces (`6.5%`)**, pero en esas carreras abiertas **del `5º al 8º del FV` ganaron 7 veces (`22.6%`)** y `0% Sin FV` ganó **0 veces**. Cuando el `4º FV` llegó a `≥ 20%` (13 carreras), ganó **2 de 13 (`15.4%`)** y el Top 3 ganó **10 de 13 (`76.9%`)**.
 - Por ello, la sección privada **`3E. Armador de Variantes y Caza-Batacazos`** permite alternar en vivo entre:
-  1. **Variante 1 (`Caza 5º–7º FV`):** Abre hasta el 5º–7º puesto del FV en las carreras con Vacío / Perdedores / 5+ años.
+  1. **Variante 1 (`Sin 1º FV en 3 Bravas: 2 Dobles Líneas + 1 Trilogía + 3 Carreras del 2º al 5º/6º FV`):** Mantiene al `1º FV` únicamente en las 2 o 3 carreras de Lote Noble / Menor Lote (`1º+2º` y `1º+2º+3º`), y en las 3 carreras de Lote Explosivo / Sin Favorito (`< 40% FV` o `10+ ejemplares en 1.100m–1.300m`) **elimina al `1º FV`** y juega del **`2º al 5º/6º del FV`** (`2 × 2 × 3 × 4 × 4 × 5 = 960 comb.`), acertando 4 de las 13 reuniones de más de Bs. 1.000.000 (`R41` de Bs. 9,36M, `R34` de Bs. 3,71M, `R24` de Bs. 3,25M y `R39` de Bs. 1,54M).
   2. **Variante 2 (`Top 5 FV Abierto`):** Para domingos donde ningún favorito supera el 52% y los 6 ganadores están dentro del Top 5 del FV (como en `R41`, `R34` y `R24`).
   3. **Variante 3 (`Bomba con TODOS / Stud / Yunta 0% FV`):** Permite incluir todos los inscritos o encender manualmente cualquier ejemplar de `0% Sin FV` por Stud, Yunta o Corazonada.
+
+---
+
+## 8. Radiografía de los 35 Ganadores `6º–8º FV` y `0% Sin FV` + Clasificación de Carreras en 2 Fases
+
+### A. Hallazgos sobre los 35 Ganadores Profundos (`6º–8º FV` y `0% Sin FV` en La Rinconada)
+1. **Factor Peso / Descargo de Aprendiz (`50 kg a 53.5 kg`):**
+   - **El `74.3%` de todos los batacazos de La Rinconada (26 de 35) y el `76.9%` de Valencia (10 de 13) corrieron livianos (`50 a 53.5 kg`).**
+   - **11 de los 35 batacazos (`31.4%`) llevaban peso pluma de `50 kg a 51 kg`**, incluyendo los que dispararon los mayores dividendos del año: `#1 Mia Sophia (51kg, 0% FV)` en `R28` (`Bs. 31,9M`), `#4 Solana (50kg, 7º FV)` en `R35` (`Bs. 3,2M`), `#5 The Fieldher Jr (50kg, 6º FV)` en `R37` (`Bs. 2,2M`), `#2 Fabi Luna (51kg, 6º FV)` en `R14` (`Bs. 610k`), `#2 Spring Training (50kg, 0% FV)`, `#5 Sue Storm (50kg, 0% FV)`, `#8 Rey Joaquín (50kg, 0% FV)`, `#9 El Chema (50.5kg, 6º FV)`.
+2. **Entrenadores y Jinetes que más repiten en los ganadores de `6º–8º FV` y `0% Sin FV`:**
+   - **Entrenadores:** `Carlos Luis Uzcátegui` (**4 ganadores de `6º–8º FV`**: `#10 Shaword`, `#7 Sarasarita`, `#4 Solana`, `#5 Meheble`), `Luis Peraza` (**3 ganadores de `6º–7º FV`**), `Juan Carlos García` (**2 ganadores el mismo domingo en `R28` de Bs. 31,9M**: `#1 Convergente 6º FV` y `#1 Mia Sophia 0% FV`) y `Aldo Traversa` (**2 ganadores de `0% Sin FV`**: `#5 Sue Storm` y `#1 Hatshepsut` en `R26` de Bs. 5,3M).
+   - **Jinetes:** `Félix Márquez` (**4 batacazos**: dos `0% FV` y dos `7º–8º FV`), `Samuel Yánez` (**3 batacazos con 50kg**) y `José Calicho` (**2 batacazos millonarios con 50–51kg**).
+3. **Llamados con `0.0%` de ganadores `0% Sin FV` (135 carreras auditadas):**
+   - En **Ganadores de 1**, **Reclamo**, **Ganadores de 3 o 4**, **Clásicos y Copas** y lotes de **3 y 4 años** jamás ganó un ejemplar con `0% Sin FV` en La Rinconada.
+   - Los `0% Sin FV` se concentran en **Perdedores / Debutantes (`45.5%`)** y **Caballos de `5 y más años` / `Ganadores de 5+` (`45.5%`)**.
+
+### B. Sistema de Clasificación de Carreras en 2 Fases (`classifyPreFvRaceRisk` + Ajuste Asíncrono FV)
+1. **Fase 1 (Pre-FV, apenas se sube el PDF de inscritos antes de existir pronósticos):**
+   - **`🟢 Fase 1 Noble`:** `Distancia ≥ 1.500m` (`0%` batacazos), o llamados de `Reclamo`, `Ganadores de 1` (`3 y 4 años`) y `Clásicos` en `≥ 1.400m` o con `Lote ≤ 8`.
+   - **`🟡 Fase 1 Intermedia`:** `1.300m–1.400m` con `9–10 ejemplares` o `6 y más años`.
+   - **`🔴 Fase 1 Explosiva`:** `Perdedores / Debutantes`, `Ganadores de 2` o `5 y más años` en `1.100m–1.300m` o con `10 a 14 ejemplares`.
+2. **Fase 2 (Post-FV, actualización dinámica a medida que se publican pronósticos):**
+   - Confirma **Doble Línea (`1º+2º`)** cuando hay corte limpio (`1º ≥ 44%, 2º ≥ 23%, 3º < 11%`), **Trilogía (`1º–3º`)** cuando los 3 primeros superan `19.5%` con `4º < 13%`, y abre a **5 o 6 caballos del FV (o `2º al 6º FV sin el 1º`)** en las carreras de Fase 1 Explosiva o con `1º FV < 40%`.
+
 
 

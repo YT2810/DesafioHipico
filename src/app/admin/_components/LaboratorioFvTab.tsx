@@ -155,13 +155,14 @@ export default function LaboratorioFvTab() {
 
   const setValidaQuickPreset = (
     v: NonNullable<typeof activeCazadorMeeting>['validas'][number],
-    mode: 'top2' | 'top3' | 'top5' | 'all_fv' | 'all_lote'
+    mode: 'top2' | 'top3' | 'sin_1fv' | 'top5' | 'all_fv' | 'all_lote'
   ) => {
     const allH = v.allFvHorses?.length ? v.allFvHorses : v.picksPremium;
     const fvOnly = allH.filter(h => h.pos > 0);
     let picked = allH;
     if (mode === 'top2') picked = fvOnly.slice(0, 2);
     else if (mode === 'top3') picked = fvOnly.slice(0, 3);
+    else if (mode === 'sin_1fv') picked = fvOnly.length >= 3 ? fvOnly.slice(1, 5) : fvOnly;
     else if (mode === 'top5') picked = fvOnly.slice(0, 5);
     else if (mode === 'all_fv') picked = fvOnly;
     setCustomSelectedByValida(prev => ({
@@ -1275,7 +1276,7 @@ export default function LaboratorioFvTab() {
                           : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
                       }`}
                     >
-                      🎯 Variante 1: Caza 5º–7º FV (Por Lote/Vacío)
+                      🎯 Variante 1: Sin 1º FV en 3 Bravas (2 Dobles + 1 Trilogía + 3 del 2º–5º/6º FV)
                     </button>
                     <button
                       type="button"
@@ -1360,8 +1361,21 @@ export default function LaboratorioFvTab() {
                         </div>
 
                         <div className="flex items-center justify-between gap-1 flex-wrap">
-                          <span className="text-[10px] font-bold text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded px-2 py-0.5">
-                            {v.category ?? 'Lote'} · {v.ageGroup ?? ''}
+                          <span
+                            className={`text-[10px] font-bold rounded px-2 py-0.5 border ${
+                              v.preFvLevel === 'explosivo'
+                                ? 'bg-red-950/60 text-red-300 border-red-700/60'
+                                : v.preFvLevel === 'noble'
+                                ? 'bg-green-950/60 text-green-300 border-green-700/60'
+                                : 'bg-sky-950/40 text-sky-300 border-sky-800/40'
+                            }`}
+                          >
+                            {v.preFvLevel === 'explosivo'
+                              ? '🔴 Fase 1 Explosiva'
+                              : v.preFvLevel === 'noble'
+                              ? '🟢 Fase 1 Noble'
+                              : '🟡 Fase 1 Intermedia'}{' '}
+                            · {v.category ?? 'Lote'} ({v.ageGroup ?? ''})
                           </span>
                           {v.winner && (
                             <span
@@ -1377,6 +1391,10 @@ export default function LaboratorioFvTab() {
                           )}
                         </div>
 
+                        <div className="text-[10px] font-semibold text-rose-200 bg-rose-950/40 border border-rose-800/40 rounded px-2 py-1">
+                          {v.badgeCazador}
+                        </div>
+
                         {/* Botones rápidos por válida */}
                         <div className="flex flex-wrap gap-1 pt-0.5">
                           <button
@@ -1384,14 +1402,21 @@ export default function LaboratorioFvTab() {
                             onClick={() => setValidaQuickPreset(v, 'top2')}
                             className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700"
                           >
-                            Candado (2)
+                            1º+2º (2)
                           </button>
                           <button
                             type="button"
                             onClick={() => setValidaQuickPreset(v, 'top3')}
                             className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700"
                           >
-                            Top 3
+                            1º–3º (3)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setValidaQuickPreset(v, 'sin_1fv')}
+                            className="text-[10px] px-2 py-0.5 rounded bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600 font-bold"
+                          >
+                            💣 Sin 1º (2º–5º)
                           </button>
                           <button
                             type="button"
@@ -1405,7 +1430,7 @@ export default function LaboratorioFvTab() {
                             onClick={() => setValidaQuickPreset(v, 'all_fv')}
                             className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-rose-300 border border-gray-700"
                           >
-                            Todos con FV
+                            Todos FV
                           </button>
                           <button
                             type="button"

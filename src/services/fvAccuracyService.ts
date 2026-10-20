@@ -371,6 +371,52 @@ export function extractMeeting5y6Payouts(
   return { payout6: list[0].a, payout5: list[1].a };
 }
 
+export function classifyPreFvRaceRisk(
+  distance: number,
+  fieldSize: number,
+  category?: string,
+  ageGroup?: string
+): {
+  preFvLevel: 'noble' | 'intermedio' | 'explosivo';
+  preFvLabel: string;
+} {
+  const cat = category ?? '';
+  const age = ageGroup ?? '';
+  const isExplosiveLote =
+    cat === 'Perdedores / Debutantes' ||
+    cat === 'Ganadores de 2 (o 2-3)' ||
+    cat === 'Ganadores de 5 o más' ||
+    age === '5 y más años';
+  const isNobleLote =
+    cat === 'Reclamo' ||
+    cat === 'Ganadores de 1 (o 1-2)' ||
+    cat === 'Clásicos y Copas' ||
+    age === '3 y 4 / 4 y 5 años';
+
+  if (distance >= 1500) {
+    return {
+      preFvLevel: 'noble',
+      preFvLabel: `🟢 Fase 1 Noble: Tiro medio/largo (${distance}m · 0% batacazos históricos)`,
+    };
+  }
+  if ((isExplosiveLote && (distance <= 1300 || fieldSize >= 9)) || (distance <= 1300 && fieldSize >= 10)) {
+    return {
+      preFvLevel: 'explosivo',
+      preFvLabel: `🔴 Fase 1 Explosiva: ${cat || 'Tiro corto'} · ${age} (${distance}m · ${fieldSize} ej. → Multiplicar 5º–7º FV)`,
+    };
+  }
+  if (isNobleLote && (distance >= 1400 || fieldSize <= 8)) {
+    return {
+      preFvLevel: 'noble',
+      preFvLabel: `🟢 Fase 1 Noble: ${cat} · ${age} (${distance}m · ${fieldSize} ej. → Candidata a Línea/Candado)`,
+    };
+  }
+  return {
+    preFvLevel: 'intermedio',
+    preFvLabel: `🟡 Fase 1 Intermedia: ${cat} · ${age} (${distance}m · ${fieldSize} ej.)`,
+  };
+}
+
 export interface FvValidaPick {
   validaNumber: number; // 1..6
   raceNumber: number;
@@ -378,6 +424,8 @@ export interface FvValidaPick {
   fieldSize: number;
   category?: string;
   ageGroup?: string;
+  preFvLevel: 'noble' | 'intermedio' | 'explosivo';
+  preFvLabel: string;
   safetyRank: number; // 1..6 (1 = más confiable, 6 = más peligrosa)
   vacioType: 'bloque_compacto_3' | 'bloque_compacto_4' | 'fijo_o_candado' | 'vacio_explosion' | 'normal';
   vacioLabel: string;
@@ -398,6 +446,7 @@ export interface FvValidaPick {
   isAllBli?: boolean;
   isAllPre?: boolean;
   isAllCazador?: boolean;
+  sinPrimeroCazador?: boolean;
   allFvHorses: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksEco: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
   picksMed: { pos: number; dorsalNumber?: number; horseName: string; fvPct: number }[];
@@ -628,15 +677,24 @@ function buildMeetingValidasPicks(
 
   const countsPre = validasRaces.map((r, idx) => {
     const rk = safetyRankByIdx.get(idx) ?? 3;
-    const p1 = r.topHorses[0]?.fvPct ?? 0;
-    const p3 = r.topHorses[2]?.fvPct ?? 0;
-    const p4 = r.topHorses[3]?.fvPct ?? 0;
-    const p5 = r.topHorses[4]?.fvPct ?? 0;
-    const p6 = r.topHorses[5]?.fvPct ?? 0;
-    const optHorses = r.topHorses.filter(h => h.fvPct >= 3.3).length;
-    const fvLen = Math.max(r.topHorses.length, 4);
+    const fvOnly = r.topHorses.filter(h => h.pos > 0);
+    const p1 = fvOnly[0]?.fvPct ?? 0;
+    const p2 = fvOnly[1]?.fvPct ?? 0;
+    const p3 = fvOnly[2]?.fvPct ?? 0;
+    const p4 = fvOnly[3]?.fvPct ?? 0;
+    const p5 = fvOnly[4]?.fvPct ?? 0;
+    const p6 = fvOnly[5]?.fvPct ?? 0;
+    const optHorses = fvOnly.filter(h => h.fvPct >= 3.3).length;
+    const fvLen = Math.max(fvOnly.length, 4);
+    const preFv = classifyPreFvRaceRisk(r.distance, r.fieldSize, r.category, r.ageGroup);
 
     if (!isValencia) {
+      if (p1 >= 44 && p2 >= 23 && p3 < 11) {
+        return 2;
+      }
+      if (p1 >= 37 && p2 >= 22 && p3 >= 19.5 && p4 < 13) {
+        return 3;
+      }
       let base =
         bestSafe.p1 >= 59 && bestSafe.r.fieldSize <= 9
           ? rk === 0
@@ -660,7 +718,14 @@ function buildMeetingValidasPicks(
       if (rk === 0 && base === 3 && ((r.sumTop2Pct >= 75 && p3 < 13) || (r.distance >= 1500 && r.fieldSize <= 8))) {
         base = 2;
       }
-      if (p1 < 37 || p5 >= 6.2 || (r.fieldSize >= 10 && r.distance <= 1300 && p6 >= 3.3)) {
+      if (p1 < 40 && p3 >= 18) {
+        base = Math.max(base, 5);
+      }
+      if (
+        p1 < 37 ||
+        p5 >= 6.2 ||
+        (preFv.preFvLevel === 'explosivo' && r.fieldSize >= 10 && p6 >= 3.3)
+      ) {
         base = Math.max(base, Math.min(optHorses, 6));
       }
       if (rk === 2 && p3 >= 16) {
@@ -696,9 +761,8 @@ function buildMeetingValidasPicks(
     for (let i = 0; i < 6; i++) {
       const minFloor = isValencia ? countsBli[i] : 3;
       if (countsPre[i] > minFloor) {
-        const rk = safetyRankByIdx.get(i) ?? 3;
-        const p4 = validasRaces[i].topHorses[3]?.fvPct ?? 0;
-        const lastPct = rk === 0 ? 99 : p4;
+        const h = validasRaces[i].topHorses;
+        const lastPct = h[countsPre[i] - 1]?.fvPct ?? 0;
         if (lastPct < minPct) {
           minPct = lastPct;
           trimIdx = i;
@@ -796,70 +860,41 @@ function buildMeetingValidasPicks(
   });
 
   // Identify #1 and #2 highest explosion score races for the Cazador ticket
-  // Instead of multiplying by all 13/14 horses (0% FV), Cazador covers positions 5–6–7 of the FV (horses with real FV points)!
-  const sortedByExplosion = [...explosionAnalysis].sort((a, b) => b.explosionScore - a.explosionScore);
-  const primaryBombIdx = sortedByExplosion[0]?.idx ?? 5;
-  const secondaryBombIdx =
-    sortedByExplosion[1] && sortedByExplosion[1].explosionScore > 0 ? sortedByExplosion[1].idx : -1;
+  const sortedByDropFirst = [...explosionAnalysis].sort((a, b) => b.explosionScore - a.explosionScore);
+  const sinPrimeroSet = new Set<number>(sortedByDropFirst.slice(0, 3).map(x => x.idx));
+  const topBombIdx = sortedByDropFirst[0]?.idx ?? -1;
+  const nobleThree = sortedByDropFirst.slice(3).sort((a, b) => a.explosionScore - b.explosionScore);
+  const trilogiaNobleIdx = nobleThree[nobleThree.length - 1]?.idx ?? -1;
 
   const isAllCazadorArr = validasRaces.map(() => false);
-  const countsCazador = validasRaces.map((r, idx) => {
-    const rk = safetyRankByIdx.get(idx) ?? 3;
-    const exp = explosionAnalysis[idx];
-    const fvWithOption = r.topHorses.filter(h => h.fvPct >= 2.2).length;
-    const fvLen = Math.max(r.topHorses.length, 4);
-
-    if (idx === primaryBombIdx) {
-      return Math.min(Math.max(fvWithOption, 6), 7, fvLen); // Posiciones 1º a 6º/7º del FV
+  const sinPrimeroArr = validasRaces.map((_, idx) => sinPrimeroSet.has(idx));
+  const picksCazadorByIdx = validasRaces.map((r, idx) => {
+    const fvOnly = r.topHorses.filter(h => h.pos > 0);
+    if (!fvOnly.length) return r.topHorses.slice(0, 3);
+    if (sinPrimeroSet.has(idx)) {
+      const takeCount = idx === topBombIdx && fvOnly.length >= 6 ? 5 : 4; // 2º..6º (5) or 2º..5º (4)
+      const withoutFirst = fvOnly.slice(1, 1 + takeCount);
+      return withoutFirst.length >= 2 ? withoutFirst : fvOnly.slice(0, takeCount);
+    } else {
+      const takeCount = idx === trilogiaNobleIdx ? 3 : 2; // 2 Dobles Líneas (2) + 1 Trilogía (3)
+      return fvOnly.slice(0, Math.min(takeCount, fvOnly.length));
     }
-    if (idx === secondaryBombIdx) {
-      return Math.min(Math.max(fvWithOption, 5), 6, fvLen); // Posiciones 1º a 5º/6º del FV
-    }
-    if (exp.vacioType === 'bloque_compacto_4') return Math.min(4, fvLen);
-    if (exp.vacioType === 'bloque_compacto_3') return Math.min(3, fvLen);
-    if (rk === 0) return (r.distance >= 1400 && exp.p1 >= 47) || exp.p1 >= 58 ? 1 : 2;
-    if (rk === 1 || exp.vacioType === 'fijo_o_candado') return 2;
-    return exp.p4 >= 12 ? 4 : 3;
   });
-
-  while (prod(countsCazador) > 1350) {
-    let trimmed = false;
-    // Trim non-bomb races that don't have a strong 4th favorite (p4 >= 18%)
-    for (const s of sortedBySafety) {
-      const exp = explosionAnalysis[s.idx];
-      if (
-        s.idx !== primaryBombIdx &&
-        s.idx !== secondaryBombIdx &&
-        countsCazador[s.idx] > 2 &&
-        !(countsCazador[s.idx] === 4 && exp.p4 >= 18)
-      ) {
-        countsCazador[s.idx]--;
-        trimmed = true;
-        break;
-      }
-    }
-    if (trimmed) continue;
-    if (secondaryBombIdx >= 0 && countsCazador[secondaryBombIdx] > 5) {
-      countsCazador[secondaryBombIdx]--;
-      continue;
-    }
-    if (countsCazador[primaryBombIdx] > 6) {
-      countsCazador[primaryBombIdx]--;
-      continue;
-    }
-    break;
-  }
+  const countsCazador = picksCazadorByIdx.map(list => Math.max(list.length, 1));
 
   const validas: FvValidaPick[] = validasRaces.map((r, idx) => {
     const rk = safetyRankByIdx.get(idx) ?? 3;
-    const p1 = r.topHorses[0]?.fvPct ?? 0;
+    const fvOnly = r.topHorses.filter(h => h.pos > 0);
+    const p1 = fvOnly[0]?.fvPct ?? 0;
     const exp = explosionAnalysis[idx];
+    const preFv = classifyPreFvRaceRisk(r.distance, r.fieldSize, r.category, r.ageGroup);
     const countEco = countsEco[idx];
     const countMed = countsMed[idx];
     const countBli = countsBli[idx];
     const countPre = countsPre[idx];
     const countCazador = countsCazador[idx];
     const isAllCazador = isAllCazadorArr[idx];
+    const sinPrimeroCazador = sinPrimeroArr[idx];
 
     const badgeEco =
       countEco === 1 ? '📌 LÍNEA (1)' : countEco === 2 ? '🔒 CANDADO (2)' : countEco === 3 ? '🔱 TRILOGÍA (3)' : `🚨 MULTIPLICAR (${countEco})`;
@@ -869,17 +904,11 @@ function buildMeetingValidasPicks(
       countBli === 1 ? '📌 LÍNEA (1)' : countBli === 2 ? '🔒 CANDADO (2)' : countBli === 3 ? '🔱 TRILOGÍA (3)' : countBli === 4 ? '🛡️ BLINDAJE (4)' : `🚨 CAZA DIVIDENDO (${countBli})`;
     const badgePre =
       countPre === 1 ? '📌 LÍNEA (1)' : countPre === 2 ? '🔒 CANDADO (2)' : countPre === 3 ? '🔱 TRILOGÍA (3)' : countPre === 4 ? '👑 PREMIUM (4)' : `👑 COBERTURA FV (${countPre})`;
-    const badgeCazador = isAllCazador
-      ? `🌟 TODOS (${countCazador})`
-      : countCazador === 1
-      ? '📌 LÍNEA CAZADORA (1)'
+    const badgeCazador = sinPrimeroCazador
+      ? `💣 SIN 1º FV: 2º al ${countCazador + 1}º FV (${countCazador})`
       : countCazador === 2
-      ? '🔒 CANDADO NOBLE (2)'
-      : countCazador === 3
-      ? '🔱 BLOQUE TRILOGÍA (3)'
-      : countCazador === 4
-      ? '🛡️ PÓKER COMPACTO (4)'
-      : `💣 CAZA 5º–${countCazador}º FV (${countCazador})`;
+      ? '🔒 DOBLE LÍNEA 1º+2º (2)'
+      : '🔱 TRILOGÍA 1º+2º+3º (3)';
 
     const reasonText =
       rk === 0
@@ -887,19 +916,18 @@ function buildMeetingValidasPicks(
         : rk === 1
         ? `2ª válida en confianza (${p1}% FV): zona histórica de "falso 2º fijo" (cubierta con 4–5 ej. en Medio/Blindado/Premium).`
         : countPre >= 5
-        ? `Alerta de dividendo (1º FV ${p1}% · ${r.fieldSize} ej.): 5º/6º FV con opción estadística activa.`
+        ? `Alerta Fase 1+2 (${r.category ?? ''} · ${r.ageGroup ?? ''} · 1º FV ${p1}% · ${r.fieldSize} ej.): abre a ${countPre} ej. del FV.`
         : `Suma Top 2: ${r.sumTop2Pct}% · Suma Top 3: ${r.sumTop3Pct}% FV.`;
 
-    const cazadorReason =
-      countCazador >= 5
-        ? `${exp.vacioLabel} → Se cubren los ${countCazador} ejemplares con opción en el FV (hasta el ${countCazador}º puesto FV, sin gastar en 0%).`
-        : `${exp.vacioLabel} → Se cierra en ${countCazador} ejemplar(es) del bloque superior.`;
+    const cazadorReason = sinPrimeroCazador
+      ? `${preFv.preFvLabel} → Se elimina al 1º FV (${p1}%) y se juega del 2º al ${countCazador + 1}º del FV.`
+      : `${preFv.preFvLabel} → Lote noble/corto: se mantiene al 1º FV en ${countCazador === 2 ? 'Doble Línea (1º+2º)' : 'Trilogía (1º+2º+3º)'}.`;
 
-    const picksEco = r.topHorses.slice(0, countEco);
-    const picksMed = r.topHorses.slice(0, countMed);
-    const picksBlindado = r.topHorses.slice(0, countBli);
-    const picksPremium = r.topHorses.slice(0, countPre);
-    const picksCazador = r.topHorses.slice(0, Math.min(countCazador, r.topHorses.length));
+    const picksEco = (fvOnly.length ? fvOnly : r.topHorses).slice(0, countEco);
+    const picksMed = (fvOnly.length ? fvOnly : r.topHorses).slice(0, countMed);
+    const picksBlindado = (fvOnly.length ? fvOnly : r.topHorses).slice(0, countBli);
+    const picksPremium = (fvOnly.length ? fvOnly : r.topHorses).slice(0, countPre);
+    const picksCazador = picksCazadorByIdx[idx];
 
     let hitEco: boolean | undefined;
     let hitMed: boolean | undefined;
@@ -913,7 +941,7 @@ function buildMeetingValidasPicks(
       hitMed = wRank !== null && wRank <= countMed;
       hitBlindado = wRank !== null && wRank <= countBli;
       hitPremium = wRank !== null && wRank <= countPre;
-      hitCazador = isAllCazador || (wRank !== null && wRank <= countCazador);
+      hitCazador = picksCazador.some(p => p.pos === wRank);
       if (hitEco) hitsEco++;
       else missedIdxEco = idx;
       if (hitMed) hitsMed++;
@@ -933,6 +961,8 @@ function buildMeetingValidasPicks(
       fieldSize: r.fieldSize,
       category: r.category,
       ageGroup: r.ageGroup,
+      preFvLevel: preFv.preFvLevel,
+      preFvLabel: preFv.preFvLabel,
       safetyRank: rk + 1,
       vacioType: exp.vacioType,
       vacioLabel: exp.vacioLabel,
@@ -949,6 +979,7 @@ function buildMeetingValidasPicks(
       countPre,
       countCazador,
       isAllCazador,
+      sinPrimeroCazador,
       allFvHorses: r.topHorses,
       picksEco,
       picksMed,
@@ -1894,9 +1925,7 @@ export async function getFvLabAnalytics(
       .map(r => {
         const rid = r._id.toString();
         const fcs = fcMap[rid] ?? [];
-        if (!fcs.length) return null;
-        const fv = calcFv(fcs);
-        if (!fv.length) return null;
+        const fv = fcs.length ? calcFv(fcs) : [];
         const fvRanked = fv.map((h, i) => ({
           pos: i + 1,
           dorsalNumber: h.dorsalNumber,
@@ -1915,6 +1944,7 @@ export async function getFvLabAnalytics(
           .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
           .map(ae => ({ pos: 0, dorsalNumber: ae.dorsalNumber, horseName: ae.horseName, fvPct: 0 }));
         const topHorses = [...fvRanked, ...zeroFv];
+        if (!topHorses.length) return null;
         const p1 = fvRanked[0]?.fvPct ?? 0;
         const p2 = fvRanked[1]?.fvPct ?? 0;
         const p3 = fvRanked[2]?.fvPct ?? 0;
