@@ -919,18 +919,32 @@ function buildMeetingValidasPicks(
   const secondBombIdx = sortedByDropFirst[1]?.idx ?? -1;
 
   const isAllCazadorArr = validasRaces.map(() => false);
-  const sinPrimeroArr = validasRaces.map((r, idx) => {
+  const sinPrimeroArr = validasRaces.map(r => {
     const fvOnly = r.topHorses.filter(h => h.pos > 0);
     const p1 = fvOnly[0]?.fvPct ?? 0;
+    const p2 = fvOnly[1]?.fvPct ?? 0;
     const p3 = fvOnly[2]?.fvPct ?? 0;
-    const preFv = classifyPreFvRaceRisk(r.distance, r.fieldSize, r.category, r.ageGroup);
-    const isCleanCandado = p1 >= 44 && (fvOnly[1]?.fvPct ?? 0) >= 23 && p3 < 13;
-    // Flag race as candidate to drop 1st FV to lower cost when it has risk factors and is not a clean candado/fijo
-    return (
-      !isCleanCandado &&
-      p1 < 56 &&
-      (p1 < 41 || preFv.preFvLevel === 'explosivo' || (p1 >= 48.5 && p1 <= 55.5 && r.distance <= 1300))
-    );
+    const p4 = fvOnly[3]?.fvPct ?? 0;
+    const p5 = fvOnly[4]?.fvPct ?? 0;
+    const p6 = fvOnly[5]?.fvPct ?? 0;
+    const cat = r.category ?? '';
+    const age = r.ageGroup ?? '';
+    const isRiskyLote =
+      cat === 'Perdedores / Debutantes' ||
+      cat === 'Ganadores de 2 (o 2-3)' ||
+      cat === 'Ganadores de 5 o más' ||
+      age === '5 y más años';
+    const isCleanCut =
+      (p1 >= 44 && p2 >= 23 && p3 < 13) || (p1 >= 37 && p2 >= 20 && p3 >= 19.5 && p4 < 13.5);
+    const dangerCount =
+      (r.distance <= 1300 ? 1 : 0) +
+      (r.fieldSize >= 10 ? 1 : 0) +
+      (isRiskyLote ? 1 : 0) +
+      (p1 > 0 && p1 < 40 ? 1 : 0) +
+      (p1 >= 48.5 && p1 <= 55.5 && (r.distance <= 1300 || r.fieldSize >= 9) ? 1 : 0) +
+      (p5 >= 5.5 || p6 >= 3.5 ? 1 : 0);
+    // Only flag race when 3+ danger chips are ON (where 78% of all out-of-Top-3 winners occur) and it has no Clean Cut
+    return !isCleanCut && p1 < 56 && dangerCount >= 3;
   });
 
   const picksCazadorByIdx = validasRaces.map((r, idx) => {

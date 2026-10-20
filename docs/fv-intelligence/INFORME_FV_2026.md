@@ -236,5 +236,47 @@ Para no meter `TODOS` en varias carreras el mismo día:
 2. **Fase 2 (Post-FV, actualización dinámica a medida que se publican pronósticos):**
    - Confirma **Doble Línea (`1º+2º`)** cuando hay corte limpio (`1º ≥ 44%, 2º ≥ 23%, 3º < 11%`), **Trilogía (`1º–3º`)** cuando los 3 primeros superan `19.5%` con `4º < 13%`, y abre a **5 o 6 caballos del FV (o `2º al 6º FV sin el 1º`)** en las carreras de Fase 1 Explosiva o con `1º FV < 40%`.
 
+---
+
+## 9. Auditoría Exclusiva de las Válidas del 5y6 (`192 Válidas` en Caracas y `114` en Valencia): Cuántas veces se encendió cada Alerta (`ON`) y Cuándo Gana Fuera de la Trilogía (`4º FV o peor`)
+
+Al aislar **únicamente las carreras válidas para el 5y6** (excluyendo las carreras no válidas):
+- **En La Rinconada (`192 válidas` en 32 reuniones):**
+  - **Ganó dentro de la Trilogía (`1º, 2º o 3º FV`):** `142 de 192` (**`74.0%`**).
+  - **Ganó FUERA de la Trilogía (`4º FV o peor`):** **`50 de 192` (`26.0%`)**, repartidas así:
+    - `4º o 5º del FV`: **23 válidas** (`12.0%`).
+    - `6º, 7º u 8º del FV`: **21 válidas** (`10.9%`).
+    - `0% Sin FV`: **6 válidas** (`3.1%`).
+- **En Valencia (`114 válidas` en 19 reuniones):**
+  - **Ganó dentro de la Trilogía (`1º, 2º o 3º FV`):** `94 de 114` (**`82.5%`**).
+  - **Ganó FUERA de la Trilogía (`4º FV o peor`):** **`20 de 114` (`17.5%`)** (`10` en `4º–5º FV`, `2` en `6º–8º FV` y `8` en `0% Sin FV`).
+
+### A. Efectividad de cada Chip en `ON` en las 192 Válidas de La Rinconada
+
+| Chip / Indicador en el Tablero | En cuántas de las 192 Válidas estuvo `ON` | Ganó la Trilogía (`1º–3º FV`) | Ganó FUERA de la Trilogía (`4º FV o peor`) | Desglose de los Ganadores Fuera de la Trilogía |
+|---|---|---|---|---|
+| **🟢 `🔒 Corte Limpio` (Indicador de Seguridad)** | **47 de 192** (`24.5%`) | **38 (`80.9%`)** | **Solo 9 (`19.1%`)** | `4º–5º`: 3 · `6º–8º`: 4 · `0%`: 2 |
+| **🔴 `📏 Tiro Corto (≤ 1.300m)`** | 141 de 192 (`73.4%`) | 102 (`72.3%`) | **39 (`27.7%`)** | `4º–5º`: 14 · **`6º–8º`: 20 (de 21!)** · `0%`: 5 |
+| **🔴 `🐎 Lote Grande (≥ 10 ej.)`** | 106 de 192 (`55.2%`) | 76 (`71.7%`) | **30 (`28.3%`)** | `4º–5º`: 14 · `6º–8º`: 12 · `0%`: 4 |
+| **🟠 `🏷️ Lote Riesgo (Perdedores / Gan.2 / 5+a)`** | 92 de 192 (`47.9%`) | 63 (`68.5%`) | **29 (`31.5%`)** | `4º–5º`: 11 · `6º–8º`: 14 · `0%`: 4 |
+| **🟣 `🟣 Sin Favorito (1º FV < 40%)`** | 67 de 192 (`34.9%`) | 45 (`67.2%`) | **22 (`32.8%`)** | **`4º–5º`: 12** · `6º–8º`: 10 · **`0%`: 0** |
+| **🟠 `🟠 Falso Fijo (48.5%–55.5% FV)`** | 26 de 192 (`13.5%`) | 18 (`69.2%`) | **8 (`30.8%`)** | `4º–5º`: 2 · `6º–8º`: 4 · `0%`: 2 |
+| **⚡ `⚡ Cola 5º–8º FV Viva (≥ 3.5%)`** | 126 de 192 (`65.6%`) | 89 (`70.6%`) | **37 (`29.4%`)** | `4º–5º`: 18 · `6º–8º`: 16 · `0%`: 3 |
+
+### B. La Ley de Acumulación de Chips `ON` (El Descubrimiento Clave en las 192 Válidas)
+
+Cuando contamos **cuántos de los 6 chips de peligro están encendidos (`ON`) al mismo tiempo** en una misma válida de La Rinconada, aparece la frontera exacta entre una carrera segura y una carrera de batacazo:
+
+| Cantidad de Chips de Peligro en `ON` en la Válida | Cantidad de Válidas (de 192) | Ganó la Trilogía (`1º, 2º o 3º FV`) | Ganó FUERA de la Trilogía (`4º FV o peor`) | Desglose Fuera del Top 3 | Conclusión Operativa |
+|---|---|---|---|---|---|
+| **`0 chips ON`** | 4 válidas | **4 (`100.0%`)** | **0 (`0.0%`)** | `0` | **🟢 Segura (Jugar 1 o 2)** |
+| **`1 chip ON`** | 26 válidas | **21 (`80.8%`)** | **5 (`19.2%`)** | `4º–5º`: 3 · `6º–8º`: 1 · `0%`: 1 | **🟢 Segura (Jugar 2 o 3)** |
+| **`2 chips ON`** | 44 válidas | **38 (`86.4%`)** | **6 (`13.6%`)** | `4º–5º`: 3 · `6º–8º`: 2 · `0%`: 1 | **🟢 Segura (Jugar 2 o 3)** |
+| **Subtotal `0 a 2 chips ON`** | **74 válidas** | **63 de 74 (`85.1%`)** | **Solo 11 (`14.9%`)** | Solo 3 de `6º–8º` en todo el año | **En 0–2 chips ON no se buscan batacazos.** |
+| **`3 chips ON`** | 47 válidas | 32 (`68.1%`) | **15 (`31.9%` — El Doble)** | **`4º–5º`: 9** · `6º–8º`: 5 · `0%`: 1 | **🟠 Alerta de `4º y 5º FV`** |
+| **`4 o más chips ON`** | 71 válidas | 47 (`66.2%`) | **24 (`33.8%` — 1 de cada 3)** | `4º–5º`: 8 · **`6º–8º`: 13** · **`0%`: 3** | **🔴 Alerta de `6º–8º FV` y `0% Sin FV`** |
+| **Subtotal `3 o más chips ON`** | **118 válidas** | 79 de 118 (`66.9%`) | **39 de 50 (`78.0%` de todas las sorpresas)** | **18 de los 21 ganadores `6º–8º FV` salieron aquí** | **Aquí se activa `✂️ Candidata a QUITAR 1º FV`.** |
+
+
 
 
