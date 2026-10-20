@@ -64,7 +64,6 @@ export const authConfig: NextAuthConfig = {
 
         await dbConnect();
         void SiteConfig; // ensure model registered
-        const welcomeBonus = await getSiteConfig<number>('welcomeBonus', 15);
 
         const user = await User.findOneAndUpdate(
           { telegramId: String(telegramUser.id) },
@@ -76,7 +75,7 @@ export const authConfig: NextAuthConfig = {
             },
             $setOnInsert: {
               roles: ['customer'],
-              balance: { golds: welcomeBonus, diamonds: 0 },
+              balance: { golds: 0, diamonds: 0 },
               meetingConsumptions: [],
               followedHandicappers: [],
             },
@@ -105,7 +104,6 @@ export const authConfig: NextAuthConfig = {
         const extraRoles = ADMIN_EMAILS.includes(email) ? ['admin', 'customer'] : ['customer'];
 
         void SiteConfig; // ensure model registered
-        const welcomeBonus = await getSiteConfig<number>('welcomeBonus', 15);
 
         await User.findOneAndUpdate(
           { $or: [{ email }, { googleId: account.providerAccountId }] },
@@ -118,7 +116,7 @@ export const authConfig: NextAuthConfig = {
             $setOnInsert: {
               alias: user.name ?? email.split('@')[0],
               roles: extraRoles,
-              balance: { golds: welcomeBonus, diamonds: 0 },
+              balance: { golds: 0, diamonds: 0 },
               meetingConsumptions: [],
               followedHandicappers: [],
             },

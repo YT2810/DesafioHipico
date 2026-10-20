@@ -17,10 +17,70 @@ import dbConnect from '@/lib/mongodb';
 import User, { GOLD_COST_PER_RACE, getFreeRacesAllowance } from '@/models/User';
 import { GOLD_COST_FULL_DAY_PER_RACE } from '@/lib/constants';
 import GoldTransaction from '@/models/GoldTransaction';
+import TopUpRequest from '@/models/TopUpRequest';
 import { Types } from 'mongoose';
 import { notifyGoldLow } from '@/services/notificationService';
 
 const GOLD_LOW_THRESHOLD = 3;
+
+export function getCurrentWeekMondayStartUTC(): Date {
+  const nowUtcMs = Date.now();
+  const veOffsetMs = 4 * 3600 * 1000; // UTC-4 (Venezuela)
+  const veNow = new Date(nowUtcMs - veOffsetMs);
+  const veDay = veNow.getUTCDay(); // 0=Dom, 1=Lun ... 6=Sáb
+  const daysSinceMonday = veDay === 0 ? 6 : veDay - 1;
+  return new Date(
+    Date.UTC(
+      veNow.getUTCFullYear(),
+      veNow.getUTCMonth(),
+      veNow.getUTCDate() - daysSinceMonday,
+      4, // 00:00 Venezuela = 04:00 UTC
+      0,
+      0,
+      0
+    )
+  );
+}
+
+/**
+ * Checks if user has an active National Pass:
+ * - Weekly Pass (any approved topup/purchase since Monday 00:00 UTC-4 of current week)
+ * - 15-Day Pass ('jinete' or >= 40 Golds / >= Bs 10,000 in last 15 days)
+ * - 30-Day Monthly Pass ('padrillo' or >= 50 Golds / >= Bs 18,000 in last 30 days)
+ */
+export async function hasActiveNationalPass(userId: string): Promise<boolean> {
+  if (!userId || !Types.ObjectId.isValid(userId)) return false;
+  const uObjId = new Types.ObjectId(userId);
+  const weekStart = getCurrentWeekMondayStartUTC();
+  const days15Ago = new Date(Date.now() - 15 * 24 * 3600 * 1000);
+  const days30Ago = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+
+  const [approvedTopUp, purchaseTx] = await Promise.all([
+    TopUpRequest.exists({
+      userId: uObjId,
+      status: 'approved',
+      $or: [
+        { reviewedAt: { $gte: weekStart } },
+        { createdAt: { $gte: weekStart } },
+        { packageId: 'jinete', reviewedAt: { $gte: days15Ago } },
+        { amountBs: { $gte: 10000 }, reviewedAt: { $gte: days15Ago } },
+        { packageId: 'padrillo', reviewedAt: { $gte: days30Ago } },
+        { amountBs: { $gte: 18000 }, reviewedAt: { $gte: days30Ago } },
+      ],
+    }),
+    GoldTransaction.exists({
+      userId: uObjId,
+      type: 'purchase',
+      $or: [
+        { createdAt: { $gte: weekStart } },
+        { amount: { $gte: 40 }, createdAt: { $gte: days15Ago } },
+        { amount: { $gte: 50 }, createdAt: { $gte: days30Ago } },
+      ],
+    }),
+  ]);
+
+  return Boolean(approvedTopUp || purchaseTx);
+}
 
 export type AccessResult =
   | { granted: true; free: true; freeRemaining: number }
@@ -46,6 +106,12 @@ export async function requestRaceAccess(
   // staff / admin → free access always (handicapper pays like customer)
   const roles = user.roles ?? [];
   if (roles.some((r: string) => ['staff', 'admin'].includes(r))) {
+    return { granted: true, free: true, freeRemaining: Infinity };
+  }
+
+  // Active National Pass (Weekly / 15-Day / Monthly) → unlocks all races automatically
+  const hasPass = await hasActiveNationalPass(userId);
+  if (hasPass) {
     return { granted: true, free: true, freeRemaining: Infinity };
   }
 
@@ -203,12 +269,13 @@ export async function getMeetingAccessMap(
   if (isPrivileged || isPastMeeting) {
     const map: Record<string, { unlocked: boolean; free: boolean }> = {};
     for (const raceId of raceIds) map[raceId] = { unlocked: true, free: true };
-    return { map, freeRemaining: Infinity, goldBalance: user.balance?.golds ?? 0, isPrivileged: isPrivileged || false, passUnlocked: false };
+    return { map, freeRemaining: Infinity, goldBalance: user.balance?.golds ?? 0, isPrivileged: isPrivileged || false, passUnlocked: true };
   }
 
+  const activeNationalPass = await hasActiveNationalPass(userId);
   const mc = (user.meetingConsumptions ?? []).find((c: { meetingId: string }) => c.meetingId === meetingId);
   // Pass expires when meeting is finished or date has passed (grace period: same day)
-  const rawPass = mc?.passUnlocked ?? false;
+  const rawPass = (mc?.passUnlocked ?? false) || activeNationalPass;
   const passUnlocked = rawPass; // expiry enforced at API layer via meeting.status
   const freeUsed = mc?.freeUsed ?? 0;
   const unlockedIds = new Set<string>(mc?.unlockedRaceIds ?? []);

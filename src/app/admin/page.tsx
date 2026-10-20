@@ -7,6 +7,7 @@ import DashboardTab from './_components/DashboardTab';
 import CarrerasTab from './_components/CarrerasTab';
 import PronosticosTab from './_components/PronosticosTab';
 import LaboratorioFvTab from './_components/LaboratorioFvTab';
+import EmailMarketingTab from './_components/EmailMarketingTab';
 import UsuariosTab from './_components/UsuariosTab';
 import FinanzasTab from './_components/FinanzasTab';
 import ConfigTab from './_components/ConfigTab';
@@ -52,6 +53,7 @@ export default function AdminPage() {
         {tab === 'carreras' && <CarrerasTab stats={stats} />}
         {tab === 'pronosticos' && <PronosticosTab stats={stats} onOpenLab={() => setTab('laboratorio')} />}
         {tab === 'laboratorio' && <LaboratorioFvTab />}
+        {tab === 'email' && <EmailMarketingTab />}
         {tab === 'usuarios' && <UsuariosTab stats={stats} />}
         {tab === 'finanzas' && <FinanzasTab stats={stats} loading={statsLoading} />}
         {tab === 'config' && <ConfigTab bcv={bcv} />}
