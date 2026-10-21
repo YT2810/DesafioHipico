@@ -4,6 +4,8 @@ import connectMongo from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
 import '@/models/Track';
 import RetrospectosToast from './RetrospectosToast';
+import SponsoredInlineBanner from '@/components/SponsoredInlineBanner';
+import { getActiveCampaign } from '@/services/adService';
 
 const BASE = 'https://www.desafiohipico.com';
 
@@ -94,6 +96,9 @@ export default async function RetrospectosPage() {
     upcoming = rawUpcoming.map(toRow);
     past = rawPast.map(toRow);
   } catch { /* build time */ }
+
+  // Sponsored in-text slot (first-party campaign, tracked in AdDailyStat)
+  const sponsor = await getActiveCampaign('retrospectos_inline');
 
   // Group past by month
   const byMonth: Record<string, MeetingRow[]> = {};
@@ -227,6 +232,23 @@ export default async function RetrospectosPage() {
               </span>
             </div>
           </Link>
+
+          {/* ── Sponsored in-text banner (Publicidad) ── */}
+          {sponsor && (
+            <SponsoredInlineBanner
+              ad={{
+                slug: sponsor.slug,
+                brand: sponsor.brand,
+                slot: 'retrospectos_inline',
+                badgeText: sponsor.creative.badgeText ?? 'Publicidad',
+                title: sponsor.creative.title,
+                subtitle: sponsor.creative.subtitle ?? '',
+                ctaText: sponsor.creative.ctaText,
+                logoUrl: sponsor.creative.logoUrl,
+                accentColor: sponsor.creative.accentColor ?? '#D4AF37',
+              }}
+            />
+          )}
 
           {/* ── CTA traqueos ── */}
           <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4 flex items-center gap-4">

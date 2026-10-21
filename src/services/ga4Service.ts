@@ -16,7 +16,7 @@ import dbConnect from '@/lib/mongodb';
 import { getSiteConfig, setSiteConfig } from '@/models/SiteConfig';
 
 const PROPERTY_ID = process.env.GA_PROPERTY_ID ?? '429858983';
-const SNAPSHOT_KEY = 'ga4Metrics';
+const SNAPSHOT_KEY = 'ga4Metrics-v2'; // v2: date-range mapping fixed (was positional)
 const SNAPSHOT_TTL_H = 24;
 
 export interface Ga4RangeMetrics {
@@ -75,14 +75,19 @@ async function fetchFromGa4(): Promise<Ga4Snapshot> {
     ],
   });
 
+  // GA4 returns a 'dateRange' dimension value per row (date_range_0 = first
+  // requested range). Row ORDER is not guaranteed — map by the dimension value.
   const rows = totals.rows ?? [];
-  const range = (i: number): Ga4RangeMetrics => ({
-    activeUsers:           Number(rows[i]?.metricValues?.[0]?.value ?? 0),
-    screenPageViews:       Number(rows[i]?.metricValues?.[1]?.value ?? 0),
-    sessions:              Number(rows[i]?.metricValues?.[2]?.value ?? 0),
-    avgSessionDurationSec: Math.round(Number(rows[i]?.metricValues?.[3]?.value ?? 0)),
-    engagementRatePct:     Math.round(Number(rows[i]?.metricValues?.[4]?.value ?? 0) * 1000) / 10,
-  });
+  const rangeByDim = (dim: string): Ga4RangeMetrics => {
+    const r = rows.find((row: any) => row.dimensionValues?.[0]?.value === dim) ?? { metricValues: [] };
+    return {
+      activeUsers:           Number(r.metricValues?.[0]?.value ?? 0),
+      screenPageViews:       Number(r.metricValues?.[1]?.value ?? 0),
+      sessions:              Number(r.metricValues?.[2]?.value ?? 0),
+      avgSessionDurationSec: Math.round(Number(r.metricValues?.[3]?.value ?? 0)),
+      engagementRatePct:     Math.round(Number(r.metricValues?.[4]?.value ?? 0) * 1000) / 10,
+    };
+  };
 
   const [pages] = await client.runReport({
     property,
@@ -95,8 +100,8 @@ async function fetchFromGa4(): Promise<Ga4Snapshot> {
 
   return {
     fetchedAt: new Date().toISOString(),
-    last28d: range(0),
-    last90d: range(1),
+    last28d: rangeByDim('date_range_0'),
+    last90d: rangeByDim('date_range_1'),
     topPages: (pages.rows ?? []).map((r: any) => ({
       path: r.dimensionValues?.[0]?.value ?? '',
       views: Number(r.metricValues?.[0]?.value ?? 0),
