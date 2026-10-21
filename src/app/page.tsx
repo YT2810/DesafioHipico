@@ -467,6 +467,8 @@ export default function HomePage() {
           ¿Tienes dudas?{' '}
           <Link href="/faq" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">Ver preguntas frecuentes</Link>
           {' '}·{' '}
+          <Link href="/publicidad" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">Anúnciate con nosotros</Link>
+          {' '}·{' '}
           <a href="mailto:desafiohipicoapp@gmail.com" className="text-yellow-700 hover:text-yellow-500 underline transition-colors">desafiohipicoapp@gmail.com</a>
         </p>
 

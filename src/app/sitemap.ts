@@ -69,6 +69,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily' as const,
       priority: 0.95,
     },
+    {
+      url: `${BASE}/publicidad`,
+      lastModified: now,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    },
   ];
 
   // ── Dynamic: recent + upcoming meetings ───────────────────────────────────
