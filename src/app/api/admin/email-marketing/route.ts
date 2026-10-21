@@ -441,7 +441,7 @@ Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto y atrac
 
       for (const u of allUsers) {
         const em = (u.email ?? '').toLowerCase().trim();
-        if (isJunkEmail(em) || suppressedSet.has(em)) continue;
+        if (isJunkEmail(em) || suppressedSet.has(em) || u.unsubscribed === true) continue;
         if (targetList === 'active') {
           const isRecentLogin = u.lastLoginDate && u.lastLoginDate >= cutoff60d;
           const hasGolds = (u.balance?.golds ?? 0) > 0;
@@ -454,18 +454,27 @@ Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto y atrac
       const uniqueRecipients = [...new Set(recipients)];
       let sentCount = 0;
 
+      const { buildUnsubscribeUrl } = await import('@/lib/unsubscribe');
+
       // Send in batches of 100 via Resend Batch API
       for (let i = 0; i < uniqueRecipients.length; i += 100) {
         const chunk = uniqueRecipients.slice(i, i + 100);
-        const batchPayload = chunk.map(to => ({
-          from: 'Desafío Hípico <noreply@desafiohipico.com>',
-          to: [to],
-          subject: body.subject,
-          html: body.html,
-          headers: {
-            'List-Unsubscribe': '<https://www.desafiohipico.com/perfil>',
-          },
-        }));
+        const batchPayload = chunk.map(to => {
+          const unsub = buildUnsubscribeUrl(to);
+          const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;text-align:center"><a href="${unsub}" style="font-size:11px;color:#9ca3af">Darte de baja de estos correos</a> · <span style="font-size:11px;color:#d1d5db">Desafío Hípico</span></div>`;
+          const html = String(body.html).includes('{{UNSUB_URL}}')
+            ? String(body.html).replaceAll('{{UNSUB_URL}}', unsub)
+            : String(body.html) + footer;
+          return {
+            from: 'Desafío Hípico <noreply@desafiohipico.com>',
+            to: [to],
+            subject: body.subject,
+            html,
+            headers: {
+              'List-Unsubscribe': `<${unsub}>`,
+            },
+          };
+        });
 
         const bRes = await fetch('https://api.resend.com/emails/batch', {
           method: 'POST',

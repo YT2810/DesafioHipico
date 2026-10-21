@@ -35,6 +35,9 @@ export interface IUser extends Document {
   followedHandicappers: Types.ObjectId[];
   lastLoginDate?: string;
   loginStreak?: number;
+  /** Email marketing consent — unchecked at register → true, or user unsubscribed */
+  unsubscribed?: boolean;
+  emailOptInAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +73,8 @@ const UserSchema = new Schema<IUser>(
     followedHandicappers: [{ type: Schema.Types.ObjectId, ref: 'HandicapperProfile' }],
     lastLoginDate: { type: String },
     loginStreak: { type: Number, default: 0 },
+    unsubscribed: { type: Boolean, default: false },
+    emailOptInAt: { type: Date },
   },
   { timestamps: true }
 );

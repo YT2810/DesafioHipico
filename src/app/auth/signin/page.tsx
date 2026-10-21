@@ -14,6 +14,7 @@ function SignInContent() {
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'signin';
   const [mode, setMode] = useState<'signin' | 'register'>(initialMode);
   const [wantsHandicapper, setWantsHandicapper] = useState(false);
+  const [emailOptIn, setEmailOptIn] = useState(true);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -24,6 +25,12 @@ function SignInContent() {
       localStorage.setItem('dh_wants_handicapper', '1');
     } else {
       localStorage.removeItem('dh_wants_handicapper');
+    }
+    // Email marketing consent — applied after first login by EmailOptInSync
+    if (mode === 'register' && !emailOptIn) {
+      localStorage.setItem('dh_email_optout', '1');
+    } else {
+      localStorage.removeItem('dh_email_optout');
     }
   }
 
@@ -80,6 +87,7 @@ function SignInContent() {
 
         {/* Register: handicapper option */}
         {mode === 'register' && (
+          <>
           <button type="button" onClick={() => setWantsHandicapper(v => !v)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
               wantsHandicapper
@@ -92,6 +100,20 @@ function SignInContent() {
               <p className="text-xs text-gray-500">Publica pronósticos y genera ingresos</p>
             </div>
           </button>
+
+          {/* Email marketing consent */}
+          <div className="rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3">
+            <button type="button" onClick={() => setEmailOptIn(v => !v)}
+              className="w-full flex items-start gap-3 text-left">
+              <span className="text-base shrink-0 mt-0.5">{emailOptIn ? '✅' : '⬜'}</span>
+              <p className="text-xs font-semibold text-gray-300">Recibir pronósticos y novedades por correo</p>
+            </button>
+            <p className="text-[10px] text-gray-600 mt-1 pl-7">
+              Máx. 2 emails por semana · puedes darte de baja cuando quieras ·{' '}
+              <Link href="/privacidad" className="underline hover:text-gray-400">política de privacidad</Link>
+            </p>
+          </div>
+          </>
         )}
 
         {/* Google */}

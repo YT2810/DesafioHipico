@@ -54,6 +54,7 @@ export interface AdminStats {
     total: number;
     last7d: number;
     last30d: number;
+    last90d: number;
     uniqueUsers: number;
     topMeetings: { meetingId: string; count: number; tipsterName?: string; meetingNumber?: number; date?: string }[];
   };

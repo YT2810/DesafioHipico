@@ -60,6 +60,7 @@ export async function GET() {
       gacetaTotal,
       gaceta7d,
       gaceta30d,
+      gaceta90d,
       gacetaUniqueUsers,
       gacetaTopMeetings,
     ] = await Promise.all([
@@ -217,6 +218,7 @@ export async function GET() {
       GacetaDownload.countDocuments(),
       GacetaDownload.countDocuments({ downloadedAt: { $gte: days7 } }),
       GacetaDownload.countDocuments({ downloadedAt: { $gte: days30 } }),
+      GacetaDownload.countDocuments({ downloadedAt: { $gte: days90 } }),
       // Unique users who ever downloaded the Gaceta
       GacetaDownload.distinct('userId').then((ids: any[]) => ids.length),
       // Top 5 meetings by downloads
@@ -323,6 +325,7 @@ export async function GET() {
         total:        gacetaTotal,
         last7d:       gaceta7d,
         last30d:      gaceta30d,
+        last90d:      gaceta90d,
         uniqueUsers:  gacetaUniqueUsers,
         topMeetings:  gacetaTopMeetings,
       },

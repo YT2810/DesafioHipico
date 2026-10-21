@@ -190,12 +190,24 @@ export default async function PublicidadPage() {
   const ga4 = await getGa4Metrics();
   const metrics = buildMetrics(ga4);
 
-  const sectionRows = ga4
-    ? ga4.topPages
-        .filter(p => PAGE_LABELS[p.path])
-        .slice(0, 6)
-        .map(p => ({ name: PAGE_LABELS[p.path], ...p }))
-    : [];
+  let sectionRows: { name: string; path: string; views: number; users: number }[] = [];
+  if (ga4) {
+    // Aggregate every /revista/[id] URL into one row — each meeting has its
+    // own path, but for the media kit it's a single product ("Gaceta Digital")
+    const revista = { name: 'Revista / Gaceta Digital', path: '/revista', views: 0, users: 0 };
+    const rest: typeof sectionRows = [];
+    for (const p of ga4.topPages) {
+      if (p.path.startsWith('/revista')) {
+        revista.views += p.views;
+        revista.users += p.users;
+      } else if (PAGE_LABELS[p.path]) {
+        rest.push({ name: PAGE_LABELS[p.path], path: p.path, views: p.views, users: p.users });
+      }
+    }
+    sectionRows = [...rest, ...(revista.views > 0 ? [revista] : [])]
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 6);
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">

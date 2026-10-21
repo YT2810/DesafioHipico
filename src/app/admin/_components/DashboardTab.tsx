@@ -145,46 +145,56 @@ export default function DashboardTab({ stats, loading }: { stats: AdminStats | n
       </div>
 
       {/* 📰 Gaceta PDF — distribución y tracking */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
-        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">📰 Gaceta Hípica — Descargas PDF</p>
-        {loading ? <div className="h-16 rounded-xl bg-gray-800 animate-pulse" /> : (
-          <div className="space-y-0.5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
-                <p className="text-xl font-extrabold text-yellow-400">{stats?.gaceta?.total ?? 0}</p>
-                <p className="text-[10px] text-gray-500">Total descargas</p>
-              </div>
-              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
-                <p className="text-xl font-extrabold text-blue-400">{stats?.gaceta?.last7d ?? 0}</p>
-                <p className="text-[10px] text-gray-500">Últimos 7 días</p>
-              </div>
-              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
-                <p className="text-xl font-extrabold text-green-400">{stats?.gaceta?.last30d ?? 0}</p>
-                <p className="text-[10px] text-gray-500">Últimos 30 días</p>
-              </div>
-              <div className="bg-gray-800 rounded-xl px-3 py-2 text-center">
-                <p className="text-xl font-extrabold text-purple-400">{stats?.gaceta?.uniqueUsers ?? 0}</p>
-                <p className="text-[10px] text-gray-500">Usuarios únicos</p>
-              </div>
-            </div>
-            {(stats?.gaceta?.topMeetings?.length ?? 0) > 0 && (
-              <div>
-                <p className="text-[10px] text-gray-600 font-semibold uppercase tracking-wide mb-1">Reuniones más descargadas</p>
-                <div className="space-y-0.5">
-                  {stats!.gaceta.topMeetings.map((m, i) => (
-                    <div key={i} className="flex items-center justify-between py-0.5 border-b border-gray-800/50 last:border-0">
-                      <span className="text-xs text-gray-400">
-                        Reunión {m.meetingNumber ?? '—'}
-                        {m.date ? ` · ${new Date(m.date).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', timeZone: 'UTC' })}` : ''}
-                        {m.tipsterName ? <span className="text-gray-600 ml-1">· {m.tipsterName}</span> : ''}
-                      </span>
-                      <span className="text-sm font-bold text-yellow-400">{m.count}</span>
-                    </div>
-                  ))}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+          <p className="text-xs font-bold text-yellow-500 uppercase tracking-widest">📰 Descargas Gaceta PDF</p>
+          <span className="text-[10px] text-gray-600">Solo usuarios registrados</span>
+        </div>
+        {loading ? (
+          <div className="m-4 h-16 rounded-xl bg-gray-800 animate-pulse" />
+        ) : (
+          <>
+            {/* KPI row */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-gray-800 border-b border-gray-800">
+              {[
+                { n: stats?.gaceta?.last7d ?? 0,   l: 'Esta semana',      c: 'text-blue-400' },
+                { n: stats?.gaceta?.last30d ?? 0,  l: 'Último mes',       c: 'text-green-400' },
+                { n: stats?.gaceta?.last90d ?? 0,  l: 'Último trimestre', c: 'text-yellow-400' },
+                { n: stats?.gaceta?.total ?? 0,    l: 'Histórico',        c: 'text-white' },
+                { n: stats?.gaceta?.uniqueUsers ?? 0, l: 'Usuarios únicos', c: 'text-purple-400' },
+              ].map(k => (
+                <div key={k.l} className="px-3 py-3 text-center">
+                  <p className={`text-xl font-extrabold ${k.c}`}>{k.n.toLocaleString('es-VE')}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{k.l}</p>
                 </div>
+              ))}
+            </div>
+
+            {/* Top meetings table */}
+            {(stats?.gaceta?.topMeetings?.length ?? 0) > 0 && (
+              <div className="px-4 py-3">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Top reuniones descargadas</p>
+                <table className="w-full text-left">
+                  <tbody>
+                    {stats!.gaceta.topMeetings.map((m, i) => (
+                      <tr key={i} className="border-b border-gray-800/60 last:border-0">
+                        <td className="py-1.5 text-xs text-gray-300">
+                          <span className="font-bold text-white">R{m.meetingNumber ?? '—'}</span>
+                          {m.date && (
+                            <span className="text-gray-500">
+                              {' '}· {new Date(m.date).toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                            </span>
+                          )}
+                          {m.tipsterName && <span className="text-gray-600"> · {m.tipsterName}</span>}
+                        </td>
+                        <td className="py-1.5 text-right text-sm font-extrabold text-yellow-400 w-16">{m.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
