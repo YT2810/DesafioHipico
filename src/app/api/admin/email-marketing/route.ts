@@ -432,7 +432,7 @@ Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto y atrac
       const suppressed = await getSiteConfig<string[]>('emailSuppressedList', []);
       const suppressedSet = new Set((suppressed ?? []).map(s => s.toLowerCase().trim()));
       const allUsers = (await User.find({ email: { $exists: true, $ne: '' } })
-        .select('email balance lastLoginDate createdAt')
+        .select('email balance lastLoginDate createdAt unsubscribed')
         .lean()) as any[];
 
       const cutoff60d = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -452,13 +452,31 @@ Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto y atrac
       }
 
       const uniqueRecipients = [...new Set(recipients)];
+
+      // Resend free plan = 100 emails/day. Track daily sends in SiteConfig and
+      // cap the campaign so we never report 600 "sent" when only ~100 went out.
+      const DAILY_LIMIT = 95; // small buffer for manual test sends
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const quotaRec = (await getSiteConfig<Record<string, number>>('emailDailyQuota', {})) ?? {};
+      const sentToday = quotaRec[todayKey] ?? 0;
+      const remaining = Math.max(0, DAILY_LIMIT - sentToday);
+
+      if (remaining === 0) {
+        return NextResponse.json(
+          { error: `Límite diario de Resend alcanzado (${sentToday}/${DAILY_LIMIT} enviados hoy). Reintenta mañana o sube de plan.` },
+          { status: 429 }
+        );
+      }
+
+      const toSend = uniqueRecipients.slice(0, remaining);
+      const deferredCount = uniqueRecipients.length - toSend.length;
       let sentCount = 0;
 
       const { buildUnsubscribeUrl } = await import('@/lib/unsubscribe');
 
       // Send in batches of 100 via Resend Batch API
-      for (let i = 0; i < uniqueRecipients.length; i += 100) {
-        const chunk = uniqueRecipients.slice(i, i + 100);
+      for (let i = 0; i < toSend.length; i += 100) {
+        const chunk = toSend.slice(i, i + 100);
         const batchPayload = chunk.map(to => {
           const unsub = buildUnsubscribeUrl(to);
           const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;text-align:center"><a href="${unsub}" style="font-size:11px;color:#9ca3af">Darte de baja de estos correos</a> · <span style="font-size:11px;color:#d1d5db">Desafío Hípico</span></div>`;
@@ -497,10 +515,19 @@ Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto y atrac
         { $set: { value: sentLog } },
         { upsert: true }
       );
+      quotaRec[todayKey] = sentToday + sentCount;
+      await SiteConfig.findOneAndUpdate(
+        { key: 'emailDailyQuota' },
+        { $set: { value: quotaRec } },
+        { upsert: true }
+      );
 
       return NextResponse.json({
         ok: true,
         sentCount,
+        deferredCount,
+        dailyLimit: DAILY_LIMIT,
+        sentToday: sentToday + sentCount,
         alreadySentAt: sentLog[logKey],
       });
     }

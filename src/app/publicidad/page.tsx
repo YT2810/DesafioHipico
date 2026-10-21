@@ -111,6 +111,11 @@ const intextFormats = [
     name: 'Traqueos',
     desc: 'Consulta diaria de entrenamientos matutinos. Audiencia técnica: entrenadores, owners y apostadores serios.',
   },
+  {
+    icon: '📰',
+    name: 'Revista / Gaceta Digital',
+    desc: 'La gaceta interactiva de cada reunión: el usuario llega desde Retrospectos y estudia la jornada completa. Producto estrella junto a Retrospectos como combo de embudo.',
+  },
 ];
 
 const audiencePoints = [
@@ -161,7 +166,7 @@ const jsonLd = {
           name: '¿Qué formatos publicitarios ofrece Desafío Hípico?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Formatos premium globales: Takeover Web, Cabecera Principal y Sticky Mobile. Formatos in-text de nicho en Retrospectos, Resultados y Traqueos.',
+            text: 'Formatos premium globales: Takeover Web, Cabecera Principal y Sticky Mobile. Formatos in-text de nicho en Retrospectos, Revista/Gaceta Digital, Resultados y Traqueos. Logo de marca en la Gaceta PDF descargable y campañas de afiliados con tracking propio.',
           },
         },
         {
@@ -286,6 +291,7 @@ export default async function PublicidadPage() {
 
           {/* Tráfico real por sección — datos GA4 del último trimestre */}
           {sectionRows.length > 0 && (
+            <div className="space-y-3">
             <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
               <p className="text-[11px] font-extrabold uppercase tracking-widest text-yellow-600 px-4 pt-3.5 pb-2">
                 Tráfico por sección · últimos 90 días
@@ -309,6 +315,38 @@ export default async function PublicidadPage() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Combo Retrospectos → Revista: el embudo completo del analista */}
+            {(() => {
+              const retro = sectionRows.find(s => s.path === '/retrospectos');
+              const rev = sectionRows.find(s => s.path === '/revista');
+              const comboViews = (retro?.views ?? 0) + (rev?.views ?? 0);
+              if (!retro || !rev || comboViews === 0) return null;
+              return (
+                <div className="rounded-2xl border border-yellow-700/50 bg-gradient-to-r from-yellow-950/40 to-gray-900 p-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-yellow-500">
+                        Combo estrella · embudo del analista
+                      </p>
+                      <p className="text-sm font-bold text-white mt-1">
+                        Retrospectos → Revista / Gaceta Digital
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        El usuario estudia el retrospecto y entra a la gaceta de la reunión: dos impactos de marca en la misma sesión de decisión.
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-2xl font-extrabold" style={{ color: GOLD }}>
+                        +{comboViews.toLocaleString('es-VE')}
+                      </p>
+                      <p className="text-[10px] text-gray-500">vistas combinadas · 90 días</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             </div>
           )}
         </section>
@@ -354,6 +392,44 @@ export default async function PublicidadPage() {
                   <p className="text-xs text-gray-400 leading-relaxed mt-1">{f.desc}</p>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Gaceta PDF — producto de visibilidad de marca */}
+          <div className="rounded-2xl border border-yellow-700/40 bg-gray-900 p-4 sm:p-5">
+            <div className="flex gap-4">
+              <span className="text-2xl shrink-0">📄</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-extrabold text-white">Marca en la Gaceta PDF</p>
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border border-yellow-700/50 text-yellow-500">
+                    Visibilidad de marca
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed mt-1">
+                  Tu logo en el encabezado de la gaceta oficial que los usuarios registrados descargan,
+                  imprimen y comparten por WhatsApp cada semana. Alcance físico en taquillas y
+                  centros hípicos que ningún banner web puede replicar.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Dos tipos de campaña — visibilidad vs. afiliados */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/60 p-4">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-yellow-500">Visibilidad de marca</p>
+              <p className="text-xs text-gray-400 leading-relaxed mt-1.5">
+                Takeover, cabecera, sticky y logo en Gaceta. Objetivo: presencia y recordación.
+                Reporte de impresiones verificado.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/60 p-4">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-yellow-500">Afiliados y referidos</p>
+              <p className="text-xs text-gray-400 leading-relaxed mt-1.5">
+                Enlaces trackeados con UTM y redirección medida. Reporte de clics propio,
+                independiente del panel de tu programa de afiliados.
+              </p>
             </div>
           </div>
 

@@ -157,9 +157,9 @@ export default function DashboardTab({ stats, loading }: { stats: AdminStats | n
             {/* KPI row */}
             <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-gray-800 border-b border-gray-800">
               {[
-                { n: stats?.gaceta?.last7d ?? 0,   l: 'Esta semana',      c: 'text-blue-400' },
-                { n: stats?.gaceta?.last30d ?? 0,  l: 'Último mes',       c: 'text-green-400' },
-                { n: stats?.gaceta?.last90d ?? 0,  l: 'Último trimestre', c: 'text-yellow-400' },
+                { n: stats?.gaceta?.last7d ?? 0,   l: 'Últimos 7 días',   c: 'text-blue-400' },
+                { n: stats?.gaceta?.last30d ?? 0,  l: 'Últimos 30 días',  c: 'text-green-400' },
+                { n: stats?.gaceta?.last90d ?? 0,  l: 'Últimos 90 días',  c: 'text-yellow-400' },
                 { n: stats?.gaceta?.total ?? 0,    l: 'Histórico',        c: 'text-white' },
                 { n: stats?.gaceta?.uniqueUsers ?? 0, l: 'Usuarios únicos', c: 'text-purple-400' },
               ].map(k => (

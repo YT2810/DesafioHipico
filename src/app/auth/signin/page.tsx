@@ -29,8 +29,13 @@ function SignInContent() {
     // Email marketing consent — applied after first login by EmailOptInSync
     if (mode === 'register' && !emailOptIn) {
       localStorage.setItem('dh_email_optout', '1');
+      localStorage.removeItem('dh_email_optin');
+    } else if (mode === 'register') {
+      localStorage.setItem('dh_email_optin', '1');
+      localStorage.removeItem('dh_email_optout');
     } else {
       localStorage.removeItem('dh_email_optout');
+      localStorage.removeItem('dh_email_optin');
     }
   }
 

@@ -16,12 +16,14 @@ export default function EmailOptInSync() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     const optOut = localStorage.getItem('dh_email_optout');
-    if (!optOut) return;
+    const optIn = localStorage.getItem('dh_email_optin');
+    if (!optOut && !optIn) return;
     localStorage.removeItem('dh_email_optout');
+    localStorage.removeItem('dh_email_optin');
     fetch('/api/user/email-prefs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ unsubscribed: true }),
+      body: JSON.stringify({ unsubscribed: Boolean(optOut) }),
     }).catch(() => {});
   }, [status]);
 
