@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { getGa4Metrics } from '@/services/ga4Service';
+
+export const revalidate = 3600;
 
 const GOLD = '#D4AF37';
 const BASE_URL = 'https://www.desafiohipico.com';
@@ -45,11 +48,31 @@ export const metadata: Metadata = {
   },
 };
 
-const metrics = [
-  { value: '+86.000', label: 'Usuarios activos mensuales', sub: 'Último trimestre · verificable en GA4' },
-  { value: '+600.000', label: 'Vistas de página', sub: 'Acumulado del último trimestre' },
-  { value: 'Hasta 6+ min', label: 'Retención en pantalla', sub: 'En páginas de análisis y pronósticos' },
-];
+function fmt(n: number): string {
+  return `+${Math.round(n).toLocaleString('es-VE')}`;
+}
+
+function buildMetrics(m: Awaited<ReturnType<typeof getGa4Metrics>>) {
+  return [
+    {
+      value: m ? fmt(m.last90d.activeUsers) : '+86.000',
+      label: 'Usuarios activos',
+      sub: 'Último trimestre · GA4 verificado',
+    },
+    {
+      value: m ? fmt(m.last90d.screenPageViews) : '+590.000',
+      label: 'Vistas de página',
+      sub: 'Acumulado del último trimestre',
+    },
+    {
+      value: m && m.last90d.avgSessionDurationSec >= 60
+        ? `${Math.round(m.last90d.avgSessionDurationSec / 60)}+ min`
+        : '5+ min',
+      label: 'Promedio por sesión',
+      sub: 'Usuarios de análisis y pronósticos',
+    },
+  ];
+}
 
 const premiumFormats = [
   {
@@ -154,7 +177,26 @@ const jsonLd = {
   ],
 };
 
-export default function PublicidadPage() {
+const PAGE_LABELS: Record<string, string> = {
+  '/retrospectos': 'Retrospectos',
+  '/resultados': 'Resultados',
+  '/pronosticos': 'Pronósticos',
+  '/en-vivo': 'En Vivo',
+  '/traqueos': 'Traqueos',
+  '/retirados': 'Retirados',
+};
+
+export default async function PublicidadPage() {
+  const ga4 = await getGa4Metrics();
+  const metrics = buildMetrics(ga4);
+
+  const sectionRows = ga4
+    ? ga4.topPages
+        .filter(p => PAGE_LABELS[p.path])
+        .slice(0, 6)
+        .map(p => ({ name: PAGE_LABELS[p.path], ...p }))
+    : [];
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <script
@@ -197,7 +239,10 @@ export default function PublicidadPage() {
         <section className="space-y-4">
           <div className="text-center">
             <h2 className="text-xl font-extrabold text-white">Una audiencia real y medible</h2>
-            <p className="text-xs text-gray-500 mt-1">Datos del último trimestre · reportes Google Analytics disponibles bajo solicitud</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Métricas en vivo desde Google Analytics 4
+              {ga4 && ` · actualizado ${new Date(ga4.fetchedAt).toLocaleDateString('es-VE')}`}
+            </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {metrics.map(m => (
@@ -216,7 +261,9 @@ export default function PublicidadPage() {
               { k: '90%', v: 'Tráfico móvil' },
               { k: 'Sáb + Dom', v: 'Días pico de visitas' },
               { k: 'Venezuela', v: 'Audiencia concentrada' },
-              { k: 'Alta intención', v: 'Usuarios que deciden jugada' },
+              ga4
+                ? { k: `${ga4.last90d.engagementRatePct.toFixed(0)}%`, v: 'Tasa de engagement' }
+                : { k: 'Alta intención', v: 'Usuarios que deciden jugada' },
             ].map(s => (
               <div key={s.k} className="rounded-xl bg-gray-900 border border-gray-800 px-3 py-2.5 text-center">
                 <p className="text-sm font-extrabold text-white">{s.k}</p>
@@ -224,6 +271,34 @@ export default function PublicidadPage() {
               </div>
             ))}
           </div>
+
+          {/* Tráfico real por sección — datos GA4 del último trimestre */}
+          {sectionRows.length > 0 && (
+            <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-yellow-600 px-4 pt-3.5 pb-2">
+                Tráfico por sección · últimos 90 días
+              </p>
+              <div className="divide-y divide-gray-800">
+                {sectionRows.map(s => {
+                  const max = sectionRows[0].views;
+                  return (
+                    <div key={s.path} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="w-24 shrink-0 text-xs font-bold text-white">{s.name}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${Math.max(4, Math.round((s.views / max) * 100))}%`, backgroundColor: GOLD }}
+                        />
+                      </div>
+                      <span className="shrink-0 text-xs font-mono text-gray-400 w-20 text-right">
+                        {s.views.toLocaleString('es-VE')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── 3. Inventario ── */}

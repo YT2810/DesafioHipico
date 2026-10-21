@@ -44,3 +44,4 @@ next-env.d.ts
 /*.pdf
 /*.pdf:Zone.Identifier
 *:Zone.Identifier
+ga4-service-account.json
