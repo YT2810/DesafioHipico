@@ -10,7 +10,7 @@ const MAILTO_URL = 'mailto:desafiohipicoapp@gmail.com?subject=Solicitud%20Media%
 export const metadata: Metadata = {
   title: 'Publicidad y Media Kit · Anuncia ante la Audiencia Hípica de Venezuela',
   description:
-    'Media Kit oficial de Desafío Hípico: +86.000 usuarios activos mensuales, +600.000 vistas trimestrales y hasta 6+ minutos de retención en páginas de análisis hípico. Formatos Takeover, Cabecera, Sticky Mobile e In-Text en Retrospectos, Resultados y Traqueos. Solicita tarifas.',
+    'Media Kit oficial de Desafío Hípico: +86.000 usuarios activos mensuales y +600.000 vistas de página en el último trimestre, con hasta 6+ minutos de retención en páginas de análisis hípico. Formatos Takeover, Cabecera, Sticky Mobile e In-Text en Retrospectos, Resultados y Traqueos. Solicita tarifas.',
   keywords: [
     'publicidad hípica Venezuela',
     'media kit hípico',
@@ -46,9 +46,9 @@ export const metadata: Metadata = {
 };
 
 const metrics = [
-  { value: '+86.000', label: 'Usuarios activos mensuales', sub: 'Audiencia recurrente y verificada' },
-  { value: '+600.000', label: 'Vistas de página trimestrales', sub: 'Tráfico orgánico de alta intención' },
-  { value: '6+ min', label: 'Retención en pantalla', sub: 'En páginas de análisis y pronósticos' },
+  { value: '+86.000', label: 'Usuarios activos mensuales', sub: 'Último trimestre · verificable en GA4' },
+  { value: '+600.000', label: 'Vistas de página', sub: 'Acumulado del último trimestre' },
+  { value: 'Hasta 6+ min', label: 'Retención en pantalla', sub: 'En páginas de análisis y pronósticos' },
 ];
 
 const premiumFormats = [
@@ -130,7 +130,7 @@ const jsonLd = {
           name: '¿Cuántos usuarios activos tiene Desafío Hípico?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Desafío Hípico tiene más de 86.000 usuarios activos mensuales y más de 600.000 vistas de página por trimestre, con hasta 6+ minutos de retención en páginas de análisis.',
+            text: 'En su último trimestre Desafío Hípico alcanzó más de 86.000 usuarios activos mensuales y más de 600.000 vistas de página, con hasta 6+ minutos de retención en páginas de análisis. Los reportes de Google Analytics se comparten con anunciantes bajo solicitud.',
           },
         },
         {
@@ -197,7 +197,7 @@ export default function PublicidadPage() {
         <section className="space-y-4">
           <div className="text-center">
             <h2 className="text-xl font-extrabold text-white">Una audiencia real y medible</h2>
-            <p className="text-xs text-gray-500 mt-1">Métricas de tráfico auditables · datos de plataforma propios</p>
+            <p className="text-xs text-gray-500 mt-1">Datos del último trimestre · reportes Google Analytics disponibles bajo solicitud</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {metrics.map(m => (
