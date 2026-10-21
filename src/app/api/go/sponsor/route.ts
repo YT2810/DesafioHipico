@@ -12,7 +12,25 @@ const SPONSOR_TARGETS: Record<string, string> = {
  * GET /api/go/sponsor?campaign=<slug>&slot=<placement>&from=<page>
  * Logs the click in our own stats, then 302s to the advertiser's
  * referral URL. Never reveals the target in page HTML source.
+ * UTM params are appended when the advertiser's link doesn't carry its own,
+ * so their analytics attributes the traffic to desafiohipico.com.
  */
+function withUtm(targetUrl: string, campaignSlug: string, slot: string): string {
+  try {
+    const u = new URL(targetUrl);
+    const hasUtm = [...u.searchParams.keys()].some(k => k.startsWith('utm_'));
+    if (!hasUtm) {
+      u.searchParams.set('utm_source', 'desafiohipico');
+      u.searchParams.set('utm_medium', 'banner');
+      u.searchParams.set('utm_campaign', campaignSlug);
+      u.searchParams.set('utm_content', slot);
+    }
+    return u.toString();
+  } catch {
+    return targetUrl;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const campaignSlug = (searchParams.get('campaign') ?? searchParams.get('brand') ?? '').toLowerCase();
@@ -25,7 +43,7 @@ export async function GET(req: NextRequest) {
   if (campaignSlug) {
     const campaign = await getCampaignBySlug(campaignSlug);
     if (campaign) {
-      targetUrl = campaign.targetUrl;
+      targetUrl = withUtm(campaign.targetUrl, campaign.slug, slot);
       void trackClick(campaign.slug, slot);
     }
   }
@@ -54,6 +72,7 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(targetUrl, { status: 302 });
   res.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.headers.set('Referrer-Policy', 'no-referrer');
+  // Advertiser sees desafiohipico.com as the referral source in their analytics
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   return res;
 }

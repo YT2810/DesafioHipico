@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
           '/en-vivo',
           '/handicapper/',
           '/contacto',
+          '/publicidad',
         ],
         disallow: [
           '/admin/',
@@ -42,6 +43,7 @@ export default function robots(): MetadataRoute.Robots {
           '/revista/',
           '/resultados',
           '/handicapper/',
+          '/publicidad',
         ],
         disallow: ['/admin/', '/api/', '/staff/'],
       },
