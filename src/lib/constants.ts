@@ -31,9 +31,9 @@ export function getFreeRacesAllowance(totalRacesCount: number): number {
 }
 
 /**
- * Paquetes de recarga fijos en Bolívares — sin dependencia de tasa de cambio.
- * Nombres con referencia hípica venezolana.
- * Bs/Gold: 250 → 225 → 200 (rebaja solo por volumen, nunca por jornada).
+ * Pases Nacionales de recarga fijos en Bolívares — sin dependencia de tasa de cambio.
+ * La aprobación de estos paquetes activa un PASE (no acredita Golds).
+ * Los precios pueden sobreescribirse en SiteConfig key 'goldPackagePrices' (admin/gold-packages).
  */
 export const TOPUP_PACKAGES = [
   {
@@ -41,8 +41,7 @@ export const TOPUP_PACKAGES = [
     label: 'Pase Semanal Nacional',
     description: 'Acceso Total Lunes a Domingo (La Rinconada + Valencia + Alertas + 5y6 VIP)',
     priceBs: 6000,
-    golds: 20,
-    bsPerGold: 300,
+    passType: 'national_weekly',
     badge: 'MÁS POPULAR',
     saving: null,
   },
@@ -51,14 +50,14 @@ export const TOPUP_PACKAGES = [
     label: 'Pase Mensual Nacional (30 Días)',
     description: '4 Semanas completas de acceso total Nacional + Cuadro 5y6 VIP',
     priceBs: 20000,
-    golds: 100,
-    bsPerGold: 200,
+    passType: 'national_monthly',
     badge: 'MEJOR VALOR',
     saving: 'Ahorras 4.000 Bs',
   },
 ] as const;
 
 export type TopUpPackageId = typeof TOPUP_PACKAGES[number]['id'];
+export type PassType = typeof TOPUP_PACKAGES[number]['passType'];
 
 export const VENEZUELAN_BANKS = [
   'Banco de Venezuela (0102)',

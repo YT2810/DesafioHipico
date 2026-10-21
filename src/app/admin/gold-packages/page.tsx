@@ -9,7 +9,6 @@ const GOLD = '#D4AF37';
 export default function GoldPackagesPage() {
   const [prices, setPrices] = useState<Record<string, string>>({
     arranque: '',
-    jinete: '',
     padrillo: '',
   });
   const [loading, setLoading] = useState(true);
@@ -62,11 +61,11 @@ export default function GoldPackagesPage() {
       <div className="max-w-lg mx-auto space-y-6">
         <div className="flex items-center gap-3">
           <Link href="/admin" className="text-gray-500 hover:text-white text-sm">← Admin</Link>
-          <h1 className="text-lg font-bold text-white">Precios Gold</h1>
+          <h1 className="text-lg font-bold text-white">Precios de Pases</h1>
         </div>
 
         <p className="text-xs text-gray-500">
-          Los precios se aplican inmediatamente en el modal de recarga. Los Gold y la cantidad de cada paquete no cambian — solo el monto en Bs.
+          Los precios se aplican inmediatamente en el modal de activación. Solo cambia el monto en Bs de cada Pase — la duración y los beneficios no cambian.
         </p>
 
         {loading ? (
@@ -80,7 +79,7 @@ export default function GoldPackagesPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold text-white">{pkg.label}</p>
-                    <p className="text-xs text-gray-500">{pkg.golds} Gold · {pkg.badge ?? 'Sin badge'}</p>
+                    <p className="text-xs text-gray-500">{pkg.passType === 'national_monthly' ? '30 días' : 'Lunes a Domingo'} · {pkg.badge ?? 'Sin badge'}</p>
                     <p className="text-[11px] text-gray-600 mt-0.5 italic">{pkg.description}</p>
                   </div>
                   {pkg.badge && (
@@ -103,9 +102,12 @@ export default function GoldPackagesPage() {
                       placeholder={String(pkg.priceBs)}
                     />
                   </div>
-                  {prices[pkg.id] && parseInt(prices[pkg.id]) > 0 && (
+                  {pkg.passType === 'national_monthly' && prices['arranque'] && prices[pkg.id] && parseInt(prices[pkg.id]) > 0 && (
                     <p className="text-[11px] text-gray-600 mt-1">
-                      {Math.round(parseInt(prices[pkg.id]) / pkg.golds).toLocaleString('es-VE')} Bs/Gold
+                      {(() => {
+                        const saved = parseInt(prices['arranque']) * 4 - parseInt(prices[pkg.id]);
+                        return saved > 0 ? `Ahorra ${saved.toLocaleString('es-VE')} Bs vs 4 semanas` : 'Sin ahorro vs 4 semanas';
+                      })()}
                     </p>
                   )}
                 </div>

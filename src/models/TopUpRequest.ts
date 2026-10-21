@@ -6,8 +6,9 @@ export type TopUpStatus = 'pending' | 'approved' | 'rejected';
 
 export interface ITopUpRequest extends Document {
   userId: Types.ObjectId;
+  packageId?: string;        // 'arranque' (semanal) | 'padrillo' (mensual) — undefined en solicitudes legacy de Golds
   amountUsd?: number;
-  goldAmount: number;
+  goldAmount: number;        // 0 para solicitudes de Pase; >0 en solicitudes legacy de Golds
   referenceNumber: string;
   phone: string;
   legalId?: string;
@@ -26,6 +27,7 @@ export interface ITopUpRequest extends Document {
 const TopUpRequestSchema = new Schema<ITopUpRequest>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    packageId: { type: String, trim: true },
     amountUsd: { type: Number, min: 0 },
     goldAmount: { type: Number, required: true },
     referenceNumber: { type: String, required: true, trim: true },

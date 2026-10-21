@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { VENEZUELAN_BANKS, TOPUP_PACKAGES, type TopUpPackageId } from '@/lib/constants';
 
-type LivePackage = { id: string; label: string; description: string; priceBs: number; golds: number; bsPerGold: number; badge: string | null; saving: string | null; };
+type LivePackage = { id: string; label: string; description: string; priceBs: number; passType?: string; badge: string | null; saving: string | null; };
 
 const GOLD = '#D4AF37';
 const SHOW_EXTENDED_TOPUP_FIELDS = false;
@@ -24,7 +24,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const [error, setError] = useState('');
   const [paymentBanks, setPaymentBanks] = useState<{ priority: number; bankName: string; phone: string; legalId: string; holderName: string }[]>([]);
   const [selectedBankIdx, setSelectedBankIdx] = useState(0);
-  const [successData, setSuccessData] = useState<{ goldAmount: number; requestId: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ packageLabel: string; requestId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al enviar la solicitud.');
-      setSuccessData({ goldAmount: data.goldAmount, requestId: data.requestId });
+      setSuccessData({ packageLabel: data.packageLabel ?? selectedPkg?.label ?? '', requestId: data.requestId });
       setStep('success');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -362,7 +362,7 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
               <div className="w-20 h-20 rounded-full bg-yellow-950/40 border-2 border-yellow-600/60 flex items-center justify-center text-4xl">🎟️</div>
               <div className="space-y-1.5">
                 <p className="text-lg font-extrabold text-white">¡Solicitud enviada!</p>
-                <p className="text-sm text-gray-400">Tu <span className="font-bold text-white">{selectedPkg?.label}</span> se activará en menos de 24 h hábiles una vez que verifiquemos el pago.</p>
+                <p className="text-sm text-gray-400">Tu <span className="font-bold text-white">{successData.packageLabel || selectedPkg?.label}</span> se activará en menos de 24 h hábiles una vez que verifiquemos el pago.</p>
                 <p className="text-xs text-gray-700 mt-2 font-mono">Ref interna: {successData.requestId.slice(-8)}</p>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-xs text-gray-400 w-full text-left space-y-1">

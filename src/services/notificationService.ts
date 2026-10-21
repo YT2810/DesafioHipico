@@ -79,12 +79,10 @@ export async function notifyAllUsers(payload: NotifPayload) {
 
 export async function notifyTopUpPending(
   userId: string,
-  goldAmount: number,
   ref: string,
   extras?: { bank?: string; phone?: string; amountBs?: number; packageLabel?: string }
 ) {
-  const parts = [`${goldAmount} Golds`];
-  if (extras?.packageLabel) parts.push(`Paquete: ${extras.packageLabel}`);
+  const parts = [extras?.packageLabel ? `Paquete: ${extras.packageLabel}` : 'Recarga'];
   if (extras?.amountBs) parts.push(`Bs ${extras.amountBs.toLocaleString('es-VE')}`);
   if (extras?.bank) parts.push(extras.bank);
   if (extras?.phone) parts.push(`Tel: ${extras.phone}`);
@@ -94,14 +92,14 @@ export async function notifyTopUpPending(
     title: '💰 Nueva recarga pendiente',
     body: parts.join(' · '),
     link: '/admin/topup',
-    data: { userId, ref, goldAmount: String(goldAmount) },
+    data: { userId, ref },
   });
 
   // Push Telegram al admin — fire-and-forget
   const lines = [
     '💰 <b>Nueva recarga pendiente</b>',
     '',
-    `📦 Plan: <b>${extras?.packageLabel ?? '—'}</b> · ${goldAmount} Gold`,
+    `📦 Plan: <b>${extras?.packageLabel ?? '—'}</b>`,
     extras?.amountBs ? `💵 Monto: <b>Bs ${extras.amountBs.toLocaleString('es-VE')}</b>` : '',
     extras?.bank ? `🏦 Banco: ${extras.bank}` : '',
     extras?.phone ? `📞 Tel: ${extras.phone}` : '',
@@ -112,13 +110,13 @@ export async function notifyTopUpPending(
   sendTelegramMessage(lines).catch(() => {});
 }
 
-export async function notifyTopUpApproved(userId: string, goldAmount: number) {
+export async function notifyTopUpApproved(userId: string, itemLabel: string) {
   await notifyUser(userId, {
     type: 'topup_approved',
     title: '✅ Recarga aprobada',
-    body: `Se acreditaron ${goldAmount} Golds a tu cuenta. ¡A jugar!`,
+    body: `Se acreditó ${itemLabel} a tu cuenta. ¡A jugar!`,
     link: '/pronosticos',
-    data: { goldAmount: String(goldAmount) },
+    data: { itemLabel },
   });
 }
 

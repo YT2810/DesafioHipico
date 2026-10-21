@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import TopUpRequest from '@/models/TopUpRequest';
+import { getLiveTopUpPackages, resolveTopUpPackageIdSync } from '@/services/topupService';
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     const limit = 20;
 
     const query = status === 'all' ? {} : { status };
-    const [requests, total] = await Promise.all([
+    const [requests, total, livePackages] = await Promise.all([
       TopUpRequest.find(query)
         .populate('userId', 'email phone legalId alias')
         .sort({ createdAt: -1 })
@@ -32,9 +33,20 @@ export async function GET(req: NextRequest) {
         .limit(limit)
         .lean(),
       TopUpRequest.countDocuments(query),
+      getLiveTopUpPackages(),
     ]);
 
-    return NextResponse.json({ requests, total, page, pages: Math.ceil(total / limit) });
+    // Resolve pass package label per request (packageId or inferred by amountBs)
+    const enriched = (requests as any[]).map(r => {
+      const packageId = resolveTopUpPackageIdSync(
+        { packageId: r.packageId, amountBs: r.amountBs },
+        livePackages,
+      );
+      const pkg = packageId ? livePackages.find(p => p.id === packageId) ?? null : null;
+      return { ...r, resolvedPackageId: packageId ?? null, packageLabel: pkg?.label ?? null };
+    });
+
+    return NextResponse.json({ requests: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error interno' }, { status: 500 });
   }

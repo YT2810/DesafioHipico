@@ -44,13 +44,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Ese número de referencia ya fue registrado.' }, { status: 409 });
     }
 
-    const goldAmount = pkg.golds;
     const cleanLegalId = typeof legalId === 'string' && legalId.trim() !== 'V' ? legalId.trim() : '';
     const cleanBank = typeof bank === 'string' ? bank.trim() : '';
 
     const request = await TopUpRequest.create({
       userId: new Types.ObjectId(session.user.id),
-      goldAmount,
+      packageId: pkg.id,
+      goldAmount: 0,
       referenceNumber: referenceNumber.trim(),
       phone: phone.trim(),
       legalId: cleanLegalId,
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Notify admins/staff with full payment details (fire-and-forget)
-    notifyTopUpPending(session.user.id, goldAmount, referenceNumber.trim(), {
+    notifyTopUpPending(session.user.id, referenceNumber.trim(), {
       bank: cleanBank || 'Pago Móvil',
       phone: phone.trim(),
       amountBs: Number(amountBs),
@@ -80,9 +80,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       requestId: request._id.toString(),
-      goldAmount,
+      packageId: pkg.id,
+      packageLabel: pkg.label,
       status: 'pending',
-      message: `Solicitud recibida. Se acreditarán ${goldAmount} Golds una vez verificado el pago.`,
+      message: `Solicitud recibida. Se activará tu ${pkg.label} una vez verificado el pago.`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error interno';

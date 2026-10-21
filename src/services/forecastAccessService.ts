@@ -44,8 +44,9 @@ export function getCurrentWeekMondayStartUTC(): Date {
 
 /**
  * Checks if user has an active National Pass:
- * - Weekly Pass (any approved topup/purchase since Monday 00:00 UTC-4 of current week)
- * - 30-Day Monthly Pass ('padrillo' or >= 50 Golds / >= Bs 18,000 in last 30 days)
+ * - Weekly Pass: any approved TopUpRequest since Monday 00:00 UTC-4 of current week
+ * - 30-Day Monthly Pass: 'padrillo' packageId or >= Bs 20,000 approved in last 30 days
+ * - Legacy: Gold purchase tx this week, or >= 50 Golds purchase in last 30 days
  */
 export async function hasActiveNationalPass(userId: string): Promise<boolean> {
   if (!userId || !Types.ObjectId.isValid(userId)) return false;
@@ -61,7 +62,7 @@ export async function hasActiveNationalPass(userId: string): Promise<boolean> {
         { reviewedAt: { $gte: weekStart } },
         { createdAt: { $gte: weekStart } },
         { packageId: 'padrillo', reviewedAt: { $gte: days30Ago } },
-        { amountBs: { $gte: 18000 }, reviewedAt: { $gte: days30Ago } },
+        { amountBs: { $gte: 20000 }, reviewedAt: { $gte: days30Ago } },
       ],
     }),
     GoldTransaction.exists({

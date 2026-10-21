@@ -14,6 +14,9 @@ interface TopUpItem {
   amountBs: number;
   amountUsd: number;
   goldAmount: number;
+  packageId?: string | null;
+  resolvedPackageId?: string | null;
+  packageLabel?: string | null;
   paymentDate: string;
   phone: string;
   legalId: string;
@@ -78,7 +81,7 @@ export default function AdminTopUpPage() {
       if (!res.ok) throw new Error(data.error ?? 'Error');
       setActionSuccess(
         action === 'approve'
-          ? `✅ Aprobada — ${data.goldAmount} Golds acreditados`
+          ? `✅ Aprobada — ${data.packageLabel ?? `${data.goldAmount} Golds`} acreditado`
           : '🚫 Solicitud rechazada'
       );
       setSelected(null);
@@ -177,9 +180,9 @@ export default function AdminTopUpPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-bold text-white font-mono">#{item.referenceNumber}</span>
                           <span className="text-xs font-bold px-2 py-0.5 rounded-full text-black" style={{ backgroundColor: GOLD }}>
-                            {item.goldAmount} Golds
+                            {item.packageLabel ? `🎟️ ${item.packageLabel}` : `${item.goldAmount} Golds`}
                           </span>
-                          <span className="text-xs text-gray-500">${item.amountUsd} USD</span>
+                          {item.amountUsd ? <span className="text-xs text-gray-500">${item.amountUsd} USD</span> : null}
                           <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
                             {cfg.label}
                           </span>
@@ -246,8 +249,8 @@ export default function AdminTopUpPage() {
                         <Detail label="Monto Bs."   value={item.amountBs.toLocaleString('es-VE')} />
                         {item.legalId && <Detail label="Cédula" value={item.legalId} />}
                         <Detail label="Teléfono"    value={item.phone} />
-                        <Detail label="Golds"       value={`${item.goldAmount} Golds`} highlight />
-                        <Detail label="USD"         value={`$${item.amountUsd}`} />
+                        <Detail label={item.packageLabel ? 'Pase' : 'Golds'} value={item.packageLabel ?? `${item.goldAmount} Golds`} highlight />
+                        {item.amountUsd ? <Detail label="USD" value={`$${item.amountUsd}`} /> : null}
                       </div>
 
                       {/* Rejection reason */}
@@ -272,7 +275,7 @@ export default function AdminTopUpPage() {
                         <button onClick={() => handleAction('approve')} disabled={actionLoading}
                           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-50 transition-opacity"
                           style={{ backgroundColor: GOLD }}>
-                          {actionLoading ? 'Procesando...' : `✅ Aprobar ${item.goldAmount} Golds`}
+                          {actionLoading ? 'Procesando...' : `✅ Aprobar ${item.packageLabel ?? `${item.goldAmount} Golds`}`}
                         </button>
                       </div>
                     </div>
