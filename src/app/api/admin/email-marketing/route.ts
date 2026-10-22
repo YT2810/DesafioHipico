@@ -210,7 +210,7 @@ export async function GET(req: NextRequest) {
     const sentLog = await getSiteConfig<Record<string, string>>('emailCampaignSentLog', {});
 
     const allUsers = (await User.find({ email: { $exists: true, $ne: '' } })
-      .select('email alias balance lastLoginDate createdAt')
+      .select('email alias balance lastLoginDate createdAt unsubscribed')
       .lean()) as any[];
 
     const cutoff60d = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -221,7 +221,7 @@ export async function GET(req: NextRequest) {
 
     for (const u of allUsers) {
       const em = (u.email ?? '').toLowerCase().trim();
-      if (isJunkEmail(em) || suppressedSet.has(em)) continue;
+      if (isJunkEmail(em) || suppressedSet.has(em) || u.unsubscribed === true) continue;
       allValidCount++;
       const isRecentLogin = u.lastLoginDate && u.lastLoginDate >= cutoff60d;
       const hasGolds = (u.balance?.golds ?? 0) > 0;
@@ -344,47 +344,80 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Regenerate with Gemini AI
+    // 2b. Manual opt-out / re-activation — when a user asks to be removed by email/WhatsApp
+    if (action === 'add_suppression' || action === 'remove_suppression') {
+      const em = String(body.email ?? '').toLowerCase().trim();
+      if (!EMAIL_REGEX.test(em)) {
+        return NextResponse.json({ error: 'Email inválido' }, { status: 400 });
+      }
+      const existing = await getSiteConfig<string[]>('emailSuppressedList', []);
+      const set = new Set((existing ?? []).map(s => s.toLowerCase().trim()));
+      const adding = action === 'add_suppression';
+      if (adding) set.add(em); else set.delete(em);
+      await SiteConfig.findOneAndUpdate(
+        { key: 'emailSuppressedList' },
+        { $set: { value: [...set] } },
+        { upsert: true }
+      );
+      // Keep the user's marketing flag in sync both ways
+      await User.updateOne({ email: em }, { $set: { unsubscribed: adding } });
+      return NextResponse.json({ ok: true, email: em, suppressed: adding, suppressedCount: set.size });
+    }
+
+    // 3. Regenerate with AI (persuasive copywriter — preserves the template's HTML structure)
     if (action === 'regenerate_ai') {
       const slot: 'wednesday' | 'thursday' = body.slot === 'thursday' ? 'thursday' : 'wednesday';
-      const ctx = await buildCampaignContext(Math.floor(Math.random() * 4));
-      const prompt =
+      const ctx = await buildCampaignContext(0);
+      const customContext = String(body.customContext ?? '').trim().slice(0, 1000);
+      const fallback = slot === 'wednesday' ? ctx.wednesday : ctx.thursday;
+
+      const facts =
         slot === 'wednesday'
-          ? `Redacta un correo corto y persuasivo de Miércoles por la mañana para los usuarios de Desafío Hípico (hipismo venezolano).
-Datos reales obligatorios (NO inventes ningún dato fuera de estos):
-- El domingo pasado en la Reunión ${ctx.lastMNum} de La Rinconada el 5y6 pagó Bs. ${ctx.lastPayout6} y ${ctx.lastTop5Count} de los 6 ganadores estuvieron en el Top 5 del Factor de Victoria.
-- Ya está cargada gratis en la web la Reunión ${ctx.upcomingMeetingNumber || ctx.lastMNum + 1} de este domingo con Inscritos, Revista Digital, Traqueos y la alerta de Fase 1 por lotes.
-Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto sin parecer spam (máx 9 palabras)", "paragraphsHtml": "<p>...</p><p>...</p>"}`
-          : `Redacta un correo persuasivo de Jueves por la tarde para los usuarios de Desafío Hípico.
-Datos reales obligatorios (NO inventes ningún dato fuera de estos):
-- Para la Reunión ${ctx.upcomingMeetingNumber || ctx.lastMNum + 1} de este domingo en La Rinconada están abiertas gratis la 1ª y 2ª carrera en la web.
+          ? `- El domingo pasado en la Reunión ${ctx.lastMNum} de La Rinconada el 5y6 pagó Bs. ${ctx.lastPayout6} y ${ctx.lastTop5Count} de los 6 ganadores estuvieron en el Top 5 del Factor de Victoria.
+- Ya está cargada gratis en la web la Reunión ${ctx.upcomingMeetingNumber || ctx.lastMNum + 1} de este domingo con Inscritos, Revista Digital, Traqueos y la alerta de Fase 1 por lotes.`
+          : `- Para la Reunión ${ctx.upcomingMeetingNumber || ctx.lastMNum + 1} de este domingo en La Rinconada están abiertas gratis la 1ª y 2ª carrera en la web.
 - El Algoritmo ya encendió alertas de batacazo en las válidas de lote grande/tiro corto.
-- Invita a activar el Pase Semanal Nacional por Bs. 6.000 (o Pase Mensual por Bs. 20.000) que desbloquea todas las carreras, la Leyenda de Disparadores de cada carrera y el Cuadro 5y6 VIP en el botón dorado flotante.
-Devuelve SOLO un JSON con este formato exacto: {"subject": "Asunto corto y atractivo (máx 9 palabras)", "paragraphsHtml": "<p>...</p><p>...</p>"}`;
+- Invita a activar el Pase Semanal Nacional por Bs. 6.000 (o Pase Mensual por Bs. 20.000) que desbloquea todas las carreras, la Leyenda de Disparadores de cada carrera y el Cuadro 5y6 VIP en el botón dorado flotante.`;
+
+      const prompt = `Eres un copywriter senior de email marketing persuasivo, especializado en hipismo venezolano.
+
+MARCA: Desafío Hípico — plataforma digital líder del hipismo venezolano (La Rinconada y Valencia). Su ventaja es el "Factor de Victoria", un algoritmo propio de pronósticos.
+TONO: cercano, experto, con urgencia honesta. Habla de "tú". Usa venezolanismos hípicos naturales (válidas, batacazo, línea, candado, dividendo, ejemplares). Nunca suenes a spam genérico.
+
+DATOS REALES OBLIGATORIOS (NO inventes ningún dato fuera de estos):
+${facts}
+${customContext ? `
+INSTRUCCIONES ADICIONALES DEL ADMINISTRADOR (tienen prioridad sobre el enfoque):
+${customContext}
+` : ''}
+TU TAREA: Reescribe el email de referencia de abajo con copy más persuasivo.
+REGLAS DE ESTRUCTURA (innegociables):
+- MANTÉN intacta la estructura HTML: mismos divs contenedores, estilos inline, cajas destacadas con borde/acento dorado (#D4AF37), bullets con ✅ o •, negritas <strong>, el botón CTA con su href y el pie de página.
+- Solo reescribe el TEXTO. Puedes ajustar emojis, y agregar UNA caja destacada o <strong> extra si mejora la venta, pero nunca elimines la caja dorada, el botón ni el footer.
+- No agregues imágenes, links nuevos, ni datos que no estén en la lista.
+
+Devuelve SOLO un JSON válido sin markdown: {"subject": "asunto corto y atractivo, máx 9 palabras, sin clickbait en mayúsculas", "html": "<HTML completo del email>"}
+
+EMAIL DE REFERENCIA (estructura a preservar):
+${fallback.html}`;
 
       try {
-        const raw = await callLLM(prompt);
+        const raw = await callLLM(prompt, {
+          model: process.env.OPENROUTER_EMAIL_MODEL ?? 'anthropic/claude-sonnet-4.5',
+          temperature: 0.7,
+        });
         const match = raw.match(/\{[\s\S]*\}/);
         if (match) {
           const parsed = JSON.parse(match[0]);
-          if (parsed.subject && parsed.paragraphsHtml) {
-            return NextResponse.json({
-              ok: true,
-              subject: parsed.subject,
-              html: buildEmailHtmlWrapper(
-                parsed.paragraphsHtml,
-                slot === 'wednesday'
-                  ? '📖 Ver Inscritos, Revista y Traqueos Gratis →'
-                  : '👑 Ver Carreras Abiertas y Activar Pase Semanal →',
-                'https://www.desafiohipico.com/pronosticos'
-              ),
-            });
+          const aiHtml = String(parsed.html ?? '');
+          // Sanity: keep the AI email only if it preserved CTA + footer structure
+          if (parsed.subject && aiHtml.includes('desafiohipico.com') && aiHtml.includes('</a>')) {
+            return NextResponse.json({ ok: true, subject: String(parsed.subject), html: aiHtml });
           }
         }
       } catch {
         // Fallback to rotated template if AI call fails
       }
-      const fallback = slot === 'wednesday' ? ctx.wednesday : ctx.thursday;
       return NextResponse.json({ ok: true, subject: fallback.subject, html: fallback.html });
     }
 

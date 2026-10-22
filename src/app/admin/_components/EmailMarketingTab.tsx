@@ -13,6 +13,8 @@ export default function EmailMarketingTab() {
   const [html, setHtml] = useState('');
   const [testEmail, setTestEmail] = useState('');
   const [variantIdx, setVariantIdx] = useState(0);
+  const [aiContext, setAiContext] = useState('');
+  const [manualEmail, setManualEmail] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -66,6 +68,34 @@ export default function EmailMarketingTab() {
     }
   }
 
+  async function handleManualSuppression(adding: boolean) {
+    const em = manualEmail.trim().toLowerCase();
+    if (!em) return;
+    setBusyAction(adding ? 'sup-add' : 'sup-del');
+    setStatusMsg(null);
+    try {
+      const res = await fetch('/api/admin/email-marketing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: adding ? 'add_suppression' : 'remove_suppression', email: em }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Error');
+      setStatusMsg({
+        type: 'ok',
+        text: adding
+          ? `🚫 ${em} dado de baja — excluido de envíos y exportaciones.`
+          : `✅ ${em} reactivado para recibir correos.`,
+      });
+      setManualEmail('');
+      loadData(variantIdx);
+    } catch (e) {
+      setStatusMsg({ type: 'err', text: e instanceof Error ? e.message : 'Error' });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function handleRegenerateAi() {
     setBusyAction('ai');
     setStatusMsg(null);
@@ -75,7 +105,7 @@ export default function EmailMarketingTab() {
       const res = await fetch('/api/admin/email-marketing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'regenerate_ai', slot }),
+        body: JSON.stringify({ action: 'regenerate_ai', slot, customContext: aiContext }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Error al regenerar');
@@ -292,7 +322,54 @@ export default function EmailMarketingTab() {
                 ? lists.sampleSuppressed.slice(0, 3).join(', ')
                 : 'Toca "Limpiar Bounces de Resend" para sincronizar'}
             </p>
+            {/* Baja manual — cuando un usuario lo pide por correo/WhatsApp */}
+            <div className="mt-2.5 pt-2.5 border-t border-gray-800/60 space-y-1.5">
+              <input
+                type="email"
+                value={manualEmail}
+                onChange={e => setManualEmail(e.target.value)}
+                placeholder="email a dar de baja..."
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-gray-600"
+              />
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleManualSuppression(true)}
+                  disabled={busyAction !== null || !manualEmail.trim()}
+                  className="flex-1 py-1.5 rounded-lg text-[10px] font-extrabold bg-red-950 hover:bg-red-900 text-red-300 border border-red-800/60 disabled:opacity-40"
+                >
+                  🚫 Dar de baja
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleManualSuppression(false)}
+                  disabled={busyAction !== null || !manualEmail.trim()}
+                  className="flex-1 py-1.5 rounded-lg text-[10px] font-extrabold bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 disabled:opacity-40"
+                >
+                  ↩️ Reactivar
+                </button>
+              </div>
+            </div>
           </div>
+        </div>
+
+        {/* Exportar audiencias a CSV (formato Resend: email,first_name,unsubscribed) */}
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-gray-500 font-semibold">Exportar para Resend Broadcasts:</span>
+          <a
+            href="/api/admin/email-marketing/export?list=active"
+            download
+            className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/50"
+          >
+            ⬇️ Lista 1: Activos CSV
+          </a>
+          <a
+            href="/api/admin/email-marketing/export?list=all_valid"
+            download
+            className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-yellow-950 hover:bg-yellow-900 text-yellow-300 border border-yellow-700/50"
+          >
+            ⬇️ Lista 2: Completa CSV
+          </a>
         </div>
       </div>
 
@@ -356,6 +433,15 @@ export default function EmailMarketingTab() {
                 {busyAction === 'ai' ? 'Redactando...' : '✨ Cambiar Estilo / Redactar con IA'}
               </button>
             </div>
+
+            {/* Instrucciones extra para la IA — se inyectan al prompt de regeneración */}
+            <textarea
+              value={aiContext}
+              onChange={e => setAiContext(e.target.value)}
+              rows={2}
+              placeholder='Instrucciones para la IA (opcional): "enfatiza el dividendo millonario", "menciona a BEYONCE CHAMP", "tono más urgente"...'
+              className="w-full bg-purple-950/20 border border-purple-800/40 rounded-xl px-3 py-2 text-xs text-purple-100 placeholder-purple-400/50 resize-none"
+            />
             <input
               type="text"
               value={subject}

@@ -122,7 +122,14 @@ export interface RaceEntriesContext {
 
 // ─── Core LLM caller (OpenRouter or Google direct) ────────────────────────────
 
-export async function callLLM(prompt: string): Promise<string> {
+export interface CallLLMOptions {
+  model?: string;
+  temperature?: number;
+}
+
+export async function callLLM(prompt: string, opts: CallLLMOptions = {}): Promise<string> {
+  const model = opts.model ?? OPENROUTER_MODEL;
+  const temperature = opts.temperature ?? 0.1;
   if (USE_OPENROUTER) {
     const res = await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -133,9 +140,9 @@ export async function callLLM(prompt: string): Promise<string> {
         'X-Title': 'Desafío Hípico',
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
+        temperature,
         max_tokens: 8192,
       }),
     });
@@ -161,7 +168,7 @@ export async function callLLM(prompt: string): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      generationConfig: { temperature, maxOutputTokens: 8192 },
     }),
   });
   if (!res.ok) {
