@@ -29,6 +29,7 @@ export default function VipFiveAndSixWidget() {
 
   const loadVip = useCallback(async (selectedTrack: 'rinconada' | 'valencia') => {
     setLoading(true);
+    setData(null); // never show the other track's data while loading or on 404
     try {
       const res = await fetch(`/api/vip-5y6?track=${selectedTrack}`);
       if (res.ok) {
@@ -206,8 +207,12 @@ export default function VipFiveAndSixWidget() {
                   ))}
                 </div>
               ) : !data ? (
-                <div className="text-center py-10 text-xs text-gray-500">
-                  El cuadro VIP de esta reunión estará disponible en cuanto se publiquen los pronósticos.
+                <div className="text-center py-10 text-xs text-gray-500 space-y-1.5">
+                  <p className="text-2xl">🏇</p>
+                  <p>
+                    No hay jornada activa en <strong className="text-gray-300">{track === 'valencia' ? 'Valencia' : 'La Rinconada'}</strong> esta semana.
+                  </p>
+                  <p>El cuadro VIP aparecerá en cuanto se cargue el próximo programa.</p>
                 </div>
               ) : (
                 <>
