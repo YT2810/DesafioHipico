@@ -13,7 +13,7 @@ import SocialProofToast from '@/components/SocialProofToast';
 interface Mark { preferenceOrder: number; horseName: string; dorsalNumber?: number; label: ForecastLabel; note?: string; }
 interface HandicapperInfo { id: string; pseudonym: string; pct1st: number; pct2nd: number; pctGeneral: number; contactNumber?: string; isGhost?: boolean; e1?: number | null; eGeneral?: number; }
 interface ForecastItem { handicapper: HandicapperInfo; marks: Mark[]; isVip: boolean; _locked?: boolean; sourceRef?: string; uploadedByRole?: 'handicapper' | 'staff' | 'admin'; }
-interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; scratchedDorsals: number[]; }
+interface RaceItem { raceId: string; raceNumber: number; distance: number; scheduledTime: string; conditions: string; prizePool: { bs: number; usd: number } | number; forecasts: ForecastItem[]; scratchedDorsals: number[]; winnerDorsal?: number | null; }
 interface MeetingItem { meetingId: string; meetingNumber: number; date: string; trackName: string; races: RaceItem[]; }
 interface HorseFactor { horseName: string; dorsalNumber?: number; points: number; factor: number; }
 
@@ -479,11 +479,18 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
               Factor de Victoria <span className="ml-1 text-gray-700 font-normal normal-case">· {race.forecasts.filter(f => !f._locked).length} pronosticadores</span>
             </p>
             <div className="space-y-2">
-              {factors.slice(0, 6).map((h, i) => (
-                <div key={h.horseName} className="flex items-center gap-2">
+              {factors.slice(0, 6).map((h, i) => {
+                const isWinner = race.winnerDorsal != null && h.dorsalNumber === race.winnerDorsal;
+                const isFaded = race.winnerDorsal != null && !isWinner;
+                return (
+                <div key={h.horseName} className={`flex items-center gap-2 ${isFaded ? 'opacity-45' : ''}`}>
                   <span className="shrink-0 w-4 text-xs text-gray-600 font-bold">{i+1}</span>
                   {h.dorsalNumber != null && <span className="shrink-0 w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-xs font-bold text-white">{h.dorsalNumber}</span>}
-                  <span className={`flex-1 text-xs font-semibold truncate ${h.dorsalNumber != null && race.scratchedDorsals?.includes(h.dorsalNumber) ? 'line-through text-gray-600' : 'text-white'}`}>{h.horseName}</span>
+                  <span className={`flex-1 text-xs font-semibold truncate ${h.dorsalNumber != null && race.scratchedDorsals?.includes(h.dorsalNumber) ? 'line-through text-gray-600' : 'text-white'}`}>
+                    {h.horseName}
+                    {isWinner && <span className="ml-1" title="Ganador oficial">🏆</span>}
+                    {isWinner && i < 3 && <span className="ml-1 text-[10px] font-black text-green-400" title="El FV lo tenía en su Top 3">✓ FV</span>}
+                  </span>
                   <div className="w-20 h-2 rounded-full bg-gray-800 overflow-hidden shrink-0">
                     <div className="h-full rounded-full" style={{ width: `${h.factor*100}%`, backgroundColor: h.factor>=0.5?'#22c55e':h.factor>=0.25?GOLD:'#6b7280' }} />
                   </div>
@@ -491,7 +498,8 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
                     {h.factor.toFixed(2)}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )
@@ -667,6 +675,7 @@ export default function PronosticosPage() {
           prizePool: r.prizePool,
           forecasts,
           scratchedDorsals: raceData.scratchedDorsals ?? [],
+          winnerDorsal: r.winnerDorsal ?? null,
           _access: raceData.access,
         } as RaceItem & { _access: any };
       });

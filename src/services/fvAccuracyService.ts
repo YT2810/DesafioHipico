@@ -2341,6 +2341,8 @@ export interface PublicVipValidaItem {
   // Sorted strictly by dorsalNumber ascending (no fvPct, no pos) when unlocked; empty when locked
   horsesEco: { dorsalNumber?: number; horseName: string }[];
   horsesMed: { dorsalNumber?: number; horseName: string }[];
+  /** Official winner dorsal when this válida already ran */
+  winnerDorsal?: number;
 }
 
 export interface PublicVipFiveAndSixResponse {
@@ -2377,16 +2379,19 @@ export async function getPublicVipFiveAndSix(
 
   for (const candMeeting of recentMeetings) {
     const candRaces = (await Race.find({ meetingId: candMeeting._id })
-      .select('_id raceNumber distance')
+      .select('_id raceNumber distance hasResults')
       .sort({ raceNumber: 1 })
       .lean()) as any[];
     if (candRaces.length < 6) continue;
 
     const validasRacesDocs = candRaces.slice(-6);
+    // Skip meetings where all 6 válidas already have results — the ticket is
+    // only useful while at least one válida is still pending.
+    if (validasRacesDocs.every(r => r.hasResults === true)) continue;
     const vIds = validasRacesDocs.map(r => r._id.toString());
     const [vForecasts, vEntries] = await Promise.all([
       Forecast.find({ raceId: { $in: vIds }, isPublished: true }).select('raceId marks').lean() as any,
-      Entry.find({ raceId: { $in: vIds } }).select('raceId status result').lean() as any,
+      Entry.find({ raceId: { $in: vIds } }).select('raceId status result dorsalNumber').lean() as any,
     ]);
 
     const fcMap: Record<string, any[]> = {};
@@ -2396,10 +2401,14 @@ export async function getPublicVipFiveAndSix(
       fcMap[rid].push(f);
     }
     const fsMap: Record<string, number> = {};
+    const winnerMap: Record<string, number> = {};
     for (const e of vEntries) {
       const rid = e.raceId.toString();
       if (e.status !== 'scratched' && !e.result?.isScratched && !e.result?.isInvalidated) {
         fsMap[rid] = (fsMap[rid] ?? 0) + 1;
+      }
+      if (e.result?.finishPosition === 1 && typeof e.dorsalNumber === 'number') {
+        winnerMap[rid] = e.dorsalNumber;
       }
     }
 
@@ -2457,6 +2466,7 @@ export async function getPublicVipFiveAndSix(
           countMed: v.countMed,
           horsesEco: isUnlocked ? sortByDorsal(v.picksEco) : [],
           horsesMed: isUnlocked ? sortByDorsal(v.picksMed) : [],
+          winnerDorsal: winnerMap[validasRacesDocs[v.validaNumber - 1]?._id?.toString() ?? ''],
         })),
       };
     }

@@ -15,6 +15,7 @@ export default function EmailMarketingTab() {
   const [variantIdx, setVariantIdx] = useState(0);
   const [aiContext, setAiContext] = useState('');
   const [manualEmail, setManualEmail] = useState('');
+  const [showSuppressed, setShowSuppressed] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -335,6 +336,30 @@ export default function EmailMarketingTab() {
                 ? lists.sampleSuppressed.slice(0, 3).join(', ')
                 : 'Toca "Limpiar Bounces de Resend" para sincronizar'}
             </p>
+            <div className="flex gap-1.5 mt-1.5">
+              <button
+                type="button"
+                onClick={() => setShowSuppressed(s => !s)}
+                className="flex-1 py-1 rounded-lg text-[10px] font-bold bg-gray-900 hover:bg-gray-800 text-gray-400 border border-gray-700/60"
+              >
+                {showSuppressed ? '▲ Ocultar lista' : `▼ Ver los ${(lists.suppressedCount ?? 0).toLocaleString('es-VE')} correos`}
+              </button>
+              <a
+                href="/api/admin/email-marketing/export?list=suppressed"
+                download
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-950 hover:bg-red-900 text-red-300 border border-red-800/60"
+                title="CSV para auditar o suprimirlos también en Resend"
+              >
+                ⬇️ CSV
+              </a>
+            </div>
+            {showSuppressed && (
+              <div className="mt-1.5 max-h-40 overflow-y-auto rounded-lg bg-gray-900 border border-gray-800 p-2 space-y-0.5">
+                {(lists.suppressedList ?? []).map((em: string) => (
+                  <p key={em} className="text-[10px] text-gray-400 font-mono truncate">{em}</p>
+                ))}
+              </div>
+            )}
             {/* Baja manual — cuando un usuario lo pide por correo/WhatsApp */}
             <div className="mt-2.5 pt-2.5 border-t border-gray-800/60 space-y-1.5">
               <input
@@ -383,6 +408,89 @@ export default function EmailMarketingTab() {
           >
             ⬇️ Lista 2: Completa CSV
           </a>
+        </div>
+      </div>
+
+      {/* 1b. Listas de Interés — segmentos detectados por comportamiento, reutilizables para campañas futuras */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+        <div>
+          <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+            <span>📋</span>
+            <span>Listas de Interés (segmentos por comportamiento)</span>
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Usuarios que demuestran interés real con sus clics. Exportables a CSV para campañas segmentadas en Resend.
+          </p>
+        </div>
+
+        {/* Lista: Interesados en el Cuadro 5y6 VIP */}
+        <div className="rounded-xl border border-yellow-800/40 bg-yellow-950/10 p-3.5 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-xs font-extrabold text-yellow-300">👑 Interesados en el Cuadro 5y6 VIP</p>
+              <p className="text-[11px] text-gray-500">
+                Usuarios que abrieron el botón flotante 👑 esta semana (lunes–domingo VE)
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-center">
+              <div>
+                <p className="text-xl font-black text-white">{data?.vip5y6?.clicksWeek ?? 0}</p>
+                <p className="text-[10px] text-gray-500 uppercase">clicks semana</p>
+              </div>
+              <div>
+                <p className="text-xl font-black text-gray-400">{data?.vip5y6?.clicksPrevWeek ?? 0}</p>
+                <p className="text-[10px] text-gray-500 uppercase">semana pasada</p>
+              </div>
+              <div>
+                <p className="text-xl font-black text-emerald-400">{data?.vip5y6?.uniqueUsersWeek ?? 0}</p>
+                <p className="text-[10px] text-gray-500 uppercase">usuarios únicos</p>
+              </div>
+            </div>
+          </div>
+
+          {(data?.vip5y6?.clickers?.length ?? 0) > 0 && (
+            <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-gray-500 border-b border-gray-800 text-left">
+                    <th className="px-2.5 py-1.5 font-bold">Usuario</th>
+                    <th className="px-2.5 py-1.5 font-bold">Email</th>
+                    <th className="px-2.5 py-1.5 font-bold text-right">Clicks</th>
+                    <th className="px-2.5 py-1.5 font-bold text-right">Último</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.vip5y6.clickers.map((c: any, i: number) => (
+                    <tr key={i} className="border-b border-gray-800/50 text-gray-300">
+                      <td className="px-2.5 py-1.5 font-semibold text-white">{c.alias}</td>
+                      <td className="px-2.5 py-1.5 text-gray-400 font-mono">{c.email || '—'}</td>
+                      <td className="px-2.5 py-1.5 text-right font-bold text-yellow-300">{c.clicks}</td>
+                      <td className="px-2.5 py-1.5 text-right text-gray-500">
+                        {c.lastClick ? new Date(c.lastClick).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href="/api/admin/email-marketing/export?list=vip5y6_week"
+              download
+              className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-yellow-950 hover:bg-yellow-900 text-yellow-300 border border-yellow-700/50"
+            >
+              ⬇️ Interesados 5y6 — Semana CSV
+            </a>
+            <a
+              href="/api/admin/email-marketing/export?list=vip5y6_all"
+              download
+              className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700"
+            >
+              ⬇️ Interesados 5y6 — Histórico CSV
+            </a>
+          </div>
         </div>
       </div>
 

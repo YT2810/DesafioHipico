@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Race from '@/models/Race';
+import Entry from '@/models/Entry';
 import { Types } from 'mongoose';
 
 export async function GET(
@@ -21,8 +22,20 @@ export async function GET(
       .select('raceNumber distance status games scheduledTime conditions prizePool annualRaceNumber')
       .lean();
 
+    // Official winners per race (result.finishPosition === 1)
+    const raceIds = races.map((r: any) => r._id);
+    const winners = await Entry.find({
+      raceId: { $in: raceIds },
+      'result.finishPosition': 1,
+    }).select('raceId dorsalNumber').lean();
+    const winnerByRace = new Map<string, number>();
+    for (const w of winners as any[]) {
+      if (typeof w.dorsalNumber === 'number') winnerByRace.set(w.raceId.toString(), w.dorsalNumber);
+    }
+
     return NextResponse.json({
       races: races.map((r: any) => ({
+        winnerDorsal: winnerByRace.get(r._id.toString()) ?? null,
         id: r._id.toString(),
         raceNumber: r.raceNumber,
         annualRaceNumber: r.annualRaceNumber ?? null,

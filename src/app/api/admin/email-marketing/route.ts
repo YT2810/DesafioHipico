@@ -7,7 +7,9 @@ import Race from '@/models/Race';
 import Track from '@/models/Track';
 import Forecast from '@/models/Forecast';
 import SiteConfig, { getSiteConfig } from '@/models/SiteConfig';
+import MarketingEvent from '@/models/MarketingEvent';
 import { getFvLabAnalytics } from '@/services/fvAccuracyService';
+import { getCurrentWeekMondayStartUTC } from '@/services/forecastAccessService';
 import { callLLM } from '@/services/ai/geminiProcessor';
 
 export const dynamic = 'force-dynamic';
@@ -233,6 +235,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // VIP 5y6 button interest — Venezuelan Mon–Sun week, same as National Pass
+    const weekStart = getCurrentWeekMondayStartUTC();
+    const prevWeekStart = new Date(weekStart.getTime() - 7 * 86400000);
+    const [vipClicksWeek, vipClicksPrevWeek, vipUniqueIds, vipClickers] = await Promise.all([
+      MarketingEvent.countDocuments({ event: 'vip5y6_open', weekStart }),
+      MarketingEvent.countDocuments({ event: 'vip5y6_open', weekStart: prevWeekStart }),
+      MarketingEvent.distinct('userId', { event: 'vip5y6_open', weekStart, userId: { $ne: null } }),
+      MarketingEvent.aggregate([
+        { $match: { event: 'vip5y6_open', weekStart, userId: { $ne: null } } },
+        { $group: { _id: '$userId', clicks: { $sum: 1 }, lastClick: { $max: '$createdAt' } } },
+        { $sort: { clicks: -1, lastClick: -1 } },
+        { $limit: 25 },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'u' } },
+        { $unwind: '$u' },
+        { $project: { alias: '$u.alias', email: '$u.email', clicks: 1, lastClick: 1 } },
+      ]),
+    ]);
+
     const ctx = await buildCampaignContext(styleVariant);
     const wedKey = `wed_R${ctx.upcomingMeetingNumber}`;
     const thuKey = `thu_R${ctx.upcomingMeetingNumber}`;
@@ -244,6 +264,20 @@ export async function GET(req: NextRequest) {
         allValidCount,
         suppressedCount: suppressedSet.size,
         sampleSuppressed: [...suppressedSet].slice(0, 30),
+        suppressedList: [...suppressedSet].sort(),
+        vip5y6InterestCount: vipUniqueIds.length,
+      },
+      vip5y6: {
+        clicksWeek: vipClicksWeek,
+        clicksPrevWeek: vipClicksPrevWeek,
+        uniqueUsersWeek: vipUniqueIds.length,
+        clickers: vipClickers.map((c: any) => ({
+          alias: c.alias ?? 'Usuario',
+          email: c.email ?? '',
+          clicks: c.clicks,
+          lastClick: c.lastClick,
+        })),
+        weekStartIso: weekStart.toISOString(),
       },
       autoModeEnabled: Boolean(autoModeEnabled),
       context: {
@@ -325,7 +359,8 @@ export async function POST(req: NextRequest) {
           .then(r => r.json())
           .catch(() => ({ data: [] }));
         for (const c of cRes?.data ?? []) {
-          if (c.unsubscribed && c.email) {
+          // Capture any non-deliverable flag Resend exposes on the contact
+          if (c.email && (c.unsubscribed || c.bounced || c.complained)) {
             set.add(String(c.email).toLowerCase().trim());
           }
         }

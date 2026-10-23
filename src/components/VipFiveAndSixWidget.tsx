@@ -63,7 +63,15 @@ export default function VipFiveAndSixWidget() {
       <div className="fixed right-3 bottom-32 z-40">
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+            fetch('/api/track/vip5y6', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ track }),
+              keepalive: true,
+            }).catch(() => {});
+          }}
           aria-label="Abrir Cuadro 5y6 VIP del Algoritmo"
           className="group relative flex items-center gap-2 rounded-full p-1 pr-4 bg-gradient-to-r from-[#1a1405] via-[#2b2108] to-[#1a1405] border-2 border-[#D4AF37] shadow-[0_0_24px_rgba(212,175,55,0.45)] hover:shadow-[0_0_32px_rgba(212,175,55,0.75)] hover:scale-105 active:scale-95 transition-all"
         >
@@ -248,10 +256,17 @@ export default function VipFiveAndSixWidget() {
 
                           {isUnlocked ? (
                             <div className="flex flex-wrap gap-1.5">
-                              {horses.map((h, idx) => (
+                              {horses.map((h, idx) => {
+                                const isWinner = v.winnerDorsal != null && h.dorsalNumber === v.winnerDorsal;
+                                const isFaded = v.winnerDorsal != null && !isWinner;
+                                return (
                                 <span
                                   key={idx}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-950 border border-gray-700 text-xs font-bold text-white"
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold text-white ${
+                                    isWinner
+                                      ? 'bg-yellow-500/15 border-yellow-500 shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+                                      : `bg-gray-950 border-gray-700 ${isFaded ? 'opacity-45' : ''}`
+                                  }`}
                                 >
                                   <span
                                     className="w-5 h-5 rounded flex items-center justify-center text-[11px] font-black text-black shrink-0"
@@ -260,8 +275,10 @@ export default function VipFiveAndSixWidget() {
                                     {h.dorsalNumber ?? '?'}
                                   </span>
                                   <span className="truncate max-w-[140px]">{h.horseName}</span>
+                                  {isWinner && <span title="Ganador oficial">🏆</span>}
                                 </span>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="flex items-center justify-between bg-gray-950/80 border border-gray-800/80 rounded-lg px-3 py-2">
