@@ -73,6 +73,10 @@ export default function PerfilPage() {
   const [txs, setTxs] = useState<TxItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  // Email marketing preference
+  const [emailsOn, setEmailsOn] = useState<boolean | null>(null);
+  const [savingEmailPref, setSavingEmailPref] = useState(false);
+
   const { update: updateSession } = useSession();
   const user = session?.user as any;
   const roles: string[] = user?.roles ?? [];
@@ -108,6 +112,33 @@ export default function PerfilPage() {
       setTxs(txData.transactions ?? []);
     }).catch(() => {}).finally(() => setLoadingHistory(false));
   }, [status]);
+
+  // Load email marketing preference
+  useEffect(() => {
+    if (status !== 'authenticated' || !user?.email) return;
+    fetch('/api/user/email-prefs')
+      .then(r => r.json())
+      .then(d => setEmailsOn(d.unsubscribed !== true))
+      .catch(() => setEmailsOn(true));
+  }, [status, user?.email]);
+
+  async function handleToggleEmails() {
+    if (emailsOn === null || savingEmailPref) return;
+    const next = !emailsOn;
+    setSavingEmailPref(true);
+    setEmailsOn(next);
+    try {
+      await fetch('/api/user/email-prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unsubscribed: !next }),
+      });
+    } catch {
+      setEmailsOn(!next);
+    } finally {
+      setSavingEmailPref(false);
+    }
+  }
 
   // Pre-fill pseudonym from localStorage intent
   useEffect(() => {
@@ -313,6 +344,20 @@ export default function PerfilPage() {
             + Recargar
           </button>
         </div>
+
+        {/* Email marketing preference */}
+        {user?.email && emailsOn !== null && (
+          <button type="button" onClick={handleToggleEmails} disabled={savingEmailPref}
+            className="w-full bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 text-left">
+            <div>
+              <p className="text-sm font-semibold text-white">📧 Pronósticos y novedades por correo</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Máx. 2 emails por semana · darte de baja no afecta tu cuenta</p>
+            </div>
+            <span className={`w-11 h-6 rounded-full shrink-0 relative transition-colors ${emailsOn ? 'bg-yellow-500' : 'bg-gray-700'}`}>
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${emailsOn ? 'left-[22px]' : 'left-0.5'}`} />
+            </span>
+          </button>
+        )}
 
         {/* Quick link to panel for privileged users */}
         {roles.includes('admin') && (

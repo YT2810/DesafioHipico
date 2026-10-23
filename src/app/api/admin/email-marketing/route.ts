@@ -39,6 +39,8 @@ function buildEmailHtmlWrapper(bodyParagraphsHtml: string, ctaText: string, ctaU
   <div style="border-top:1px solid #27272a;padding-top:14px;margin-top:22px;font-size:11px;color:#6b7280;text-align:center">
     Recibes este boletín porque estás registrado en desafiohipico.com.<br/>
     <a href="https://www.desafiohipico.com/perfil" style="color:#9ca3af;text-decoration:underline">Gestionar cuenta</a>
+    &nbsp;·&nbsp;
+    <a href="{{UNSUB_URL}}" style="color:#9ca3af;text-decoration:underline">Darte de baja de estos correos</a>
   </div>
 </div>`;
 }
@@ -393,6 +395,7 @@ ${customContext}
 TU TAREA: Reescribe el email de referencia de abajo con copy más persuasivo.
 REGLAS DE ESTRUCTURA (innegociables):
 - MANTÉN intacta la estructura HTML: mismos divs contenedores, estilos inline, cajas destacadas con borde/acento dorado (#D4AF37), bullets con ✅ o •, negritas <strong>, el botón CTA con su href y el pie de página.
+- El PIE DE PÁGINA es intocable: el texto "Recibes este boletín...", el enlace "Gestionar cuenta" y el enlace "Darte de baja de estos correos" con href="{{UNSUB_URL}}" deben quedar EXACTAMENTE igual — es un placeholder legal obligatorio, nunca lo elimines, lo muevas ni cambies ese href.
 - Solo reescribe el TEXTO. Puedes ajustar emojis, y agregar UNA caja destacada o <strong> extra si mejora la venta, pero nunca elimines la caja dorada, el botón ni el footer.
 - No agregues imágenes, links nuevos, ni datos que no estén en la lista.
 
@@ -428,6 +431,13 @@ ${fallback.html}`;
       if (!EMAIL_REGEX.test(toEmail)) {
         return NextResponse.json({ error: 'Email de prueba inválido' }, { status: 400 });
       }
+      // Same unsubscribe treatment as the real campaign — the test email must be identical
+      const { buildUnsubscribeUrl } = await import('@/lib/unsubscribe');
+      const unsub = buildUnsubscribeUrl(toEmail);
+      const testFooter = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;text-align:center"><a href="${unsub}" style="font-size:11px;color:#9ca3af">Darte de baja de estos correos</a> · <span style="font-size:11px;color:#d1d5db">Desafío Hípico</span></div>`;
+      const testHtml = String(body.html).includes('{{UNSUB_URL}}')
+        ? String(body.html).replaceAll('{{UNSUB_URL}}', unsub)
+        : String(body.html) + testFooter;
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -438,7 +448,10 @@ ${fallback.html}`;
           from: 'Desafío Hípico <noreply@desafiohipico.com>',
           to: [toEmail],
           subject: `[PRUEBA] ${body.subject}`,
-          html: body.html,
+          html: testHtml,
+          headers: {
+            'List-Unsubscribe': `<${unsub}>`,
+          },
         }),
       });
       if (!res.ok) {
