@@ -144,6 +144,19 @@ export default function EmailMarketingTab() {
     }
   }
 
+  async function handleCopyForResend() {
+    try {
+      const forResend = html.replaceAll('{{UNSUB_URL}}', '{{{UNSUBSCRIBE_URL}}}');
+      await navigator.clipboard.writeText(forResend);
+      setStatusMsg({
+        type: 'ok',
+        text: '📋 HTML copiado listo para Resend Broadcast — el enlace de baja ya usa la variable de Resend.',
+      });
+    } catch {
+      setStatusMsg({ type: 'err', text: 'No se pudo copiar al portapapeles' });
+    }
+  }
+
   async function handleSendCampaign() {
     const count =
       targetList === 'active'
@@ -478,6 +491,14 @@ export default function EmailMarketingTab() {
                   {busyAction === 'test' ? 'Enviando...' : '🧪 Enviarme Prueba'}
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={handleCopyForResend}
+                className="w-full py-2.5 rounded-xl text-xs font-extrabold bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-600 transition-all"
+              >
+                📋 Copiar HTML para Resend Broadcast (con baja de Resend)
+              </button>
 
               <button
                 type="button"
