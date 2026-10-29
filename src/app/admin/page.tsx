@@ -11,6 +11,7 @@ import EmailMarketingTab from './_components/EmailMarketingTab';
 import UsuariosTab from './_components/UsuariosTab';
 import FinanzasTab from './_components/FinanzasTab';
 import ConfigTab from './_components/ConfigTab';
+import CampaignTab from './_components/CampaignTab';
 import { useAdminStats, useBcvStatus, bcvAlertNeeded } from './_hooks/useAdminStats';
 
 export default function AdminPage() {
@@ -53,6 +54,7 @@ export default function AdminPage() {
         {tab === 'carreras' && <CarrerasTab stats={stats} />}
         {tab === 'pronosticos' && <PronosticosTab stats={stats} onOpenLab={() => setTab('laboratorio')} />}
         {tab === 'laboratorio' && <LaboratorioFvTab />}
+        {tab === 'campanas' && <CampaignTab />}
         {tab === 'email' && <EmailMarketingTab />}
         {tab === 'usuarios' && <UsuariosTab stats={stats} />}
         {tab === 'finanzas' && <FinanzasTab stats={stats} loading={statsLoading} />}

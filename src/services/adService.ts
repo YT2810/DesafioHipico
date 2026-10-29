@@ -12,6 +12,7 @@ import AdDailyStat from '@/models/AdDailyStat';
 
 export type AdSlot =
   | 'retrospectos_inline'
+  | 'revista_inline'
   | 'resultados_inline'
   | 'pronosticos_inline'
   | 'traqueos_inline'
@@ -22,22 +23,27 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Active campaign for a slot (first match wins). Returns null if none. */
+/**
+ * Active campaign for a slot.
+ * If multiple campaigns are active for the same slot (A/B/C testing),
+ * one is selected at random on each call — giving each variant equal exposure.
+ * Returns null if no campaign qualifies.
+ */
 export async function getActiveCampaign(slot: AdSlot | string): Promise<ISponsorCampaign | null> {
   try {
     await dbConnect();
     const now = new Date();
-    const campaign = await SponsorCampaign.findOne({
+    const campaigns = await SponsorCampaign.find({
       active: true,
       slots: slot,
       $and: [
         { $or: [{ startsAt: { $exists: false } }, { startsAt: null }, { startsAt: { $lte: now } }] },
         { $or: [{ endsAt: { $exists: false } }, { endsAt: null }, { endsAt: { $gte: now } }] },
       ],
-    })
-      .sort({ createdAt: 1 })
-      .lean<ISponsorCampaign>();
-    return campaign ?? null;
+    }).lean<ISponsorCampaign[]>();
+    if (!campaigns.length) return null;
+    // Random selection for A/B/C testing — fair impression distribution
+    return campaigns[Math.floor(Math.random() * campaigns.length)];
   } catch {
     return null;
   }

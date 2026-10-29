@@ -4,7 +4,7 @@ import connectMongo from '@/lib/mongodb';
 import Meeting from '@/models/Meeting';
 import '@/models/Track';
 import RetrospectosToast from './RetrospectosToast';
-import SponsoredInlineBanner from '@/components/SponsoredInlineBanner';
+import AnimatedSponsorBanner from '@/components/AnimatedSponsorBanner';
 import { getActiveCampaign } from '@/services/adService';
 
 const BASE = 'https://www.desafiohipico.com';
@@ -235,7 +235,7 @@ export default async function RetrospectosPage() {
 
           {/* ── Sponsored in-text banner (Publicidad) ── */}
           {sponsor && (
-            <SponsoredInlineBanner
+            <AnimatedSponsorBanner
               ad={{
                 slug: sponsor.slug,
                 brand: sponsor.brand,
@@ -245,7 +245,8 @@ export default async function RetrospectosPage() {
                 subtitle: sponsor.creative.subtitle ?? '',
                 ctaText: sponsor.creative.ctaText,
                 logoUrl: sponsor.creative.logoUrl,
-                accentColor: sponsor.creative.accentColor ?? '#D4AF37',
+                accentColor: sponsor.creative.accentColor ?? '#00A8E8',
+                endsAt: sponsor.endsAt ? new Date(sponsor.endsAt).toISOString() : undefined,
               }}
             />
           )}

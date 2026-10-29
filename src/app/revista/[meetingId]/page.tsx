@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import RevistaClient from './RevistaClient';
+import AnimatedSponsorBanner from '@/components/AnimatedSponsorBanner';
+import { getActiveCampaign } from '@/services/adService';
 
 const BASE = 'https://www.desafiohipico.com';
 
@@ -102,7 +104,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RevistaPage({ params }: Props) {
   const { meetingId } = await params;
-  const data = await fetchMeta(meetingId);
+  const [data, revistaSponsor] = await Promise.all([
+    fetchMeta(meetingId),
+    getActiveCampaign('revista_inline'),
+  ]);
   const m = data?.meeting;
 
   const dt = m ? new Date(m.date) : null;
@@ -125,6 +130,25 @@ export default async function RevistaPage({ params }: Props) {
             {isRinconada2 ? ` Cuánto pagó el 5y6 La Rinconada · Retrospectos La Rinconada · Gaceta hípica` : ` Cuánto pagó el 5y6 Valencia · Retrospectos Valencia`} · Datos INH
           </p>
         </>
+      )}
+      {/* ── In-text sponsored banner (revista_inline slot) ── */}
+      {revistaSponsor && (
+        <div className="max-w-3xl mx-auto px-4 pt-2 pb-0">
+          <AnimatedSponsorBanner
+            ad={{
+              slug: revistaSponsor.slug,
+              brand: revistaSponsor.brand,
+              slot: 'revista_inline',
+              badgeText: revistaSponsor.creative.badgeText ?? 'Publicidad',
+              title: revistaSponsor.creative.title,
+              subtitle: revistaSponsor.creative.subtitle ?? '',
+              ctaText: revistaSponsor.creative.ctaText,
+              logoUrl: revistaSponsor.creative.logoUrl,
+              accentColor: revistaSponsor.creative.accentColor ?? '#00A8E8',
+              endsAt: revistaSponsor.endsAt ? new Date(revistaSponsor.endsAt).toISOString() : undefined,
+            }}
+          />
+        </div>
       )}
       <RevistaClient meetingId={meetingId} initialData={data ?? undefined} />
     </>
