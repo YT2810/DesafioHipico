@@ -6,10 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import SponsorCampaign from '@/models/SponsorCampaign';
 import AdDailyStat from '@/models/AdDailyStat';
+
+// Pages with static/ISR caching that must refresh when a campaign changes
+const REVALIDATE_PATHS = ['/retrospectos', '/publicidad'];
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +107,7 @@ export async function POST(req: NextRequest) {
     },
     { upsert: true, new: true }
   );
+  REVALIDATE_PATHS.forEach(p => revalidatePath(p));
   return NextResponse.json({ ok: true, campaign });
 }
 
@@ -127,5 +132,6 @@ export async function PATCH(req: NextRequest) {
     { new: true }
   );
   if (!campaign) return NextResponse.json({ error: 'Campaña no encontrada.' }, { status: 404 });
+  REVALIDATE_PATHS.forEach(p => revalidatePath(p));
   return NextResponse.json({ ok: true, campaign });
 }

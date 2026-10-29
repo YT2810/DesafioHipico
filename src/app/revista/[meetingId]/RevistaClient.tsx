@@ -369,7 +369,11 @@ interface InitialData {
   hasWorkouts: boolean;
 }
 
-export default function RevistaClient({ meetingId, initialData }: { meetingId: string; initialData?: InitialData }) {
+export default function RevistaClient({ meetingId, initialData, sponsorBanner }: {
+  meetingId: string;
+  initialData?: InitialData;
+  sponsorBanner?: React.ReactNode;
+}) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
 
@@ -514,6 +518,9 @@ export default function RevistaClient({ meetingId, initialData }: { meetingId: s
             </p>
           </div>
         )}
+
+        {/* ── Sponsored banner — revista_inline ── */}
+        {sponsorBanner}
 
         {/* Selector de carrera */}
         <div>

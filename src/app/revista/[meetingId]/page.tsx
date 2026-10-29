@@ -131,26 +131,28 @@ export default async function RevistaPage({ params }: Props) {
           </p>
         </>
       )}
-      {/* ── In-text sponsored banner (revista_inline slot) ── */}
-      {revistaSponsor && (
-        <div className="max-w-3xl mx-auto px-4 pt-2 pb-0">
-          <AnimatedSponsorBanner
-            ad={{
-              slug: revistaSponsor.slug,
-              brand: revistaSponsor.brand,
-              slot: 'revista_inline',
-              badgeText: revistaSponsor.creative.badgeText ?? 'Publicidad',
-              title: revistaSponsor.creative.title,
-              subtitle: revistaSponsor.creative.subtitle ?? '',
-              ctaText: revistaSponsor.creative.ctaText,
-              logoUrl: revistaSponsor.creative.logoUrl,
-              accentColor: revistaSponsor.creative.accentColor ?? '#00A8E8',
-              endsAt: revistaSponsor.endsAt ? new Date(revistaSponsor.endsAt).toISOString() : undefined,
-            }}
-          />
-        </div>
-      )}
-      <RevistaClient meetingId={meetingId} initialData={data ?? undefined} />
+      <RevistaClient
+        meetingId={meetingId}
+        initialData={data ?? undefined}
+        sponsorBanner={
+          revistaSponsor ? (
+            <AnimatedSponsorBanner
+              ad={{
+                slug: revistaSponsor.slug,
+                brand: revistaSponsor.brand,
+                slot: 'revista_inline',
+                badgeText: revistaSponsor.creative.badgeText ?? 'Publicidad',
+                title: revistaSponsor.creative.title,
+                subtitle: revistaSponsor.creative.subtitle ?? '',
+                ctaText: revistaSponsor.creative.ctaText,
+                logoUrl: revistaSponsor.creative.logoUrl,
+                accentColor: revistaSponsor.creative.accentColor ?? '#00A8E8',
+                endsAt: revistaSponsor.endsAt ? new Date(revistaSponsor.endsAt).toISOString() : undefined,
+              }}
+            />
+          ) : undefined
+        }
+      />
     </>
   );
 }
