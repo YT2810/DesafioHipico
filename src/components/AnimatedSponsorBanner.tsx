@@ -153,8 +153,11 @@ export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
   }, [mounted, ad.slug, ad.slot, pathname]);
 
   // ── Variant detection ────────────────────────────────────────────────────
-  const isLVBP = /(-b$|-b-|\blvbp\b)/i.test(ad.slug) || /lvbp/i.test(ad.badgeText);
-  const isExclusiva = /(-c$|-c-)/i.test(ad.slug);
+  // LVBP/Exclusiva son temas del creativo 1xBET — solo aplican a campañas
+  // 1xbet (o badge explícito "LVBP"). Un slug house-*-b NO debe activar beisbol.
+  const is1xBet = /^1xbet/i.test(ad.slug) || /^1xbet$/i.test(ad.brand);
+  const isLVBP = /\blvbp\b/i.test(ad.badgeText) || (is1xBet && /-b$/i.test(ad.slug));
+  const isExclusiva = is1xBet && /-c$/i.test(ad.slug);
 
   const accent = ad.accentColor || (isLVBP ? '#C41E3A' : isExclusiva ? '#F5A623' : '#00A8E8');
 
@@ -252,16 +255,28 @@ export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={ad.logoUrl} alt={ad.brand} className="h-4 w-auto object-contain max-w-[80px]" />
                 </div>
-              ) : /^1xbet/i.test(ad.slug) || /^1xbet$/i.test(ad.brand) ? (
+              ) : is1xBet ? (
                 <div className="shrink-0 bg-[#041221] border border-[#00A8E8]/30 rounded-lg px-2 py-1">
                   <OneXBetWordmark className="h-4 w-auto" />
                 </div>
+              ) : ad.isHouseAd ? (
+                <div
+                  className="shrink-0 rounded-lg border border-white/20 w-9 h-9"
+                  role="img"
+                  aria-label="Desafío Hípico"
+                  style={{
+                    backgroundColor: '#C41E1E',
+                    backgroundImage: 'url(/logo-dh.png)',
+                    backgroundSize: '420%',
+                    backgroundPosition: '50% 28%',
+                  }}
+                />
               ) : ad.brand ? (
                 <div
                   className="shrink-0 rounded-lg px-2 py-1 flex items-center justify-center text-xs font-black"
                   style={{ backgroundColor: `${accent}33`, border: `1px solid ${accent}44`, color: accent, minWidth: 36 }}
                 >
-                  {ad.brand.slice(0, 4).toUpperCase()}
+                  {ad.brand.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
               ) : null}
             </div>

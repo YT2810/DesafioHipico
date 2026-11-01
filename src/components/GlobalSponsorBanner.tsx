@@ -56,12 +56,28 @@ function BrandMark({ ad, logoH = 'h-4' }: { ad: GlobalAd; logoH?: string }) {
       </div>
     );
   }
+  if (ad.isHouseAd) {
+    // Hexágono DH real — crop por background-image sobre el logo institucional
+    return (
+      <div
+        className="shrink-0 rounded-lg border border-white/20 w-8 h-8 sm:w-9 sm:h-9"
+        role="img"
+        aria-label="Desafío Hípico"
+        style={{
+          backgroundColor: '#C41E1E',
+          backgroundImage: 'url(/logo-dh.png)',
+          backgroundSize: '420%',
+          backgroundPosition: '50% 28%',
+        }}
+      />
+    );
+  }
   return (
     <div
       className="shrink-0 rounded-lg px-2 py-1 flex items-center justify-center text-[11px] font-black"
       style={{ backgroundColor: `${ad.accentColor}33`, border: `1px solid ${ad.accentColor}55`, color: ad.accentColor, minWidth: 36 }}
     >
-      {(ad.brand || 'DH').slice(0, 4).toUpperCase()}
+      {(ad.brand || 'DH').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}
     </div>
   );
 }
@@ -133,9 +149,9 @@ export default function GlobalSponsorBanner() {
           aria-label={`Publicidad: ${header.brand}`}
           className="w-full border-b z-30"
           style={{
-            background: `linear-gradient(90deg, #050d18 0%, ${header.accentColor}38 50%, #050d18 100%)`,
-            borderColor: `${header.accentColor}66`,
-            boxShadow: `0 2px 16px -4px ${header.accentColor}40`,
+            background: `linear-gradient(90deg, #04070d 0%, #0a1420 50%, #04070d 100%)`,
+            borderColor: `${header.accentColor}55`,
+            boxShadow: `inset 0 -1px 0 ${header.accentColor}33, 0 1px 10px -4px ${header.accentColor}30`,
           }}
         >
           <a
@@ -185,9 +201,9 @@ export default function GlobalSponsorBanner() {
           <div
             className="mx-auto max-w-lg pointer-events-auto rounded-2xl backdrop-blur-md border px-3 py-2.5 flex items-center justify-between gap-2"
             style={{
-              background: `linear-gradient(90deg, rgba(5,13,24,0.96), ${sticky.accentColor}30, rgba(5,13,24,0.96))`,
-              borderColor: `${sticky.accentColor}77`,
-              boxShadow: `0 -6px 24px ${sticky.accentColor}40`,
+              background: 'linear-gradient(90deg, rgba(4,7,13,0.97), rgba(10,20,32,0.97), rgba(4,7,13,0.97))',
+              borderColor: `${sticky.accentColor}66`,
+              boxShadow: `0 -4px 20px rgba(0,0,0,0.5), 0 -6px 20px -8px ${sticky.accentColor}50`,
             }}
           >
             <a
