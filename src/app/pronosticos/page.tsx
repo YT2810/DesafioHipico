@@ -339,11 +339,15 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
   const factors = unlocked ? calcFactors(race.forecasts) : [];
   const hasBatacazo = race.forecasts.some(f => f.marks.some(m => m.label === 'Batacazo'));
 
-  // Race Type & Risk Triggers Legend (visible only when passUnlocked or isPrivileged)
+  // Race Type & Risk Triggers — split into ⚠️ risk / ✅ favor with real stats
   const raceDiag = useMemo(() => {
     const cond = (race.conditions ?? '').toUpperCase().replace(/\(?\s*A\s+EXCEPCI[OÓ]N\s+DE\s+CARRERAS?\s+DE\s+RECLAMO[^)]*\)?/g, '');
     const isRiskyLote = /PERDEDOR|NO\s+GANADOR|DEBUTANTES|GANADORES?\s+DE\s+2\b|GANADORES?\s+DE\s+5|5\s+Y\s+M[AÁ]S\s+A[ÑN]OS/.test(cond);
-    const isNobleLote = /DE\s+RECLAMO|RECLAMO\s+LIBRE|GANADORES?\s+DE\s+1\b|CLASICO|CL[AÁ]SICO|COPA\b|3\s+Y\s+4\s+A[ÑN]OS/.test(cond);
+    const hasNobleTrait = /DE\s+RECLAMO|RECLAMO\s+LIBRE|GANADORES?\s+DE\s+1\b|CLASICO|CL[AÁ]SICO|COPA\b|3\s+Y\s+4\s+A[ÑN]OS/.test(cond);
+    // Noble only fully applies when there's no risky category override
+    const isNobleLote = hasNobleTrait && !isRiskyLote;
+    // When both match (e.g. "3 y 4 años, Perdedores"), the noble trait becomes a moderator
+    const isNobleModeratorOnly = hasNobleTrait && isRiskyLote;
     const allFactors = calcFactors(race.forecasts);
     const p1 = (allFactors[0]?.factor ?? 0) * 100;
     const p2 = (allFactors[1]?.factor ?? 0) * 100;
@@ -359,41 +363,58 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
     const isFalsoFijo = hasFv && p1 >= 48.5 && p1 <= 55.5 && race.distance <= 1300;
     const isColaViva = hasFv && (p5 >= 5.5 || p6 >= 3.5);
 
-    const activeChips: { label: string; tone: 'green' | 'amber' | 'red' | 'purple' }[] = [];
-    if (race.distance >= 1500) activeChips.push({ label: `🟢 Tiro Largo (${race.distance}m · 0% batacazos)`, tone: 'green' });
-    if (race.distance <= 1300) activeChips.push({ label: `📏 Tiro Corto (${race.distance}m)`, tone: 'red' });
-    if (isNobleLote) activeChips.push({ label: '🟢 Llamado Noble (0% fuera del FV)', tone: 'green' });
-    if (isRiskyLote) activeChips.push({ label: '🏷️ Lote de Sorpresa (Perdedores / Gan.2 / 5+a)', tone: 'amber' });
-    if (isCleanCandado) activeChips.push({ label: '🔒 Corte Limpio Candado (1º+2º)', tone: 'green' });
-    else if (isCleanTrilogia) activeChips.push({ label: '🔱 Corte Limpio Trilogía (1º–3º)', tone: 'green' });
-    if (isNoFav) activeChips.push({ label: '🟣 Sin Favorito Claro (1º FV < 40%)', tone: 'purple' });
-    if (isFalsoFijo) activeChips.push({ label: '🟠 Alerta Falso Fijo (48.5%–55.5%)', tone: 'amber' });
-    if (isColaViva) activeChips.push({ label: '⚡ Puntos Vivos en 5º–6º FV', tone: 'amber' });
+    type DiagChip = { label: string; stat: string; tone: 'green' | 'amber' | 'red' | 'purple' };
+    const riskChips: DiagChip[] = [];
+    const favorChips: DiagChip[] = [];
 
-    const dangerCount =
-      (race.distance <= 1300 ? 1 : 0) +
-      (isRiskyLote ? 1 : 0) +
-      (isNoFav ? 1 : 0) +
-      (isFalsoFijo ? 1 : 0) +
-      (isColaViva ? 1 : 0);
+    // ── Risk chips ──
+    if (race.distance <= 1300) riskChips.push({ label: `� Tiro Corto (${race.distance}m)`, stat: '82.8% de batacazos del año ocurren en ≤1300m', tone: 'red' });
+    if (isRiskyLote) riskChips.push({ label: '🏷️ Lote de Sorpresa', stat: '31.5% ganó fuera del Top 3 en Perdedores/Gan.2/5+a', tone: 'amber' });
+    if (isNoFav) riskChips.push({ label: `� Sin Favorito (1º FV ${p1.toFixed(1)}%)`, stat: '32.8% ganó fuera del Top 3 cuando 1º < 40%', tone: 'purple' });
+    if (isFalsoFijo) riskChips.push({ label: `� Falso Fijo (${p1.toFixed(1)}%)`, stat: '30.8% ganó fuera del Top 3 en banda 48.5%–55.5%', tone: 'amber' });
+    if (isColaViva) riskChips.push({ label: '⚡ Cola Viva 5º–6º FV', stat: '29.4% ganó fuera del Top 3 con puntos vivos en cola', tone: 'amber' });
 
-    let title = '🟡 Carrera de Riesgo Intermedio';
-    let legend = 'Carrera balanceada: el ganador suele estar entre las 3 primeras marcas del Factor de Victoria.';
+    // ── Favor chips ──
+    if (race.distance >= 1500) favorChips.push({ label: `� Tiro Largo (${race.distance}m)`, stat: '0% batacazos · 100% ganó Top 5 FV', tone: 'green' });
+    if (isNobleLote) favorChips.push({ label: '� Llamado Noble', stat: '0% ganadores Sin FV · 86%+ Top 3', tone: 'green' });
+    if (isNobleModeratorOnly) favorChips.push({ label: '� Moderador: Edad 3-4 años', stat: '92.6% Top 3 · 0% ganadores Sin FV (modera riesgo)', tone: 'green' });
+    if (isCleanCandado) favorChips.push({ label: '� Corte Limpio Candado', stat: '83.9% Top 3 · 71% ganó en los 2 primeros FV', tone: 'green' });
+    else if (isCleanTrilogia) favorChips.push({ label: '🔱 Corte Limpio Trilogía', stat: '83.5% Top 3 · los 3 primeros superan 19.5%', tone: 'green' });
+
+    const dangerCount = riskChips.length;
+    const favorCount = favorChips.length;
+
+    // ── Title ──
+    let title: string;
+    let recommendation: string;
+    let fvScope: string;
     if (race.distance >= 1500 || (isCleanCandado && dangerCount <= 2)) {
-      title = isCleanCandado ? '🟢 Diagnóstico: Candado de Corte Limpio (1º + 2º FV)' : '🟢 Diagnóstico: Carrera Noble de Alta Lógica';
-      legend = isCleanCandado
-        ? 'Solo los 2 primeros ejemplares concentran el consenso y el 3º cae por debajo del 13% (83.9% efectividad histórica).'
-        : 'En 1.500m o más históricamente hay 0% de batacazos fuera del Top 5 FV (91%–100% gana el Top 3).';
+      title = isCleanCandado
+        ? '🟢 Candado de Corte Limpio'
+        : '🟢 Carrera Noble de Alta Lógica';
+      recommendation = isCleanCandado
+        ? '83.9% gana en el Top 3 — cerrar en 2 o 3 ejemplares.'
+        : '0% batacazos en ≥1500m — el Top 3 FV domina.';
+      fvScope = 'Top 2-3';
     } else if (isCleanTrilogia && dangerCount <= 2) {
-      title = '🟢 Diagnóstico: Trilogía de Corte Limpio (1º + 2º + 3º FV)';
-      legend = 'Los 3 primeros superan el 20% de consenso y el 4º cae por debajo de 13.5% (83.5% efectividad histórica).';
+      title = '🟢 Trilogía de Corte Limpio';
+      recommendation = '83.5% gana en el Top 3 — cerrar en 3 ejemplares.';
+      fvScope = 'Top 3';
+    } else if (dangerCount >= 4) {
+      title = `🔴 Alerta de Sorpresa`;
+      recommendation = `Con ${dangerCount} riesgos activos, el 33.8% gana fuera del Top 3 — ampliar al 5º–6º FV.`;
+      fvScope = 'Top 5-6';
     } else if (dangerCount >= 3) {
-      title = `🔴 Diagnóstico: Alerta de Sorpresa (${dangerCount} Disparadores Activos)`;
-      legend =
-        'En carreras con 3 o más disparadores de peligro activos se concentra el 78% de los ganadores fuera de la Trilogía (revisar 4º–6º FV).';
+      title = `🟠 Riesgo Elevado`;
+      recommendation = `Con ${dangerCount} riesgos activos, el 31.9% gana fuera del Top 3 — considerar hasta el 4º–5º FV.`;
+      fvScope = 'Top 4-5';
+    } else {
+      title = '🟡 Riesgo Intermedio';
+      recommendation = 'Carrera balanceada — el ganador suele estar en el Top 3 FV (85.1%).';
+      fvScope = 'Top 3';
     }
 
-    return { activeChips, title, legend, totalSignals: Math.max(activeChips.length, 2) };
+    return { riskChips, favorChips, dangerCount, favorCount, title, recommendation, fvScope, totalSignals: Math.max(dangerCount + favorCount, 2) };
   }, [race.conditions, race.distance, race.forecasts]);
   const sortedForecasts = unlocked
     ? [...race.forecasts].sort((a, b) => {
@@ -418,34 +439,58 @@ function RacePanel({ race, unlocked, goldBalance, followedIds, onUnlock, onFollo
         <p className="text-xs text-gray-600 mt-0.5">{race.conditions}{typeof race.prizePool === 'object' && race.prizePool.bs ? ` · Premio Bs. ${race.prizePool.bs.toLocaleString()}` : typeof race.prizePool === 'number' && race.prizePool > 0 ? ` · Premio Bs. ${race.prizePool.toLocaleString()}` : ''}</p>
       </div>
 
-      {/* ── Leyenda de Disparadores / Tipo de Carrera (Exclusivo Pase Semanal Activo) ── */}
+      {/* ── Diagnóstico FV: ⚠️ En Contra / ✅ A Favor (Exclusivo Pase Activo) ── */}
       {passUnlocked || isPrivileged ? (
-        <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-950/70 space-y-1.5">
+        <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-950/70 space-y-2">
+          {/* Título + badge */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs font-extrabold text-yellow-400">{raceDiag.title}</span>
+            <span className="text-xs font-extrabold text-yellow-400">
+              {raceDiag.title}
+              {' — '}
+              {raceDiag.dangerCount} {raceDiag.dangerCount === 1 ? 'riesgo' : 'riesgos'}
+              {raceDiag.favorCount > 0 ? ` · ${raceDiag.favorCount} a favor` : ''}
+            </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-300 border border-yellow-600/30">
               👑 Exclusivo Pase Nacional
             </span>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {raceDiag.activeChips.map((ch, idx) => (
-              <span
-                key={idx}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                  ch.tone === 'green'
-                    ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
-                    : ch.tone === 'purple'
-                    ? 'bg-purple-950/60 text-purple-300 border-purple-700/50'
-                    : ch.tone === 'amber'
-                    ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
+          {/* ⚠️ En contra */}
+          {raceDiag.riskChips.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-extrabold text-red-400 uppercase tracking-wider">⚠️ En contra</p>
+              {raceDiag.riskChips.map((ch, idx) => (
+                <div key={idx} className="flex items-start gap-1.5">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 ${
+                    ch.tone === 'purple' ? 'bg-purple-950/60 text-purple-300 border-purple-700/50'
+                    : ch.tone === 'amber' ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
                     : 'bg-red-950/60 text-red-300 border-red-700/50'
-                }`}
-              >
-                {ch.label}
-              </span>
-            ))}
+                  }`}>{ch.label}</span>
+                  <span className="text-[10px] text-gray-500 leading-snug pt-0.5">{ch.stat}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* ✅ A favor */}
+          {raceDiag.favorChips.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">✅ A favor</p>
+              {raceDiag.favorChips.map((ch, idx) => (
+                <div key={idx} className="flex items-start gap-1.5">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 bg-emerald-950/60 text-emerald-300 border-emerald-700/50">{ch.label}</span>
+                  <span className="text-[10px] text-gray-500 leading-snug pt-0.5">{ch.stat}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* 📊 Balance */}
+          <div className="pt-1 border-t border-gray-800/60">
+            <p className="text-[11px] text-gray-300 leading-snug">
+              <span className="font-bold text-yellow-400">📊 </span>
+              {raceDiag.recommendation}
+              {' '}
+              <span className="font-bold text-yellow-300">→ Mirar: {raceDiag.fvScope} FV</span>
+            </p>
           </div>
-          <p className="text-[11px] text-gray-300 leading-snug">{raceDiag.legend}</p>
         </div>
       ) : (
         <div className="px-4 py-2.5 border-b border-gray-800 bg-gradient-to-r from-yellow-950/20 via-gray-950 to-yellow-950/20 flex items-center justify-between gap-3 flex-wrap">

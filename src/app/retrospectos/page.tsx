@@ -247,6 +247,7 @@ export default async function RetrospectosPage() {
                 logoUrl: sponsor.creative.logoUrl,
                 accentColor: sponsor.creative.accentColor ?? '#00A8E8',
                 endsAt: sponsor.endsAt ? new Date(sponsor.endsAt).toISOString() : undefined,
+                isHouseAd: !!(sponsor as any).isHouseAd,
               }}
             />
           )}

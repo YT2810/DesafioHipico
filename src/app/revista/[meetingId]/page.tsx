@@ -148,6 +148,7 @@ export default async function RevistaPage({ params }: Props) {
                 logoUrl: revistaSponsor.creative.logoUrl,
                 accentColor: revistaSponsor.creative.accentColor ?? '#00A8E8',
                 endsAt: revistaSponsor.endsAt ? new Date(revistaSponsor.endsAt).toISOString() : undefined,
+                isHouseAd: !!(revistaSponsor as any).isHouseAd,
               }}
             />
           ) : undefined

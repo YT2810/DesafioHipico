@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 /**
  * AnimatedSponsorBanner — motion-enhanced first-party ad banner.
@@ -115,16 +116,23 @@ export interface AnimatedAdProps {
   ctaText: string;
   logoUrl?: string;
   accentColor: string;
-  endsAt?: string; // ISO string — drives countdown
+  endsAt?: string;    // ISO string — drives countdown
+  isHouseAd?: boolean; // Si es publicidad propia, se oculta a usuarios con pase activo
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
   const pathname = usePathname() ?? '/';
+  const { data: session } = useSession();
   const [mounted, setMounted] = useState(false);
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const fired = useRef(false);
+
+  // House ads no se muestran a usuarios con pase activo (ya compraron)
+  const user = (session?.user as any) ?? null;
+  const hasActivePass = !!(user?.passUnlocked || user?.roles?.some((r: string) => ['admin', 'staff'].includes(r)));
+  if (ad.isHouseAd && hasActivePass) return null;
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -237,10 +245,24 @@ export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
                   <span className="text-[10px] font-bold text-gray-300">{daysLeft}d restantes</span>
                 </div>
               )}
-              {/* 1xBET logo pill */}
-              <div className="shrink-0 bg-[#041221] border border-[#00A8E8]/30 rounded-lg px-2 py-1">
-                <OneXBetWordmark className="h-4 w-auto" />
-              </div>
+              {/* Logo del anunciante — dinámico */}
+              {ad.logoUrl ? (
+                <div className="shrink-0 bg-black/40 border border-white/20 rounded-lg px-2 py-1 flex items-center justify-center" style={{ minWidth: 48 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ad.logoUrl} alt={ad.brand} className="h-4 w-auto object-contain max-w-[80px]" />
+                </div>
+              ) : /^1xbet/i.test(ad.slug) || /^1xbet$/i.test(ad.brand) ? (
+                <div className="shrink-0 bg-[#041221] border border-[#00A8E8]/30 rounded-lg px-2 py-1">
+                  <OneXBetWordmark className="h-4 w-auto" />
+                </div>
+              ) : ad.brand ? (
+                <div
+                  className="shrink-0 rounded-lg px-2 py-1 flex items-center justify-center text-xs font-black"
+                  style={{ backgroundColor: `${accent}33`, border: `1px solid ${accent}44`, color: accent, minWidth: 36 }}
+                >
+                  {ad.brand.slice(0, 4).toUpperCase()}
+                </div>
+              ) : null}
             </div>
           </div>
 

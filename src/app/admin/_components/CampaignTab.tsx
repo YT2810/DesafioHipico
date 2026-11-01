@@ -38,6 +38,7 @@ interface FormState {
   targetUrl: string;
   slots: string[];
   active: boolean;
+  isHouseAd: boolean;
   startsAt: string;
   endsAt: string;
   badgeText: string;
@@ -60,10 +61,11 @@ const SLOT_CATALOGUE = [
   { id: 'sticky_mobile',       label: 'Sticky Mobile',          icon: '📱', page: 'Global' },
 ];
 
-// ─── Plantillas 1xBET A/B/C ──────────────────────────────────────────────────
+// ─── Plantillas A/B/C ────────────────────────────────────────────────────────
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const NEXT_30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+const NEXT_90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
 
 const TEMPLATES_1XBET = [
   {
@@ -77,7 +79,7 @@ const TEMPLATES_1XBET = [
       brand: '1xBET',
       targetUrl: 'https://1xplay.vip/DESAFIOVIP',
       slots: ['retrospectos_inline', 'revista_inline'],
-      active: true,
+      active: true, isHouseAd: false,
       startsAt: TODAY,
       endsAt: NEXT_30,
       badgeText: 'Sponsor Oficial',
@@ -100,7 +102,7 @@ const TEMPLATES_1XBET = [
       brand: '1xBET',
       targetUrl: 'https://1xplay.vip/DESAFIOVIP',
       slots: ['retrospectos_inline', 'revista_inline'],
-      active: true,
+      active: true, isHouseAd: false,
       startsAt: TODAY,
       endsAt: NEXT_30,
       badgeText: 'LVBP 2026 EN VIVO',
@@ -123,7 +125,7 @@ const TEMPLATES_1XBET = [
       brand: '1xBET',
       targetUrl: 'https://1xplay.vip/DESAFIOVIP',
       slots: ['retrospectos_inline', 'revista_inline'],
-      active: true,
+      active: true, isHouseAd: false,
       startsAt: TODAY,
       endsAt: NEXT_30,
       badgeText: 'Solo Desafío Hípico',
@@ -133,6 +135,169 @@ const TEMPLATES_1XBET = [
       logoUrl: '',
       accentColor: '#F5A623',
       notes: 'Campaña 1xBET octubre–noviembre 2026. Afiliado: DESAFIOVIP. Variante C — exclusividad.',
+    },
+  },
+];
+
+// ─── Plantillas House Ads (Publicidad Propia — Pase Nacional) ────────────────
+
+const TEMPLATES_HOUSE = [
+  // ── Retrospectos ──────────────────────────────────────────────────────────
+  {
+    key: 'retro-pase-a',
+    emoji: '📰',
+    label: 'Retrospectos A',
+    desc: 'Reto del FV · dorado · empuja al Pase',
+    color: '#D4AF37',
+    form: {
+      slug: 'house-retro-pase-a',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['retrospectos_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: '👑 Pase Nacional',
+      title: '¿Cuántos ganadores tenías en el FV de esta jornada?',
+      subtitle: 'Actívalo antes de la próxima reunión · +30 handicappers · 79.9% acierta el Top 3',
+      ctaText: 'Activar Pase →',
+      logoUrl: '',
+      accentColor: '#D4AF37',
+      notes: 'House ad — Retrospectos variante A. Reto del FV, empuja al Pase Nacional.',
+    },
+  },
+  {
+    key: 'retro-pase-b',
+    emoji: '📰',
+    label: 'Retrospectos B',
+    desc: 'Próxima jornada · dorado · ventaja',
+    color: '#C0862A',
+    form: {
+      slug: 'house-retro-pase-b',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['retrospectos_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'Factor de Victoria',
+      title: 'La próxima jornada empieza con ventaja — activa el Pase',
+      subtitle: 'Diagnóstico por carrera · Prioridad de selección · 79.9% efectividad Top 3 · Bs. 6.000/semana',
+      ctaText: 'Ver Pase Nacional →',
+      logoUrl: '',
+      accentColor: '#C0862A',
+      notes: 'House ad — Retrospectos variante B. Ángulo de ventaja pre-jornada.',
+    },
+  },
+  // ── Revista ───────────────────────────────────────────────────────────────
+  {
+    key: 'revista-pase-a',
+    emoji: '📖',
+    label: 'Revista A',
+    desc: 'Inscritos + FV · dorado · pre-carrera',
+    color: '#D4AF37',
+    form: {
+      slug: 'house-revista-pase-a',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['revista_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'Hoy es reunión',
+      title: 'Ya tienes los inscritos. Falta saber quién va a ganar',
+      subtitle: 'El Factor de Victoria ordena cada carrera por probabilidad real · Pase Nacional · Bs. 6.000',
+      ctaText: 'Ver el FV de hoy →',
+      logoUrl: '',
+      accentColor: '#D4AF37',
+      notes: 'House ad — Revista variante A. Momento perfecto pre-carrera: ya leyeron los inscritos.',
+    },
+  },
+  {
+    key: 'revista-pase-b',
+    emoji: '📖',
+    label: 'Revista B',
+    desc: 'Sin margen de error · verde · algoritmo',
+    color: '#22c55e',
+    form: {
+      slug: 'house-revista-pase-b',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['revista_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'Pase Semanal',
+      title: 'Esta semana juegas con el algoritmo o sin él. Tú decides',
+      subtitle: '79.9% de los ganadores están en el Top 3 FV · Activar el Pase · Bs. 6.000',
+      ctaText: 'Activar el Pase →',
+      logoUrl: '',
+      accentColor: '#22c55e',
+      notes: 'House ad — Revista variante B. Decisión binaria: con o sin el FV.',
+    },
+  },
+  // ── Resultados ────────────────────────────────────────────────────────────
+  {
+    key: 'result-pase-a',
+    emoji: '🏆',
+    label: 'Resultados A',
+    desc: 'El FV lo vio · dorado · post-carrera',
+    color: '#D4AF37',
+    form: {
+      slug: 'house-result-pase-a',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['resultados_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'El algoritmo lo vio venir',
+      title: 'El ganador estaba en el Top 3 del FV. ¿Lo tenías?',
+      subtitle: 'Activa el Pase y el Factor de Victoria trabaja para ti cada domingo · Bs. 6.000/semana',
+      ctaText: 'Activar el Pase →',
+      logoUrl: '',
+      accentColor: '#D4AF37',
+      notes: 'House ad — Resultados variante A. Momento post-carrera: motivación alta.',
+    },
+  },
+  {
+    key: 'result-pase-b',
+    emoji: '🏆',
+    label: 'Resultados B',
+    desc: 'Para la próxima · verde · positivo',
+    color: '#22c55e',
+    form: {
+      slug: 'house-result-pase-b',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['resultados_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'Para la próxima jornada',
+      title: 'Esta ya pasó — la próxima la juegas con el FV',
+      subtitle: 'El Pase Nacional incluye diagnóstico completo por carrera · 79.9% efectividad Top 3',
+      ctaText: 'Ver Pase →',
+      logoUrl: '',
+      accentColor: '#22c55e',
+      notes: 'House ad — Resultados variante B. Tono positivo, mira hacia adelante.',
+    },
+  },
+  // ── Traqueos ──────────────────────────────────────────────────────────────
+  {
+    key: 'traqueos-pase',
+    emoji: '⏱',
+    label: 'Traqueos',
+    desc: 'El siguiente nivel · dorado · analista',
+    color: '#D4AF37',
+    form: {
+      slug: 'house-traqueos-pase',
+      brand: 'Desafío Hípico',
+      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      slots: ['traqueos_inline'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'El siguiente nivel',
+      title: 'Ya estudiaste los trabajos. El FV calculó quién corre mejor',
+      subtitle: 'Combina traqueos + Factor de Victoria · 79.9% Top 3 · Pase Nacional · Bs. 6.000',
+      ctaText: 'Ver el FV Completo →',
+      logoUrl: '',
+      accentColor: '#D4AF37',
+      notes: 'House ad — Traqueos. Audiencia seria, máxima intención de compra.',
     },
   },
 ];
@@ -150,7 +315,7 @@ function brandToSlug(brand: string): string {
 function emptyForm(): FormState {
   return {
     slug: '', brand: '', targetUrl: '', slots: [],
-    active: true,
+    active: true, isHouseAd: false,
     startsAt: TODAY, endsAt: NEXT_30,
     badgeText: 'Sponsor Oficial', title: '', subtitle: '', ctaText: 'Reclamar Bono',
     logoUrl: '', accentColor: '#00A8E8', notes: '',
@@ -247,6 +412,7 @@ export default function CampaignTab() {
       targetUrl: c.targetUrl,
       slots: c.slots,
       active: c.active,
+      isHouseAd: !!(c as any).isHouseAd,
       startsAt: toLocalDate(c.startsAt),
       endsAt: toLocalDate(c.endsAt),
       badgeText: c.creative.badgeText ?? 'Sponsor Oficial',
@@ -282,8 +448,8 @@ export default function CampaignTab() {
       flash('err', 'Faltan campos obligatorios: nombre del anunciante, URL y título del banner');
       return;
     }
-    if (!/^https?:\/\//.test(form.targetUrl)) {
-      flash('err', 'URL destino debe empezar con https://');
+    if (!/^https?:\/\//.test(form.targetUrl) && !form.targetUrl.startsWith('/')) {
+      flash('err', 'URL destino debe empezar con https:// o / (ruta interna)');
       return;
     }
     setBusy('save');
@@ -293,6 +459,7 @@ export default function CampaignTab() {
       targetUrl: form.targetUrl.trim(),
       slots: form.slots,
       active: form.active,
+      isHouseAd: form.isHouseAd,
       startsAt: form.startsAt || undefined,
       endsAt: form.endsAt || undefined,
       creative: {
@@ -392,7 +559,7 @@ export default function CampaignTab() {
       ) : campaigns.length === 0 ? (
         <div className="text-center py-12 text-gray-600">
           <p className="text-4xl mb-2">📭</p>
-          <p className="text-sm">Sin campañas aún. Usa "Nueva Campaña" o carga una plantilla 1xBET.</p>
+          <p className="text-sm">Sin campañas aún. Usa "Nueva Campaña" — hay plantillas de Publicidad Propia y 1xBET listas.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -429,6 +596,11 @@ export default function CampaignTab() {
                       <span className="text-[10px] text-gray-600 font-mono bg-gray-800 px-1.5 py-0.5 rounded">
                         {c.slug}
                       </span>
+                      {(c as any).isHouseAd && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-950/50 border border-blue-700/50 text-blue-400 uppercase">
+                          🏠 Propia
+                        </span>
+                      )}
                       {isExpired && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-950/50 border border-red-700/50 text-red-400 uppercase">
                           Vencida
@@ -522,38 +694,69 @@ export default function CampaignTab() {
 
             <div className="p-5 space-y-5">
 
-              {/* ── Plantillas rápidas 1xBET (solo en modo nuevo) ── */}
+              {/* ── Plantillas rápidas (solo en modo nuevo) ── */}
               {editing === 'new' && (
-                <section>
-                  <p className="text-[10px] uppercase tracking-widest font-bold text-yellow-600 mb-2">
-                    ⚡ Plantillas rápidas — carga todo con un click
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {TEMPLATES_1XBET.map(t => (
-                      <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => applyTemplate(t)}
-                        className="flex flex-col items-start gap-1 rounded-xl p-3 border transition-all hover:brightness-110 text-left"
-                        style={{
-                          borderColor: `${t.color}55`,
-                          background: `${t.color}12`,
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{t.emoji}</span>
-                          <span className="text-xs font-black text-white">{t.label}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500">{t.desc}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
-                          <span className="text-[9px] text-gray-600 font-mono">{t.form.slug}</span>
-                        </div>
-                      </button>
-                    ))}
+                <section className="space-y-4">
+                  {/* House Ads — Publicidad Propia */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-blue-400 mb-2">
+                      🏠 Publicidad Propia — Desafío Hípico (se ocultan a usuarios con Pase)
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {TEMPLATES_HOUSE.map(t => (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => applyTemplate(t)}
+                          className="flex flex-col items-start gap-1 rounded-xl p-2.5 border transition-all hover:brightness-110 text-left"
+                          style={{ borderColor: `${t.color}55`, background: `${t.color}12` }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm">{t.emoji}</span>
+                            <span className="text-[11px] font-black text-white leading-tight">{t.label}</span>
+                          </div>
+                          <p className="text-[9px] text-gray-500 leading-tight">{t.desc}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+                            <span className="text-[8px] text-gray-600 font-mono">{t.form.slug}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[9px] text-gray-600">
+                      Cada variante rota aleatoriamente en su slot. Actívalas juntas para A/B testing. Se ocultan solas cuando el usuario tiene Pase activo.
+                    </p>
                   </div>
-                  <div className="mt-2 px-3 py-2 rounded-xl bg-gray-900 border border-gray-800 text-[10px] text-gray-500">
-                    Carga la plantilla y ajusta fechas o copy si lo necesitas. Las 3 variantes comparten la misma URL de afiliado — el sistema las rota aleatoriamente para el testing A/B/C.
+
+                  {/* 1xBET Sponsor */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-yellow-600 mb-2">
+                      ⚡ Sponsor externo — 1xBET A/B/C
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {TEMPLATES_1XBET.map(t => (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => applyTemplate(t)}
+                          className="flex flex-col items-start gap-1 rounded-xl p-3 border transition-all hover:brightness-110 text-left"
+                          style={{ borderColor: `${t.color}55`, background: `${t.color}12` }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{t.emoji}</span>
+                            <span className="text-xs font-black text-white">{t.label}</span>
+                          </div>
+                          <p className="text-[10px] text-gray-500">{t.desc}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+                            <span className="text-[9px] text-gray-600 font-mono">{t.form.slug}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[9px] text-gray-600">
+                      Las 3 variantes comparten la misma URL de afiliado y rotan aleatoriamente para testing A/B/C.
+                    </p>
                   </div>
                 </section>
               )}
@@ -673,6 +876,14 @@ export default function CampaignTab() {
                     className="w-3.5 h-3.5 accent-yellow-500" />
                   <span className="text-xs text-gray-300">
                     Activa — el banner aparece inmediatamente en la web al guardar
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.isHouseAd}
+                    onChange={e => setForm(p => ({ ...p, isHouseAd: e.target.checked }))}
+                    className="w-3.5 h-3.5 accent-blue-500" />
+                  <span className="text-xs text-gray-400">
+                    <span className="text-blue-400 font-bold">Publicidad Propia</span> — se oculta automáticamente a usuarios con Pase activo
                   </span>
                 </label>
               </section>

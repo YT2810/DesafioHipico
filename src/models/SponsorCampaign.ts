@@ -15,6 +15,7 @@ export interface ISponsorCampaign extends Document {
   targetUrl: string;        // URL de referidos del anunciante
   slots: string[];          // placements donde aparece: 'retrospectos_inline', 'resultados_inline', 'header_leaderboard', 'sticky_mobile'
   active: boolean;
+  isHouseAd: boolean;       // true = publicidad propia (se oculta a usuarios con pase activo)
   creative: ISponsorCreative;
   startsAt?: Date;
   endsAt?: Date;
@@ -25,11 +26,12 @@ export interface ISponsorCampaign extends Document {
 
 const SponsorCampaignSchema = new Schema<ISponsorCampaign>(
   {
-    slug:      { type: String, required: true, unique: true, trim: true, lowercase: true },
-    brand:     { type: String, required: true, trim: true },
-    targetUrl: { type: String, required: true },
-    slots:     { type: [String], required: true, default: [] },
-    active:    { type: Boolean, default: true },
+    slug:       { type: String, required: true, unique: true, trim: true, lowercase: true },
+    brand:      { type: String, required: true, trim: true },
+    targetUrl:  { type: String, required: true },
+    slots:      { type: [String], required: true, default: [] },
+    active:     { type: Boolean, default: true },
+    isHouseAd:  { type: Boolean, default: false },
     creative: {
       badgeText:   { type: String, default: 'Publicidad' },
       title:       { type: String, required: true },
