@@ -56,7 +56,7 @@ export default function VipFiveAndSixWidget() {
   const combCount =
     tier === 'economico' ? data?.combinationsEco ?? 144 : data?.combinationsMed ?? 432;
   const costBs =
-    tier === 'economico' ? data?.costBsEco ?? 5040 : data?.costBsMed ?? 15120;
+    tier === 'economico' ? data?.costBsEco ?? 7200 : data?.costBsMed ?? 21600;
 
   return (
     <>
@@ -182,7 +182,7 @@ export default function VipFiveAndSixWidget() {
                       : 'bg-gray-900/60 text-gray-500 border-gray-800'
                   }`}
                 >
-                  Económico ({data?.combinationsEco ?? 144} comb. · Bs. {(data?.costBsEco ?? 5040).toLocaleString('es-VE')})
+                  Económico ({data?.combinationsEco ?? 144} comb. · Bs. {(data?.costBsEco ?? 7200).toLocaleString('es-VE')})
                 </button>
                 <button
                   type="button"
@@ -193,7 +193,7 @@ export default function VipFiveAndSixWidget() {
                       : 'bg-gray-900/60 text-gray-500 border-gray-800'
                   }`}
                 >
-                  ⭐ Medio Recomendado ({data?.combinationsMed ?? 432} comb. · Bs. {(data?.costBsMed ?? 15120).toLocaleString('es-VE')})
+                  ⭐ Medio Recomendado ({data?.combinationsMed ?? 432} comb. · Bs. {(data?.costBsMed ?? 21600).toLocaleString('es-VE')})
                 </button>
               </div>
             </div>

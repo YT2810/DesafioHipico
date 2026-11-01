@@ -344,10 +344,15 @@ export interface FvPatternInsight {
   metric: string;
 }
 
-export const FACTOR_5Y6_BS = 35;
+export const FACTOR_5Y6_BS = 50;
 
+// Historial oficial del factor INH por fecha de reunión:
+//   Bs. 20 hasta 03/09/2026 · Bs. 35 hasta 30/10/2026 · Bs. 50 desde 31/10/2026
 export function get5y6FactorBs(dateStr: string): number {
-  return dateStr && dateStr <= '2026-09-03' ? 20 : 35;
+  if (!dateStr) return FACTOR_5Y6_BS;
+  if (dateStr <= '2026-09-03') return 20;
+  if (dateStr <= '2026-10-30') return 35;
+  return 50;
 }
 
 export function extractMeeting5y6Payouts(
@@ -2259,11 +2264,12 @@ export async function getFvLabAnalytics(
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (validasInput.length === 6) {
-      const built = buildMeetingValidasPicks(validasInput, isValencia, FACTOR_5Y6_BS, 0, 0);
+      const meetingDateStr = candMeeting.date ? new Date(candMeeting.date).toISOString().slice(0, 10) : '';
+      const built = buildMeetingValidasPicks(validasInput, isValencia, get5y6FactorBs(meetingDateStr), 0, 0);
       upcomingFiveAndSix = {
         meetingId: mId,
         meetingNumber: candMeeting.meetingNumber ?? 0,
-        date: candMeeting.date ? new Date(candMeeting.date).toISOString().slice(0, 10) : '',
+        date: meetingDateStr,
         isHistoricalPreview: false,
         hasSuperFijo: built.hasSuperFijo,
         combinationsEco: built.combinationsEco,
@@ -2440,7 +2446,8 @@ export async function getPublicVipFiveAndSix(
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (validasInput.length === 6) {
-      const built = buildMeetingValidasPicks(validasInput, isValencia, FACTOR_5Y6_BS, 0, 0);
+      const meetingDateStr = candMeeting.date ? new Date(candMeeting.date).toISOString().slice(0, 10) : '';
+      const built = buildMeetingValidasPicks(validasInput, isValencia, get5y6FactorBs(meetingDateStr), 0, 0);
       const sortByDorsal = (list: { dorsalNumber?: number; horseName: string }[]) =>
         [...list]
           .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
@@ -2449,7 +2456,7 @@ export async function getPublicVipFiveAndSix(
       return {
         trackName: track.name,
         meetingNumber: candMeeting.meetingNumber ?? 0,
-        date: candMeeting.date ? new Date(candMeeting.date).toISOString().slice(0, 10) : '',
+        date: meetingDateStr,
         isUnlocked,
         combinationsEco: built.combinationsEco,
         combinationsMed: built.combinationsMed,

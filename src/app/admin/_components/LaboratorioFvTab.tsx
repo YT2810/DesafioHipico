@@ -62,7 +62,9 @@ export default function LaboratorioFvTab() {
         meetingNumber: data.upcomingFiveAndSix.meetingNumber,
         date: data.upcomingFiveAndSix.date,
         year: 2026,
-        factorBs: 35,
+        factorBs: !data.upcomingFiveAndSix.date ? 50
+          : data.upcomingFiveAndSix.date <= '2026-09-03' ? 20
+          : data.upcomingFiveAndSix.date <= '2026-10-30' ? 35 : 50,
         payout6Bs: 0,
         payout5Bs: 0,
         hasSuperFijo: data.upcomingFiveAndSix.hasSuperFijo,
@@ -888,7 +890,7 @@ export default function LaboratorioFvTab() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Calculado con Factor Oficial Bs. 35 · Refuerza el "2º Fijo" (trampa histórica), juega Sin Línea cuando no hay fijo dominante y activa TODOS en la válida trampa.
+                    Calculado con Factor Oficial Bs. 50 vigente · Refuerza el "2º Fijo" (trampa histórica), juega Sin Línea cuando no hay fijo dominante y activa TODOS en la válida trampa.
                   </p>
                 </div>
 
@@ -1010,7 +1012,7 @@ export default function LaboratorioFvTab() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-white">
-                    📊 3D. Verificador Anual y Rentabilidad de 5 y 6 ({data.fiveAndSixBacktest.totalMeetings} reuniones · Factor Bs. 20 hasta 03/09 y Bs. 35 desde 04/09)
+                    📊 3D. Verificador Anual y Rentabilidad de 5 y 6 ({data.fiveAndSixBacktest.totalMeetings} reuniones · Factor Bs. 20 hasta 03/09, Bs. 35 hasta 30/10 y Bs. 50 desde 31/10)
                   </h3>
                   <p className="text-xs text-gray-500">
                     Compara cuadros con 6 aciertos, inversión acumulada, premios cobrados (con 6 + múltiplos de 5) y ganancia neta por metodología.
@@ -1195,7 +1197,7 @@ export default function LaboratorioFvTab() {
               v => (customSelectedByValida[v.validaNumber] ?? []).length || 1
             );
             const combCustom = countsCustom.reduce((a, b) => a * b, 1);
-            const factorCustom = activeCazadorMeeting.factorBs || 35;
+            const factorCustom = activeCazadorMeeting.factorBs || 50;
             const costCustomBs = combCustom * factorCustom;
 
             let customHits = 0;
