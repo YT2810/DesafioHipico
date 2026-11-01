@@ -88,21 +88,23 @@ Los hallazgos estadísticos, leyes por distancia/tamaño de lote, umbrales (`+40
 | `src/app/api/ads/impression/route.ts` | Tracking de impresiones |
 | `src/app/api/go/sponsor/route.ts` | Redirect de clicks con tracking |
 
-### Slots disponibles
+### Slots disponibles (todos montados y funcionales)
 | Slot ID | Página | Tipo |
 |---|---|---|
 | `retrospectos_inline` | /retrospectos | ISR 1h — selección server-side |
 | `revista_inline` | /revista/[id] | Dinámica — selección server-side |
-| `resultados_inline` | /resultados | Dinámica |
-| `traqueos_inline` | /traqueos | ISR 5m |
-| `header_leaderboard` | Global | Reservado para cliente premium |
-| `sticky_mobile` | Global | Reservado para cliente premium |
+| `resultados_inline` | /resultados | Dinámica — prop `sponsorBanner` a ResultadosClient |
+| `traqueos_inline` | /traqueos + /traqueos/valencia | ISR 5m — prop `sponsorBanner` a TraqueosClient |
+| `header_leaderboard` | Global (layout) | Client-side fetch `/api/ads/active` via GlobalSponsorBanner |
+| `sticky_mobile` | Global (layout, solo móvil) | Igual — barra inferior dismissible, `sm:hidden` |
 
-### Reglas del sistema house ads
-- `isHouseAd: true` → el banner se oculta automáticamente cuando `isPaidUser=true` (usuario con Pase activo).
-- En `AnimatedSponsorBanner`, si `isHouseAd && isPaidUser` → retorna `null` sin renderizar.
-- Las páginas de pago (pronosticos) NO muestran house ads a usuarios con pase — se pasa `isPaidUser={passUnlocked || isPrivileged}`.
-- Retrospectos y Revista son públicas — house ads sí aparecen para usuarios sin pase.
+### Reglas del sistema de ads
+- **Backfill:** `getActiveCampaign()` prioriza campañas pagas (`isHouseAd: false`). House ads solo sirven en slots SIN sponsor activo — al vender el slot desaparecen solas.
+- **House ads:** `isHouseAd: true` → ocultas a `session.user.hasActivePass` o roles admin/staff. Navegan en la misma pestaña (no `_blank`).
+- **hasActivePass** se expone vía JWT en `auth.ts` usando `hasActiveNationalPass(userId)` — cubre pase semanal Y mensual. `session.user.passUnlocked` NO existe (es por-reunión).
+- **Destino house ads:** `/pase` — landing dedicada de checkout (TopUpModal en modo `inline`). NUNCA apuntar a `/pronosticos` — el usuario tendría que buscar el botón de pago.
+- `/api/ads/active?slots=a,b` — endpoint client-side para slots globales; evita que el layout haga llamadas DB y la selección sea por usuario, no por caché ISR.
+- Banners globales ocultos en `/admin`, `/staff`, `/auth`, `/pase`.
 
 ### Logo dinámico (AnimatedSponsorBanner)
 - Si `creative.logoUrl` → mostrar imagen.
@@ -114,15 +116,19 @@ Los hallazgos estadísticos, leyes por distancia/tamaño de lote, umbrales (`+40
 - Para A/B real por usuario: hay que pasar todas las campañas activas al cliente y rotar en `useEffect`. Pendiente — actualmente la rotación es por render/caché.
 - `/retrospectos` tiene ISR 1h → todos ven la misma variante durante la ventana de caché. Aceptado temporalmente.
 
-### Plantillas pre-cargadas (Admin → Campañas → Nueva Campaña)
-**House Ads (Publicidad Propia):**
-- `house-retro-pase-a/b` → Retrospectos — empuja al Pase Nacional
-- `house-revista-pase-a/b` → Revista — momento pre-carrera
-- `house-result-pase-a/b` → Resultados — momento post-carrera
-- `house-traqueos-pase` → Traqueos — audiencia analista avanzada
+### House Ads — 9 campañas (botón "🏠 Crear House Ads" las crea todas)
+Copy mezclado dolor/beneficio, todas → `/pase`:
+- `house-retro-pase-a` → "¿Leíste el retrospecto y aún no sabes por quién ir?"
+- `house-retro-pase-b` → "¿Cuántos 'fijos' de grupo te han tumbado la combinada?"
+- `house-revista-pase-a` → "El FV te dice cuándo cerrar en 2 y cuándo abrir a 5"
+- `house-revista-pase-b` → "¿Sigues jugando por corazonada?"
+- `house-result-pase-a` → "El ganador estaba en el Top 3 del FV. ¿Lo tenías?"
+- `house-result-pase-b` → "El FV marcó esta carrera como Alerta antes de correrse"
+- `house-traqueos-pase` → "Ya tienes los trabajos — te falta el orden de llegada"
+- `house-global-header` → "79.9% de los ganadores salieron del Top 3 del FV"
+- `house-global-sticky` → "El FV de esta jornada ya está listo. ¿Vas a jugar a ciegas?"
 
-**Sponsor externo:**
-- `1xbet-a/b/c` → variantes hipismo, LVBP y código exclusivo
+**Sponsor externo (templates):** `1xbet-a/b/c` → hipismo, LVBP, código exclusivo
 
 ---
 
@@ -152,8 +158,9 @@ Se muestran siempre los primeros 6 (`.slice(0,6)`). El texto `fvScope` guía al 
 
 ## Tareas pendientes para la próxima sesión
 
-1. **Activar las house ads desde Admin**: ir a `/admin` → Campañas → Nueva Campaña → seleccionar plantilla de Publicidad Propia → guardar. Hacer esto para cada slot (retro-a, retro-b, revista-a, revista-b, result-a, result-b, traqueos).
-2. **Rotación A/B equitativa en Retrospectos**: cuando haya tráfico suficiente para medir, implementar selección client-side en `AnimatedSponsorBanner` recibiendo array de campañas en vez de una sola.
-3. **Pase Americanas**: cuando arranque la temporada americana, crear el producto y las house ads correspondientes.
-4. **header_leaderboard y sticky_mobile**: reservados para primer cliente premium externo.
+1. **Crear las house ads**: Admin → Campañas → botón "🏠 Crear House Ads" — un click las crea todas (9).
+2. **Takeover Web**: único formato del media kit sin implementar — requiere slot `takeover` + skin global en layout.
+3. **Logo en Gaceta PDF**: `GacetaPrintTemplate` solo tiene DHLogo — falta `sponsorLogoUrl`.
+4. **Rotación A/B equitativa en Retrospectos**: ISR 1h congela la variante — evaluar migrar a fetch client-side como los slots globales.
+5. **Pase Americanas**: cuando arranque la temporada americana, crear el producto y las house ads.
 
