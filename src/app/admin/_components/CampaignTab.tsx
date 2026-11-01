@@ -492,47 +492,78 @@ export default function CampaignTab() {
 
   function closeModal() { setEditing(null); setSlotOpen(false); }
 
-  // ── Crear todas las house ads de una vez (backfill de slots vacíos) ─────────
+  // ── Sincronizar house ads: crea las faltantes y actualiza el creative de las
+  // existentes. Preserva active / fechas / notas que hayas ajustado a mano.
   async function seedHouseAds() {
     setSeeding(true);
-    let created = 0, skipped = 0, failed = 0;
+    let created = 0, updated = 0, failed = 0;
     for (const t of TEMPLATES_HOUSE) {
-      if (existingSlugs.includes(t.form.slug)) { skipped++; continue; }
       const f = t.form;
-      const body = {
-        slug: f.slug,
-        brand: f.brand,
-        targetUrl: f.targetUrl,
-        slots: f.slots,
-        active: f.active,
-        isHouseAd: f.isHouseAd,
-        startsAt: f.startsAt || undefined,
-        endsAt: f.endsAt || undefined,
-        creative: {
-          badgeText: f.badgeText,
-          title: f.title,
-          subtitle: f.subtitle,
-          ctaText: f.ctaText,
-          logoUrl: f.logoUrl,
-          accentColor: f.accentColor,
-        },
-        notes: f.notes,
-      };
+      const exists = existingSlugs.includes(f.slug);
+      const body = exists
+        ? {
+            // Sync ligero: solo copy/creative + destino + slots — no toca
+            // active, startsAt, endsAt ni notes que el usuario pudo ajustar.
+            slug: f.slug,
+            targetUrl: f.targetUrl,
+            slots: f.slots,
+            isHouseAd: f.isHouseAd,
+            creative: {
+              badgeText: f.badgeText,
+              title: f.title,
+              subtitle: f.subtitle,
+              ctaText: f.ctaText,
+              logoUrl: f.logoUrl,
+              accentColor: f.accentColor,
+            },
+          }
+        : {
+            slug: f.slug,
+            brand: f.brand,
+            targetUrl: f.targetUrl,
+            slots: f.slots,
+            active: f.active,
+            isHouseAd: f.isHouseAd,
+            startsAt: f.startsAt || undefined,
+            endsAt: f.endsAt || undefined,
+            creative: {
+              badgeText: f.badgeText,
+              title: f.title,
+              subtitle: f.subtitle,
+              ctaText: f.ctaText,
+              logoUrl: f.logoUrl,
+              accentColor: f.accentColor,
+            },
+            notes: f.notes,
+          };
       try {
         const r = await fetch('/api/admin/sponsors', {
-          method: 'POST',
+          method: exists ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (r.ok) created++; else failed++;
+        if (r.ok) exists ? updated++ : created++; else failed++;
       } catch { failed++; }
     }
     flash(
       failed ? 'err' : 'ok',
-      `House ads: ${created} creadas${skipped ? ` · ${skipped} ya existían` : ''}${failed ? ` · ${failed} fallaron` : ''}`
+      `House ads: ${created} creadas · ${updated} sincronizadas${failed ? ` · ${failed} fallaron` : ''}`
     );
     setSeeding(false);
     load();
+  }
+
+  // ── Eliminar campaña ─────────────────────────────────────────────────────────
+  async function removeCampaign(slug: string, brand: string) {
+    if (!window.confirm(`¿Eliminar la campaña "${brand}" (${slug})? Las estadísticas históricas se conservan.`)) return;
+    const r = await fetch(`/api/admin/sponsors?slug=${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    if (r.ok) {
+      flash('ok', 'Campaña eliminada ✅');
+      load();
+    } else {
+      const e = await r.json().catch(() => ({}));
+      flash('err', e.error ?? 'Error al eliminar');
+    }
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
@@ -614,9 +645,9 @@ export default function CampaignTab() {
             onClick={seedHouseAds}
             disabled={seeding}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
-            title="Crea todas las house ads de una vez — solo llenan slots que NO tengan sponsor pago activo"
+            title="Crea las house ads faltantes y sincroniza el copy de las existentes — preserva tu configuración de fechas/activación"
           >
-            {seeding ? '⏳ Creando...' : '🏠 Crear House Ads'}
+            {seeding ? '⏳ Sincronizando...' : '🏠 Sincronizar House Ads'}
           </button>
           <button
             onClick={openNew}
@@ -768,10 +799,17 @@ export default function CampaignTab() {
                         </p>
                       );
                     })}
-                    <button onClick={() => openEdit(c)}
-                      className="mt-1.5 px-3 py-1 rounded-lg text-[10px] font-bold border border-gray-700 text-gray-400 hover:border-yellow-700/60 hover:text-yellow-400 transition-colors">
-                      ✏️ Editar
-                    </button>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <button onClick={() => openEdit(c)}
+                        className="px-3 py-1 rounded-lg text-[10px] font-bold border border-gray-700 text-gray-400 hover:border-yellow-700/60 hover:text-yellow-400 transition-colors">
+                        ✏️ Editar
+                      </button>
+                      <button onClick={() => removeCampaign(c.slug, c.brand)}
+                        title="Eliminar campaña"
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold border border-gray-800 text-gray-600 hover:border-red-800/60 hover:text-red-400 transition-colors">
+                        🗑
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -827,7 +865,7 @@ export default function CampaignTab() {
                       ))}
                     </div>
                     <p className="mt-1.5 text-[9px] text-gray-600">
-                      Regla backfill: solo llenan slots SIN sponsor pago activo — cuando vendes el slot, desaparecen solas. Rotan aleatoriamente entre sí y se ocultan a usuarios con Pase. Botón "🏠 Crear House Ads" las crea todas de una vez.
+                      Regla backfill: solo llenan slots SIN sponsor pago activo — cuando vendes el slot, desaparecen solas. Rotan aleatoriamente entre sí y se ocultan a usuarios con Pase. Botón "🏠 Sincronizar House Ads": crea las faltantes y actualiza el copy de las existentes sin tocar tu configuración.
                     </p>
                   </div>
 

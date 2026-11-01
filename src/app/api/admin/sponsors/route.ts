@@ -136,3 +136,22 @@ export async function PATCH(req: NextRequest) {
   REVALIDATE_PATHS.forEach(p => revalidatePath(p));
   return NextResponse.json({ ok: true, campaign });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user || !isPrivileged(session)) {
+    return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+  }
+  const slug = req.nextUrl.searchParams.get('slug');
+  if (!slug) {
+    return NextResponse.json({ error: 'Falta slug.' }, { status: 400 });
+  }
+  await dbConnect();
+  const deleted = await SponsorCampaign.findOneAndDelete({
+    slug: String(slug).toLowerCase().trim(),
+  });
+  if (!deleted) return NextResponse.json({ error: 'Campaña no encontrada.' }, { status: 404 });
+  // Las estadísticas en AdDailyStat se conservan (historial por slug)
+  REVALIDATE_PATHS.forEach(p => revalidatePath(p));
+  return NextResponse.json({ ok: true });
+}
