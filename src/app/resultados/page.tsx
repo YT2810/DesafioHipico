@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import ResultadosClient from './ResultadosClient';
+import AnimatedSponsorBanner from '@/components/AnimatedSponsorBanner';
+import { getActiveCampaign } from '@/services/adService';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300; // 5 min cache
@@ -70,7 +72,9 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function ResultadosPage() {
+export default async function ResultadosPage() {
+  const sponsor = await getActiveCampaign('resultados_inline');
+
   return (
     <>
       <h1 className="sr-only">Resultados La Rinconada y Valencia · Posiciones, Dividendos y Cuánto Pagó el 5y6</h1>
@@ -91,7 +95,25 @@ export default function ResultadosPage() {
           }),
         }}
       />
-      <ResultadosClient />
+      <ResultadosClient
+        sponsorBanner={sponsor ? (
+          <AnimatedSponsorBanner
+            ad={{
+              slug: sponsor.slug,
+              brand: sponsor.brand,
+              slot: 'resultados_inline',
+              badgeText: sponsor.creative.badgeText ?? 'Publicidad',
+              title: sponsor.creative.title,
+              subtitle: sponsor.creative.subtitle ?? '',
+              ctaText: sponsor.creative.ctaText,
+              logoUrl: sponsor.creative.logoUrl,
+              accentColor: sponsor.creative.accentColor ?? '#00A8E8',
+              endsAt: sponsor.endsAt ? new Date(sponsor.endsAt).toISOString() : undefined,
+              isHouseAd: !!(sponsor as any).isHouseAd,
+            }}
+          />
+        ) : undefined}
+      />
       <p className="text-[11px] text-gray-800 text-center leading-relaxed px-4 pb-4">
         Resultados La Rinconada hoy · Cuánto pagó el 5y6 La Rinconada · Dividendos La Rinconada ·
         Resultados Valencia hoy · Cuánto pagó el 5y6 Valencia · Datos INH Venezuela ·

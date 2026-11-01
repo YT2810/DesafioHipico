@@ -129,11 +129,6 @@ export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const fired = useRef(false);
 
-  // House ads no se muestran a usuarios con pase activo (ya compraron)
-  const user = (session?.user as any) ?? null;
-  const hasActivePass = !!(user?.passUnlocked || user?.roles?.some((r: string) => ['admin', 'staff'].includes(r)));
-  if (ad.isHouseAd && hasActivePass) return null;
-
   useEffect(() => { setMounted(true); }, []);
 
   // Countdown from endsAt
@@ -183,6 +178,12 @@ export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
 
   const href = `/api/go/sponsor?campaign=${encodeURIComponent(ad.slug)}&slot=${encodeURIComponent(ad.slot)}&from=${encodeURIComponent(pathname)}`;
 
+  // House ads no se muestran a usuarios con Pase Nacional activo ni a staff/admin
+  // (va después de los hooks — un return temprano antes de useEffect rompe React)
+  const user = (session?.user as any) ?? null;
+  const hasActivePass = !!(user?.hasActivePass || user?.roles?.some((r: string) => ['admin', 'staff'].includes(r)));
+  if (ad.isHouseAd && hasActivePass) return null;
+
   return (
     <>
       {/* Inject keyframes once */}
@@ -190,7 +191,7 @@ export default function AnimatedSponsorBanner({ ad }: { ad: AnimatedAdProps }) {
 
       <a
         href={href}
-        target="_blank"
+        target={ad.isHouseAd ? undefined : '_blank'}
         rel="sponsored nofollow noopener noreferrer"
         aria-label={`Publicidad: ${ad.brand}`}
         className="block rounded-2xl overflow-hidden group"

@@ -15,8 +15,16 @@ const SPONSOR_TARGETS: Record<string, string> = {
  * UTM params are appended when the advertiser's link doesn't carry its own,
  * so their analytics attributes the traffic to desafiohipico.com.
  */
-function withUtm(targetUrl: string, campaignSlug: string, slot: string): string {
+function withUtm(targetUrl: string, campaignSlug: string, slot: string, origin: string): string {
   try {
+    // URLs internas (house ads → /pase) se resuelven contra el propio dominio
+    // y no llevan UTM de afiliado — solo el parámetro de campaña interno
+    if (targetUrl.startsWith('/')) {
+      const u = new URL(targetUrl, origin);
+      u.searchParams.set('src', 'house_ad');
+      u.searchParams.set('cmp', campaignSlug);
+      return u.toString();
+    }
     const u = new URL(targetUrl);
     const hasUtm = [...u.searchParams.keys()].some(k => k.startsWith('utm_'));
     if (!hasUtm) {
@@ -43,7 +51,7 @@ export async function GET(req: NextRequest) {
   if (campaignSlug) {
     const campaign = await getCampaignBySlug(campaignSlug);
     if (campaign) {
-      targetUrl = withUtm(campaign.targetUrl, campaign.slug, slot);
+      targetUrl = withUtm(campaign.targetUrl, campaign.slug, slot, req.nextUrl.origin);
       void trackClick(campaign.slug, slot);
     }
   }

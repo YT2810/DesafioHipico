@@ -9,9 +9,9 @@ type LivePackage = { id: string; label: string; description: string; priceBs: nu
 const GOLD = '#D4AF37';
 const SHOW_EXTENDED_TOPUP_FIELDS = false;
 
-interface TopUpModalProps { onClose: () => void; }
+interface TopUpModalProps { onClose: () => void; inline?: boolean }
 
-export default function TopUpModal({ onClose }: TopUpModalProps) {
+export default function TopUpModal({ onClose, inline = false }: TopUpModalProps) {
   const { data: session } = useSession();
   const user = session?.user as any;
   const today = new Date().toISOString().slice(0, 10);
@@ -112,15 +112,15 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
   const stepIndex = step === 'package' ? 0 : step === 'destination' ? 1 : step === 'form' ? 2 : 3;
   const stepLabels = ['Elige tu Pase', 'Datos de pago', 'Confirma el pago'];
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-gray-950 border border-gray-800 rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[94vh] flex flex-col shadow-2xl">
+  const card = (
+      <div className={`relative w-full sm:max-w-md bg-gray-950 border border-gray-800 ${inline ? 'rounded-2xl' : 'rounded-t-3xl sm:rounded-2xl'} overflow-hidden ${inline ? '' : 'max-h-[94vh]'} flex flex-col shadow-2xl`}>
 
-        {/* Pull handle (mobile) */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="w-10 h-1 bg-gray-700 rounded-full" />
-        </div>
+        {/* Pull handle (mobile, solo en modo modal) */}
+        {!inline && (
+          <div className="flex justify-center pt-3 pb-1 sm:hidden">
+            <div className="w-10 h-1 bg-gray-700 rounded-full" />
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
@@ -128,7 +128,9 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
             <h2 className="text-base font-extrabold text-white">🎟️ Activar Pase Nacional</h2>
             <p className="text-xs text-gray-500">Acceso completo a La Rinconada + Valencia</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-sm">✕</button>
+          {!inline && (
+            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-sm">✕</button>
+          )}
         </div>
 
         {/* Step progress */}
@@ -375,6 +377,14 @@ export default function TopUpModal({ onClose }: TopUpModalProps) {
 
         </div>
       </div>
+  );
+
+  if (inline) return card;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      {card}
     </div>
   );
 }

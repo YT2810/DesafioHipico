@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import SocialProofToast from '@/components/SocialProofToast';
 
@@ -49,7 +49,7 @@ function trackGA(eventName: string, params: Record<string, string | number>) {
 
 type TrackId = 'rinconada' | 'valencia';
 
-export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackId }) {
+export default function TraqueosClient({ track = 'rinconada', sponsorBanner }: { track?: TrackId; sponsorBanner?: ReactNode }) {
   const [dates, setDates] = useState<DateItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [entries, setEntries] = useState<WorkoutEntry[]>([]);
@@ -243,6 +243,9 @@ export default function TraqueosClient({ track = 'rinconada' }: { track?: TrackI
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+
+        {/* ── Sponsored in-text (traqueos_inline) ── */}
+        {sponsorBanner}
 
         {/* ── Búsqueda global por caballo ── */}
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4 space-y-2">

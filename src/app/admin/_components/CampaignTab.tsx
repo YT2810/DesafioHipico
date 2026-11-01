@@ -139,7 +139,11 @@ const TEMPLATES_1XBET = [
   },
 ];
 
-// ─── Plantillas House Ads (Publicidad Propia — Pase Nacional) ────────────────
+// ─── House Ads (Publicidad Propia — Pase Nacional → /pase) ───────────────────
+// Copy mezclado: dolor (jugar a ciegas, fijos trampa, batacazos no vistos)
+// + beneficio (orden, diagnóstico, cuándo cerrar o abrir la jugada)
+
+const PASE_URL = '/pase';
 
 const TEMPLATES_HOUSE = [
   // ── Retrospectos ──────────────────────────────────────────────────────────
@@ -147,44 +151,44 @@ const TEMPLATES_HOUSE = [
     key: 'retro-pase-a',
     emoji: '📰',
     label: 'Retrospectos A',
-    desc: 'Reto del FV · dorado · empuja al Pase',
+    desc: 'Dolor: data sin conclusión · dorado',
     color: '#D4AF37',
     form: {
       slug: 'house-retro-pase-a',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['retrospectos_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
       badgeText: '👑 Pase Nacional',
-      title: '¿Cuántos ganadores tenías en el FV de esta jornada?',
-      subtitle: 'Actívalo antes de la próxima reunión · +30 handicappers · 79.9% acierta el Top 3',
-      ctaText: 'Activar Pase →',
+      title: '¿Leíste el retrospecto y aún no sabes por quién ir?',
+      subtitle: 'El FV resume toda la data en un número por caballo · 79.9% acierta el Top 3',
+      ctaText: 'Ver el FV →',
       logoUrl: '',
       accentColor: '#D4AF37',
-      notes: 'House ad — Retrospectos variante A. Reto del FV, empuja al Pase Nacional.',
+      notes: 'House ad — Retrospectos A. Dolor: retrospecto abruma, FV concluye.',
     },
   },
   {
     key: 'retro-pase-b',
     emoji: '📰',
     label: 'Retrospectos B',
-    desc: 'Próxima jornada · dorado · ventaja',
-    color: '#C0862A',
+    desc: 'Dolor: el fijo del grupo · verde',
+    color: '#22c55e',
     form: {
       slug: 'house-retro-pase-b',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['retrospectos_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
       badgeText: 'Factor de Victoria',
-      title: 'La próxima jornada empieza con ventaja — activa el Pase',
-      subtitle: 'Diagnóstico por carrera · Prioridad de selección · 79.9% efectividad Top 3 · Bs. 6.000/semana',
-      ctaText: 'Ver Pase Nacional →',
+      title: "¿Cuántos 'fijos' de grupo te han tumbado la combinada?",
+      subtitle: 'El FV detecta cuándo el favorito es trampa · Diagnóstico de riesgo por carrera · Bs. 6.000',
+      ctaText: 'Activar mi Pase →',
       logoUrl: '',
-      accentColor: '#C0862A',
-      notes: 'House ad — Retrospectos variante B. Ángulo de ventaja pre-jornada.',
+      accentColor: '#22c55e',
+      notes: 'House ad — Retrospectos B. Dolor: fijos de WhatsApp que fallan.',
     },
   },
   // ── Revista ───────────────────────────────────────────────────────────────
@@ -192,44 +196,44 @@ const TEMPLATES_HOUSE = [
     key: 'revista-pase-a',
     emoji: '📖',
     label: 'Revista A',
-    desc: 'Inscritos + FV · dorado · pre-carrera',
+    desc: 'Beneficio: cuándo cerrar o abrir · dorado',
     color: '#D4AF37',
     form: {
       slug: 'house-revista-pase-a',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['revista_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
       badgeText: 'Hoy es reunión',
-      title: 'Ya tienes los inscritos. Falta saber quién va a ganar',
-      subtitle: 'El Factor de Victoria ordena cada carrera por probabilidad real · Pase Nacional · Bs. 6.000',
-      ctaText: 'Ver el FV de hoy →',
+      title: 'El FV te dice cuándo cerrar en 2 y cuándo abrir a 5',
+      subtitle: 'Diagnóstico de riesgo por carrera · La Rinconada + Valencia · Bs. 6.000',
+      ctaText: 'Activar el FV →',
       logoUrl: '',
       accentColor: '#D4AF37',
-      notes: 'House ad — Revista variante A. Momento perfecto pre-carrera: ya leyeron los inscritos.',
+      notes: 'House ad — Revista A. Beneficio: saber cuántos caballos jugar por carrera.',
     },
   },
   {
     key: 'revista-pase-b',
     emoji: '📖',
     label: 'Revista B',
-    desc: 'Sin margen de error · verde · algoritmo',
+    desc: 'Dolor: jugar por corazonada · verde',
     color: '#22c55e',
     form: {
       slug: 'house-revista-pase-b',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['revista_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
       badgeText: 'Pase Semanal',
-      title: 'Esta semana juegas con el algoritmo o sin él. Tú decides',
-      subtitle: '79.9% de los ganadores están en el Top 3 FV · Activar el Pase · Bs. 6.000',
-      ctaText: 'Activar el Pase →',
+      title: '¿Sigues jugando por corazonada? El algoritmo ya corrió los números',
+      subtitle: 'FV + 5y6 VIP + diagnóstico por carrera · Pase Nacional Bs. 6.000',
+      ctaText: 'Quiero el Pase →',
       logoUrl: '',
       accentColor: '#22c55e',
-      notes: 'House ad — Revista variante B. Decisión binaria: con o sin el FV.',
+      notes: 'House ad — Revista B. Dolor: corazonada vs algoritmo.',
     },
   },
   // ── Resultados ────────────────────────────────────────────────────────────
@@ -237,44 +241,44 @@ const TEMPLATES_HOUSE = [
     key: 'result-pase-a',
     emoji: '🏆',
     label: 'Resultados A',
-    desc: 'El FV lo vio · dorado · post-carrera',
+    desc: 'Dolor: "era obvio" post-carrera · dorado',
     color: '#D4AF37',
     form: {
       slug: 'house-result-pase-a',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['resultados_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
-      badgeText: 'El algoritmo lo vio venir',
+      badgeText: 'El FV lo vio venir',
       title: 'El ganador estaba en el Top 3 del FV. ¿Lo tenías?',
-      subtitle: 'Activa el Pase y el Factor de Victoria trabaja para ti cada domingo · Bs. 6.000/semana',
-      ctaText: 'Activar el Pase →',
+      subtitle: 'Para que la próxima no te pase · Pase Nacional Bs. 6.000/semana',
+      ctaText: 'Activar mi Pase →',
       logoUrl: '',
       accentColor: '#D4AF37',
-      notes: 'House ad — Resultados variante A. Momento post-carrera: motivación alta.',
+      notes: 'House ad — Resultados A. Dolor: el ganador era obvio y no lo tenías.',
     },
   },
   {
     key: 'result-pase-b',
     emoji: '🏆',
     label: 'Resultados B',
-    desc: 'Para la próxima · verde · positivo',
+    desc: 'Dolor: batacazo no detectado · verde',
     color: '#22c55e',
     form: {
       slug: 'house-result-pase-b',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['resultados_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
-      badgeText: 'Para la próxima jornada',
-      title: 'Esta ya pasó — la próxima la juegas con el FV',
-      subtitle: 'El Pase Nacional incluye diagnóstico completo por carrera · 79.9% efectividad Top 3',
-      ctaText: 'Ver Pase →',
+      badgeText: 'El batacazo se avisó',
+      title: 'El FV marcó esta carrera como Alerta antes de correrse',
+      subtitle: 'Diagnóstico de riesgo en cada carrera · Pase Nacional Bs. 6.000',
+      ctaText: 'Quiero esas alertas →',
       logoUrl: '',
       accentColor: '#22c55e',
-      notes: 'House ad — Resultados variante B. Tono positivo, mira hacia adelante.',
+      notes: 'House ad — Resultados B. Dolor: batacazo que nadie vio venir.',
     },
   },
   // ── Traqueos ──────────────────────────────────────────────────────────────
@@ -282,22 +286,67 @@ const TEMPLATES_HOUSE = [
     key: 'traqueos-pase',
     emoji: '⏱',
     label: 'Traqueos',
-    desc: 'El siguiente nivel · dorado · analista',
+    desc: 'Beneficio: análisis completo · dorado',
     color: '#D4AF37',
     form: {
       slug: 'house-traqueos-pase',
       brand: 'Desafío Hípico',
-      targetUrl: 'https://www.desafiohipico.com/pronosticos',
+      targetUrl: PASE_URL,
       slots: ['traqueos_inline'],
       active: true, isHouseAd: true,
       startsAt: TODAY, endsAt: NEXT_90,
-      badgeText: 'El siguiente nivel',
-      title: 'Ya estudiaste los trabajos. El FV calculó quién corre mejor',
-      subtitle: 'Combina traqueos + Factor de Victoria · 79.9% Top 3 · Pase Nacional · Bs. 6.000',
-      ctaText: 'Ver el FV Completo →',
+      badgeText: 'Análisis completo',
+      title: 'Ya tienes los trabajos — te falta el orden de llegada',
+      subtitle: 'Traqueos + FV = la jugada completa · Pase Nacional Bs. 6.000',
+      ctaText: 'Completar mi análisis →',
       logoUrl: '',
       accentColor: '#D4AF37',
-      notes: 'House ad — Traqueos. Audiencia seria, máxima intención de compra.',
+      notes: 'House ad — Traqueos. Beneficio: combinar trabajos con el FV.',
+    },
+  },
+  // ── Globales (header + sticky) ────────────────────────────────────────────
+  {
+    key: 'global-header',
+    emoji: '🖥️',
+    label: 'Cabecera Global',
+    desc: 'Dolor+prueba · dorado · todas las páginas',
+    color: '#D4AF37',
+    form: {
+      slug: 'house-global-header',
+      brand: 'Desafío Hípico',
+      targetUrl: PASE_URL,
+      slots: ['header_leaderboard'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: '👑 Pase Nacional',
+      title: '79.9% de los ganadores salieron del Top 3 del FV',
+      subtitle: 'Deja de jugar a ciegas · Pase Nacional Bs. 6.000/semana',
+      ctaText: 'Activar Pase →',
+      logoUrl: '',
+      accentColor: '#D4AF37',
+      notes: 'House ad — Cabecera global. Prueba estadística + dolor.',
+    },
+  },
+  {
+    key: 'global-sticky',
+    emoji: '📱',
+    label: 'Sticky Mobile',
+    desc: 'Urgencia · verde · barra inferior móvil',
+    color: '#22c55e',
+    form: {
+      slug: 'house-global-sticky',
+      brand: 'Desafío Hípico',
+      targetUrl: PASE_URL,
+      slots: ['sticky_mobile'],
+      active: true, isHouseAd: true,
+      startsAt: TODAY, endsAt: NEXT_90,
+      badgeText: 'Pase Nacional',
+      title: 'El FV de esta jornada ya está listo. ¿Vas a jugar a ciegas?',
+      subtitle: 'Actívalo en 2 minutos · Pago Móvil · Bs. 6.000',
+      ctaText: 'Activar →',
+      logoUrl: '',
+      accentColor: '#22c55e',
+      notes: 'House ad — Sticky mobile. Urgencia + facilidad de activación.',
     },
   },
 ];
@@ -354,6 +403,7 @@ export default function CampaignTab() {
   const [editing, setEditing] = useState<Campaign | null | 'new'>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [slotOpen, setSlotOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   // Track whether the user manually typed the slug (to stop auto-fill)
   const slugManual = useRef(false);
@@ -442,6 +492,49 @@ export default function CampaignTab() {
 
   function closeModal() { setEditing(null); setSlotOpen(false); }
 
+  // ── Crear todas las house ads de una vez (backfill de slots vacíos) ─────────
+  async function seedHouseAds() {
+    setSeeding(true);
+    let created = 0, skipped = 0, failed = 0;
+    for (const t of TEMPLATES_HOUSE) {
+      if (existingSlugs.includes(t.form.slug)) { skipped++; continue; }
+      const f = t.form;
+      const body = {
+        slug: f.slug,
+        brand: f.brand,
+        targetUrl: f.targetUrl,
+        slots: f.slots,
+        active: f.active,
+        isHouseAd: f.isHouseAd,
+        startsAt: f.startsAt || undefined,
+        endsAt: f.endsAt || undefined,
+        creative: {
+          badgeText: f.badgeText,
+          title: f.title,
+          subtitle: f.subtitle,
+          ctaText: f.ctaText,
+          logoUrl: f.logoUrl,
+          accentColor: f.accentColor,
+        },
+        notes: f.notes,
+      };
+      try {
+        const r = await fetch('/api/admin/sponsors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (r.ok) created++; else failed++;
+      } catch { failed++; }
+    }
+    flash(
+      failed ? 'err' : 'ok',
+      `House ads: ${created} creadas${skipped ? ` · ${skipped} ya existían` : ''}${failed ? ` · ${failed} fallaron` : ''}`
+    );
+    setSeeding(false);
+    load();
+  }
+
   // ── Save ────────────────────────────────────────────────────────────────────
   async function save() {
     if (!form.slug.trim() || !form.brand.trim() || !form.targetUrl.trim() || !form.title.trim()) {
@@ -516,12 +609,22 @@ export default function CampaignTab() {
             Cada campaña es un anunciante activo en la web. Puedes pausarla o activarla al instante.
           </p>
         </div>
-        <button
-          onClick={openNew}
-          className="shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-yellow-500 hover:bg-yellow-400 text-black transition-colors"
-        >
-          + Nueva Campaña
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={seedHouseAds}
+            disabled={seeding}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
+            title="Crea todas las house ads de una vez — solo llenan slots que NO tengan sponsor pago activo"
+          >
+            {seeding ? '⏳ Creando...' : '🏠 Crear House Ads'}
+          </button>
+          <button
+            onClick={openNew}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-yellow-500 hover:bg-yellow-400 text-black transition-colors"
+          >
+            + Nueva Campaña
+          </button>
+        </div>
       </div>
 
       {/* ── Flash ── */}
@@ -724,7 +827,7 @@ export default function CampaignTab() {
                       ))}
                     </div>
                     <p className="mt-1.5 text-[9px] text-gray-600">
-                      Cada variante rota aleatoriamente en su slot. Actívalas juntas para A/B testing. Se ocultan solas cuando el usuario tiene Pase activo.
+                      Regla backfill: solo llenan slots SIN sponsor pago activo — cuando vendes el slot, desaparecen solas. Rotan aleatoriamente entre sí y se ocultan a usuarios con Pase. Botón "🏠 Crear House Ads" las crea todas de una vez.
                     </p>
                   </div>
 

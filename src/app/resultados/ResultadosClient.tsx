@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import SocialProofToast from '@/components/SocialProofToast';
 
 const ChevronDown  = ({ className }: { className?: string }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>;
@@ -211,7 +211,7 @@ function MeetingCard({ m, defaultOpen }: { m: MeetingResult; defaultOpen?: boole
   );
 }
 
-export default function ResultadosClient() {
+export default function ResultadosClient({ sponsorBanner }: { sponsorBanner?: ReactNode }) {
   const [meetings, setMeetings] = useState<MeetingResult[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [page,     setPage]     = useState(1);
@@ -254,6 +254,9 @@ export default function ResultadosClient() {
             <strong className="text-gray-400">resultados carreras de Valencia hoy sábado</strong> (HINAVA). Datos oficiales actualizados cada jornada.
           </p>
         </div>
+
+        {/* ── Sponsored in-text (resultados_inline) ── */}
+        {sponsorBanner}
 
         {loading && (
           <div className="space-y-4">

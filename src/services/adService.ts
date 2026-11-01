@@ -42,8 +42,12 @@ export async function getActiveCampaign(slot: AdSlot | string): Promise<ISponsor
       ],
     }).lean<ISponsorCampaign[]>();
     if (!campaigns.length) return null;
+    // Backfill: paid sponsor campaigns always win the slot. House ads only
+    // serve when NO paying campaign is active for this slot.
+    const paid = campaigns.filter(c => !(c as any).isHouseAd);
+    const pool = paid.length ? paid : campaigns;
     // Random selection for A/B/C testing — fair impression distribution
-    return campaigns[Math.floor(Math.random() * campaigns.length)];
+    return pool[Math.floor(Math.random() * pool.length)];
   } catch {
     return null;
   }

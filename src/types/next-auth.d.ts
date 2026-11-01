@@ -20,6 +20,7 @@ declare module 'next-auth' {
       goldEarned?: number;
       loginStreak?: number;
       hasPurchasedThisWeek?: boolean;
+      hasActivePass?: boolean;
     };
   }
 
@@ -53,5 +54,6 @@ declare module 'next-auth/jwt' {
     goldEarned?: number;
     loginStreak?: number;
     hasPurchasedThisWeek?: boolean;
+    hasActivePass?: boolean;
   }
 }

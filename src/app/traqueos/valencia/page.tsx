@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import TraqueosClient from '../TraqueosClient';
+import AnimatedSponsorBanner from '@/components/AnimatedSponsorBanner';
+import { getActiveCampaign } from '@/services/adService';
 
 const BASE = 'https://www.desafiohipico.com';
 
@@ -36,7 +38,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TraqueosValenciaPage() {
+export const revalidate = 300;
+
+export default async function TraqueosValenciaPage() {
+  const sponsor = await getActiveCampaign('traqueos_inline');
   const breadcrumb = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -50,7 +55,26 @@ export default function TraqueosValenciaPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
-      <TraqueosClient track="valencia" />
+      <TraqueosClient
+        track="valencia"
+        sponsorBanner={sponsor ? (
+          <AnimatedSponsorBanner
+            ad={{
+              slug: sponsor.slug,
+              brand: sponsor.brand,
+              slot: 'traqueos_inline',
+              badgeText: sponsor.creative.badgeText ?? 'Publicidad',
+              title: sponsor.creative.title,
+              subtitle: sponsor.creative.subtitle ?? '',
+              ctaText: sponsor.creative.ctaText,
+              logoUrl: sponsor.creative.logoUrl,
+              accentColor: sponsor.creative.accentColor ?? '#00A8E8',
+              endsAt: sponsor.endsAt ? new Date(sponsor.endsAt).toISOString() : undefined,
+              isHouseAd: !!(sponsor as any).isHouseAd,
+            }}
+          />
+        ) : undefined}
+      />
     </>
   );
 }

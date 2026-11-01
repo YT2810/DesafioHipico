@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!/^https?:\/\//.test(body.targetUrl)) {
-    return NextResponse.json({ error: 'targetUrl debe ser URL http(s) válida.' }, { status: 400 });
+  if (!/^https?:\/\//.test(body.targetUrl) && !body.targetUrl.startsWith('/')) {
+    return NextResponse.json({ error: 'targetUrl debe ser URL http(s) o ruta interna (/).' }, { status: 400 });
   }
   await dbConnect();
   const campaign = await SponsorCampaign.findOneAndUpdate(
@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
         targetUrl: body.targetUrl,
         slots: Array.isArray(body.slots) ? body.slots : [],
         active: body.active !== false,
+        isHouseAd: body.isHouseAd === true,
         creative: {
           badgeText: body.creative.badgeText ?? 'Publicidad',
           title: body.creative.title,
@@ -120,7 +121,7 @@ export async function PATCH(req: NextRequest) {
   if (!body?.slug) {
     return NextResponse.json({ error: 'Falta slug.' }, { status: 400 });
   }
-  const allowed = ['active', 'targetUrl', 'slots', 'brand', 'notes', 'startsAt', 'endsAt', 'creative'];
+  const allowed = ['active', 'targetUrl', 'slots', 'brand', 'notes', 'startsAt', 'endsAt', 'creative', 'isHouseAd'];
   const $set: Record<string, any> = {};
   for (const k of allowed) {
     if (body[k] !== undefined) $set[k] = body[k];
