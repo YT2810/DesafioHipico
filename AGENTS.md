@@ -1,5 +1,25 @@
 # DesafioHipico — Instrucciones para agentes de IA
 
+## Protocolo de sesión (SEGUIR SIEMPRE)
+1. Leer `DECISIONS.md` completo — memoria persistente del proyecto
+2. Invocar skill `/contexto` para estado actual y próximo paso
+3. Implementar según el plan de DECISIONS.md sección "PLAN ACTIVO"
+4. Registrar decisiones nuevas con `/decidir` antes o al implementarlas
+5. `npx tsc --noEmit` antes de cada commit
+6. `git push origin main` — el credential helper resuelve auth automáticamente
+
+## Skills disponibles (invocar cuando sean relevantes)
+- `/contexto` — estado actual del proyecto y hoja de ruta
+- `/decidir` — registra una decisión en DECISIONS.md
+- `/deploy` — protocolo completo de verificación y push
+- `/factor-victoria` — lógica del FV, umbrales, diagnóstico, factor 5y6
+- `/ads-sistema` — 6 slots, backfill, house ads, tracking, campañas
+- `/pase-nacional` — flujo de pago, hasActivePass, landing /pase
+- `/seo-reglas` — sitemap dinámico, LLM indexing, keywords, rutas
+- `/tym-holding` — arquitectura TYM, roadmap multi-tenant, qué parametrizar
+
+---
+
 ## Comandos del proyecto
 
 ```bash
