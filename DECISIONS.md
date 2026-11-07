@@ -118,3 +118,13 @@ El hipismo venezolano no tenía una plataforma digital seria. Los apostadores bu
 - Guard anti-duplicado: si el usuario ya tiene pase activo → `409 requiresConfirm`, el admin debe confirmar explícitamente.
 - Auditoría: crea `TopUpRequest` pre-aprobado con `referenceNumber MANUAL-*`, `bank: Efectivo|Manual`, `adminNote` (nuevo campo en el modelo), `reviewedBy` = admin.
 **Notas**: `amountBs` opcional para registrar efectivo recibido (0 = regalo). Las estadísticas de ingresos suman `amountUsd`, así que un regalo NO infla revenue. Dispara `ActivityEvent` pass_activation y notificación al usuario igual que una aprobación normal.
+
+### [Nov 2026] Sesión — Filtro por pase + vista de usuario (solo lectura)
+**Decisión**: `GET /api/admin/users?pass=activo|tuvo|nunca` + `GET /api/admin/users/[id]/vista`.
+**Contexto**: No había forma de listar quién tiene pase activo/quién alguna vez lo tuvo, ni de verificar que una asignación manual (regalo/efectivo) llegó al usuario.
+**Implementación**:
+- `src/services/passService.ts` — replica las reglas de `hasActiveNationalPass` en batch: `getActivePassUserIds`, `getEverPassUserIds`, `getPassInfoForUser(s)` con `computePassInfo` (mensual > semanal > expired > never). 4 queries para una página de 20 usuarios, no N.
+- Filtro en `/admin/users` con botones Todos/Pase activo/Tuvo/Nunca + badge por fila (👑 Mensual, 🎟️ Semanal, ⏰ Expirado).
+- Vista de solo lectura en la tarjeta expandida: pase que ve el usuario + expiración, facturación completa, uso (jornadas/carreras), recargas y pases con motivo, notificaciones recibidas con leída/sin leer.
+**Seguridad**: `/vista` solo rol `admin` (ni staff) — expone datos privados (notificaciones, documento de identidad vía billingComplete, historial). Semanal = semana calendario (reinicia lunes 00:00 VE), mensual = reviewedAt + 30d.
+**Descartado por ahora**: impersonación real (JWT como otro usuario) — toca auth y permite actuar como el usuario. Solo si la vista de lectura resulta insuficiente.

@@ -7,6 +7,12 @@ const GOLD = '#D4AF37';
 const ALL_ROLES = ['customer', 'handicapper', 'admin', 'staff'] as const;
 type Role = typeof ALL_ROLES[number];
 
+interface PassInfo {
+  status: 'monthly' | 'weekly' | 'expired' | 'never';
+  kind: 'monthly' | 'weekly' | null;
+  expiresAt: string | null;
+}
+
 interface UserItem {
   _id: string;
   email?: string;
@@ -16,6 +22,24 @@ interface UserItem {
   roles: Role[];
   balance: { golds: number };
   createdAt: string;
+  pass?: PassInfo | null;
+}
+
+interface UserVista {
+  user: {
+    alias: string; email: string | null; roles: string[];
+    balance: { golds: number; diamonds: number };
+    billingComplete: boolean; lastLoginDate: string | null;
+    loginStreak: number; unsubscribed: boolean; followedCount: number; createdAt: string;
+  };
+  pass: PassInfo;
+  topups: Array<{
+    _id: string; referenceNumber: string; amountBs: number; goldAmount: number;
+    status: string; packageLabel: string | null; adminNote?: string; bank?: string;
+    paymentDate: string; reviewedAt?: string; createdAt: string;
+  }>;
+  notifications: Array<{ _id: string; type: string; title: string; body: string; read: boolean; createdAt: string }>;
+  usage: { meetingsConsumed: number; racesUnlocked: number };
 }
 
 interface GoldTx {
@@ -53,6 +77,13 @@ const TX_LABEL: Record<string, string> = {
   platform_fee:       'Comisión plataforma',
 };
 
+const PASS_CFG: Record<PassInfo['status'], { label: string; icon: string; cls: string }> = {
+  monthly: { label: 'Mensual', icon: '👑', cls: 'text-purple-300 bg-purple-950/50 border-purple-700/50' },
+  weekly:  { label: 'Semanal', icon: '🎟️', cls: 'text-yellow-300 bg-yellow-950/40 border-yellow-700/50' },
+  expired: { label: 'Expirado', icon: '⏰', cls: 'text-gray-500 bg-gray-800 border-gray-700' },
+  never:   { label: 'Sin pase', icon: '', cls: 'text-gray-600 bg-gray-800 border-gray-800' },
+};
+
 const ROLE_CFG: Record<Role, { color: string; bg: string; border: string }> = {
   customer:    { color: 'text-gray-400',   bg: 'bg-gray-800',        border: 'border-gray-700'   },
   handicapper: { color: 'text-yellow-400', bg: 'bg-yellow-950/40',   border: 'border-yellow-700/50' },
@@ -79,6 +110,10 @@ export default function AdminUsersPage() {
   const [passMsg, setPassMsg] = useState('');
   const [passLoading, setPassLoading] = useState<'arranque' | 'padrillo' | null>(null);
   const [passNeedsConfirm, setPassNeedsConfirm] = useState<'arranque' | 'padrillo' | null>(null);
+  const [passFilter, setPassFilter] = useState<'all' | 'activo' | 'tuvo' | 'nunca'>('all');
+  const [vista, setVista] = useState<UserVista | null>(null);
+  const [vistaLoading, setVistaLoading] = useState(false);
+  const [vistaErr, setVistaErr] = useState('');
   const [goldSort, setGoldSort] = useState<'none' | 'desc' | 'asc'>('none');
   const [txUserId, setTxUserId] = useState<string | null>(null);
   const [txList, setTxList] = useState<GoldTx[]>([]);
@@ -94,7 +129,7 @@ export default function AdminUsersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/users?q=${encodeURIComponent(debouncedQ)}`);
+      const res = await fetch(`/api/admin/users?q=${encodeURIComponent(debouncedQ)}${passFilter !== 'all' ? `&pass=${passFilter}` : ''}`);
       const data = await res.json();
       setUsers(data.users ?? []);
       setTotal(data.total ?? 0);
@@ -103,7 +138,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedQ]);
+  }, [debouncedQ, passFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -116,9 +151,27 @@ export default function AdminUsersPage() {
     setPassAmount('');
     setPassMsg('');
     setPassNeedsConfirm(null);
+    setVista(null);
+    setVistaErr('');
     setTxUserId(null);
     setTxList([]);
     setTxTotal(0);
+  }
+
+  async function loadVista(userId: string) {
+    if (vista) { setVista(null); return; }
+    setVistaLoading(true);
+    setVistaErr('');
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/vista`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error');
+      setVista(data);
+    } catch (e: any) {
+      setVistaErr(e.message);
+    } finally {
+      setVistaLoading(false);
+    }
   }
 
   async function loadTransactions(userId: string) {
@@ -269,6 +322,26 @@ export default function AdminUsersPage() {
           </button>
         </div>
 
+        {/* Pass filter */}
+        <div className="flex gap-2 flex-wrap">
+          {([
+            { id: 'all',    label: 'Todos' },
+            { id: 'activo', label: '🎟️ Pase activo' },
+            { id: 'tuvo',   label: '⏰ Tuvo pase' },
+            { id: 'nunca',  label: '✖ Nunca tuvo' },
+          ] as const).map(f => (
+            <button key={f.id} onClick={() => setPassFilter(f.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                passFilter === f.id
+                  ? 'text-black border-yellow-600'
+                  : 'text-gray-500 bg-gray-900 border-gray-800 hover:border-gray-600'
+              }`}
+              style={passFilter === f.id ? { backgroundColor: GOLD } : undefined}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {/* User list */}
         {loading ? (
           <div className="space-y-3">
@@ -312,6 +385,12 @@ export default function AdminUsersPage() {
                               {r}
                             </span>
                           ))}
+                          {u.pass && u.pass.status !== 'never' && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full border font-semibold ${PASS_CFG[u.pass.status].cls}`}
+                              title={u.pass.expiresAt ? `Expira: ${new Date(u.pass.expiresAt).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}` : undefined}>
+                              {PASS_CFG[u.pass.status].icon} {PASS_CFG[u.pass.status].label}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -442,6 +521,107 @@ export default function AdminUsersPage() {
                           </button>
                         )}
                         {passMsg && <p className={`text-xs ${passMsg.startsWith('✅') ? 'text-green-400' : 'text-yellow-400'}`}>{passMsg}</p>}
+                      </div>
+
+                      {/* Vista del usuario (solo lectura) */}
+                      <div className="border-t border-gray-800 pt-3">
+                        <button
+                          onClick={() => loadVista(u._id)}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors text-sm font-semibold text-gray-300">
+                          <span>👁️ Vista del usuario</span>
+                          <span className="text-gray-500 text-xs">
+                            {vistaLoading ? 'Cargando...' : vista ? 'Ocultar ▲' : 'Ver ▼'}
+                          </span>
+                        </button>
+                        {vistaErr && <p className="text-xs text-red-400 mt-2">⚠️ {vistaErr}</p>}
+                        {vista && (
+                          <div className="mt-2 space-y-2">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className={`rounded-lg px-2.5 py-2 col-span-2 border ${vista.pass.status === 'monthly' ? 'bg-purple-950/30 border-purple-700/40' : vista.pass.status === 'weekly' ? 'bg-yellow-950/30 border-yellow-700/40' : 'bg-gray-800/50 border-gray-700/40'}`}>
+                                <p className="text-gray-500 mb-0.5">Pase que ve el usuario</p>
+                                <p className="font-bold text-white">
+                                  {vista.pass.status === 'monthly' ? '👑 Mensual activo'
+                                    : vista.pass.status === 'weekly' ? '🎟️ Semanal activo'
+                                    : vista.pass.status === 'expired' ? '⏰ Tuvo pase — expirado'
+                                    : '✖ Nunca tuvo pase'}
+                                </p>
+                                {vista.pass.expiresAt && (
+                                  <p className="text-gray-500 text-[10px] mt-0.5">
+                                    Activo hasta: {new Date(vista.pass.expiresAt).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="bg-gray-800/50 rounded-lg px-2.5 py-2">
+                                <p className="text-gray-600 mb-0.5">Facturación</p>
+                                <p className={vista.user.billingComplete ? 'text-green-400' : 'text-red-400'}>
+                                  {vista.user.billingComplete ? 'Completa' : 'Incompleta'}
+                                </p>
+                              </div>
+                              <div className="bg-gray-800/50 rounded-lg px-2.5 py-2">
+                                <p className="text-gray-600 mb-0.5">Actividad</p>
+                                <p className="text-white">{vista.usage.meetingsConsumed} jornadas · {vista.usage.racesUnlocked} carreras</p>
+                              </div>
+                              <div className="bg-gray-800/50 rounded-lg px-2.5 py-2">
+                                <p className="text-gray-600 mb-0.5">Último login</p>
+                                <p className="text-white">{vista.user.lastLoginDate ?? '—'} · racha {vista.user.loginStreak}</p>
+                              </div>
+                              <div className="bg-gray-800/50 rounded-lg px-2.5 py-2">
+                                <p className="text-gray-600 mb-0.5">Email marketing</p>
+                                <p className={vista.user.unsubscribed ? 'text-red-400' : 'text-green-400'}>
+                                  {vista.user.unsubscribed ? 'Desuscrito' : 'Suscrito'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Historial de pases/recargas */}
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Recargas y pases</p>
+                              {vista.topups.length === 0 ? (
+                                <p className="text-xs text-gray-600">Sin recargas registradas</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {vista.topups.map(t => (
+                                    <div key={t._id} className="bg-gray-800/60 rounded-lg px-3 py-2 flex items-center gap-2 text-xs">
+                                      <span className={t.status === 'approved' ? 'text-green-400' : t.status === 'rejected' ? 'text-red-400' : 'text-yellow-400'}>
+                                        {t.status === 'approved' ? '✅' : t.status === 'rejected' ? '🚫' : '⏳'}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-gray-200 font-semibold truncate">
+                                          {t.packageLabel ?? `${t.goldAmount} Golds`}
+                                          {t.adminNote && <span className="text-purple-400 font-normal"> · {t.adminNote}</span>}
+                                        </p>
+                                        <p className="text-gray-600">
+                                          {t.referenceNumber} · Bs {t.amountBs.toLocaleString('es-VE')} · {new Date(t.createdAt).toLocaleDateString('es-VE')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Notificaciones recibidas */}
+                            <div>
+                              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Notificaciones recibidas</p>
+                              {vista.notifications.length === 0 ? (
+                                <p className="text-xs text-gray-600">Sin notificaciones</p>
+                              ) : (
+                                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                                  {vista.notifications.map(n => (
+                                    <div key={n._id} className="bg-gray-800/60 rounded-lg px-3 py-2 text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-gray-200 font-semibold flex-1 min-w-0 truncate">{n.title}</p>
+                                        <span className={n.read ? 'text-gray-600' : 'text-blue-400'}>{n.read ? 'leída' : 'sin leer'}</span>
+                                      </div>
+                                      <p className="text-gray-500 truncate">{n.body}</p>
+                                      <p className="text-gray-600 mt-0.5">{new Date(n.createdAt).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {saveErr && <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2">⚠️ {saveErr}</p>}
