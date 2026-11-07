@@ -20,6 +20,7 @@ export interface ITopUpRequest extends Document {
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
   rejectionReason?: string;
+  adminNote?: string;       // motivo de asignación manual (efectivo, regalo, cortesía)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,6 +46,7 @@ const TopUpRequestSchema = new Schema<ITopUpRequest>(
     reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     reviewedAt: { type: Date },
     rejectionReason: { type: String, trim: true },
+    adminNote: { type: String, trim: true },
   },
   { timestamps: true }
 );

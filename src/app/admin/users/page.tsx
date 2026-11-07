@@ -74,6 +74,11 @@ export default function AdminUsersPage() {
   const [goldAmount, setGoldAmount] = useState('');
   const [goldMsg, setGoldMsg] = useState('');
   const [goldLoading, setGoldLoading] = useState(false);
+  const [passNote, setPassNote] = useState('');
+  const [passAmount, setPassAmount] = useState('');
+  const [passMsg, setPassMsg] = useState('');
+  const [passLoading, setPassLoading] = useState<'arranque' | 'padrillo' | null>(null);
+  const [passNeedsConfirm, setPassNeedsConfirm] = useState<'arranque' | 'padrillo' | null>(null);
   const [goldSort, setGoldSort] = useState<'none' | 'desc' | 'asc'>('none');
   const [txUserId, setTxUserId] = useState<string | null>(null);
   const [txList, setTxList] = useState<GoldTx[]>([]);
@@ -107,6 +112,10 @@ export default function AdminUsersPage() {
     setEditRoles([...(u.roles ?? [])]);
     setSaveMsg('');
     setSaveErr('');
+    setPassNote('');
+    setPassAmount('');
+    setPassMsg('');
+    setPassNeedsConfirm(null);
     setTxUserId(null);
     setTxList([]);
     setTxTotal(0);
@@ -155,6 +164,43 @@ export default function AdminUsersPage() {
       setGoldMsg(`⚠️ ${e.message}`);
     } finally {
       setGoldLoading(false);
+    }
+  }
+
+  async function handleGrantPass(packageId: 'arranque' | 'padrillo', confirm = false) {
+    if (!selected || !passNote.trim()) {
+      setPassMsg('⚠️ Escribe el motivo (efectivo, regalo, cortesía...).');
+      return;
+    }
+    setPassLoading(packageId);
+    setPassMsg('');
+    try {
+      const res = await fetch('/api/admin/users/grant-pass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: selected.email ?? selected.alias ?? selected.telegramId,
+          packageId,
+          note: passNote.trim(),
+          amountBs: passAmount ? parseInt(passAmount) : 0,
+          confirm,
+        }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && data.requiresConfirm) {
+        setPassNeedsConfirm(packageId);
+        setPassMsg(`⚠️ ${data.error}`);
+        return;
+      }
+      if (!res.ok) throw new Error(data.error);
+      setPassMsg(`✅ ${data.packageLabel} otorgado a ${data.alias}`);
+      setPassNote('');
+      setPassAmount('');
+      setPassNeedsConfirm(null);
+    } catch (e: any) {
+      setPassMsg(`⚠️ ${e.message}`);
+    } finally {
+      setPassLoading(null);
     }
   }
 
@@ -351,6 +397,51 @@ export default function AdminUsersPage() {
                           </button>
                         </div>
                         {goldMsg && <p className="text-xs text-green-400">{goldMsg}</p>}
+                      </div>
+
+                      {/* Otorgar Pase Nacional (manual: efectivo, regalo, cortesía) */}
+                      <div className="border-t border-gray-800 pt-3 space-y-2">
+                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">🎟️ Otorgar Pase Nacional</p>
+                        <input
+                          type="text"
+                          placeholder="Motivo (ej: pago en efectivo, regalo)"
+                          value={passNote}
+                          onChange={e => { setPassNote(e.target.value); setPassNeedsConfirm(null); }}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            placeholder="Bs recibidos (0 si es regalo)"
+                            value={passAmount}
+                            onChange={e => setPassAmount(e.target.value)}
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleGrantPass('arranque')}
+                            disabled={!!passLoading}
+                            className="flex-1 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-40"
+                            style={{ backgroundColor: GOLD }}>
+                            {passLoading === 'arranque' ? '...' : '🎟️ Semanal'}
+                          </button>
+                          <button
+                            onClick={() => handleGrantPass('padrillo')}
+                            disabled={!!passLoading}
+                            className="flex-1 py-2 rounded-xl text-xs font-bold text-black bg-purple-500 hover:bg-purple-400 disabled:opacity-40 transition-colors">
+                            {passLoading === 'padrillo' ? '...' : '👑 Mensual'}
+                          </button>
+                        </div>
+                        {passNeedsConfirm && (
+                          <button
+                            onClick={() => handleGrantPass(passNeedsConfirm, true)}
+                            disabled={!!passLoading}
+                            className="w-full py-2 rounded-xl text-xs font-bold text-yellow-300 bg-yellow-950/40 border border-yellow-700/50 hover:bg-yellow-950/60 disabled:opacity-40 transition-colors">
+                            ⚠️ Ya tiene pase activo — confirmar otorgar {passNeedsConfirm === 'padrillo' ? 'Mensual' : 'Semanal'}
+                          </button>
+                        )}
+                        {passMsg && <p className={`text-xs ${passMsg.startsWith('✅') ? 'text-green-400' : 'text-yellow-400'}`}>{passMsg}</p>}
                       </div>
 
                       {saveErr && <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2">⚠️ {saveErr}</p>}

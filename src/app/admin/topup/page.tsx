@@ -23,6 +23,7 @@ interface TopUpItem {
   receiptUrl?: string;
   status: Status;
   rejectionReason?: string;
+  adminNote?: string;
   createdAt: string;
   reviewedAt?: string;
   userId?: { email?: string; phone?: string; legalId?: string; alias?: string };
@@ -213,6 +214,9 @@ export default function AdminTopUpPage() {
                         )}
                         {item.rejectionReason && (
                           <p className="text-xs text-red-500 italic">Motivo: {item.rejectionReason}</p>
+                        )}
+                        {item.adminNote && (
+                          <p className="text-xs text-purple-400 italic">📝 {item.adminNote}</p>
                         )}
                       </div>
 

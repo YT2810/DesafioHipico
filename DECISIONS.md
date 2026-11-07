@@ -108,3 +108,13 @@ El hipismo venezolano no tenía una plataforma digital seria. Los apostadores bu
 ### [Oct 2026] Sesión — Sistema de ads completo
 **Construido**: 6 slots, backfill, house ads (9 campañas), landing /pase, hasActivePass JWT.
 **Commits**: `0afa9fe`, `de2b853`
+
+### [Nov 2026] Sesión — Otorgar Pase manual (efectivo/regalo/cortesía)
+**Decisión**: Nuevo endpoint `POST /api/admin/users/grant-pass` + UI "🎟️ Otorgar Pase" en `/admin/users`.
+**Contexto**: Con el Pase Nacional activo no había forma de activar acceso por pago en efectivo o regalo — solo existía el flujo de solicitud+revisión vía Pago Móvil y la asignación manual de Golds.
+**Seguridad**:
+- **Solo rol `admin`** — ni siquiera `staff` (a diferencia de `/admin/topup/[id]/review`). Es la operación más delicada de la monetización: salta la verificación de pago por completo.
+- `identifier` sanitizado contra regex injection (el endpoint de Gold no lo hace; este sí).
+- Guard anti-duplicado: si el usuario ya tiene pase activo → `409 requiresConfirm`, el admin debe confirmar explícitamente.
+- Auditoría: crea `TopUpRequest` pre-aprobado con `referenceNumber MANUAL-*`, `bank: Efectivo|Manual`, `adminNote` (nuevo campo en el modelo), `reviewedBy` = admin.
+**Notas**: `amountBs` opcional para registrar efectivo recibido (0 = regalo). Las estadísticas de ingresos suman `amountUsd`, así que un regalo NO infla revenue. Dispara `ActivityEvent` pass_activation y notificación al usuario igual que una aprobación normal.
