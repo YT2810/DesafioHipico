@@ -2482,3 +2482,143 @@ export async function getPublicVipFiveAndSix(
   return null;
 }
 
+// ─── All Active VIP Meetings (multi-track, current week) ──────────────────────
+
+export interface PublicVipMeetingItem extends PublicVipFiveAndSixResponse {
+  meetingId: string;
+}
+
+/**
+ * Returns ALL tracks that have an active 5y6 this week, sorted by date asc.
+ * Uses the same logic as getPublicVipFiveAndSix but across every track.
+ */
+export async function getAllActiveVipMeetings(
+  isUnlocked: boolean,
+): Promise<PublicVipMeetingItem[]> {
+  await dbConnect();
+  void Horse;
+  void Person;
+
+  const tracks = (await Track.find({}).select('_id name').lean()) as any[];
+  const results: PublicVipMeetingItem[] = [];
+
+  for (const track of tracks) {
+    const isValencia = /valencia/i.test(track.name ?? '');
+
+    const recentMeetings = (await Meeting.find({ trackId: track._id })
+      .select('_id meetingNumber date')
+      .sort({ date: -1 })
+      .limit(5)
+      .lean()) as any[];
+
+    for (const candMeeting of recentMeetings) {
+      const candRaces = (await Race.find({ meetingId: candMeeting._id })
+        .select('_id raceNumber distance hasResults')
+        .sort({ raceNumber: 1 })
+        .lean()) as any[];
+      if (candRaces.length < 6) continue;
+
+      const validasRacesDocs = candRaces.slice(-6);
+      if (validasRacesDocs.every((r: any) => r.hasResults === true)) continue;
+
+      const vIds = validasRacesDocs.map((r: any) => r._id.toString());
+      const [vForecasts, vEntries] = await Promise.all([
+        Forecast.find({ raceId: { $in: vIds }, isPublished: true }).select('raceId marks').lean() as any,
+        Entry.find({ raceId: { $in: vIds } }).select('raceId status result dorsalNumber').lean() as any,
+      ]);
+
+      const fcMap: Record<string, any[]> = {};
+      for (const f of vForecasts) {
+        const rid = f.raceId.toString();
+        if (!fcMap[rid]) fcMap[rid] = [];
+        fcMap[rid].push(f);
+      }
+      const fsMap: Record<string, number> = {};
+      const winnerMap: Record<string, number> = {};
+      for (const e of vEntries) {
+        const rid = e.raceId.toString();
+        if (e.status !== 'scratched' && !e.result?.isScratched && !e.result?.isInvalidated) {
+          fsMap[rid] = (fsMap[rid] ?? 0) + 1;
+        }
+        if (e.result?.finishPosition === 1 && typeof e.dorsalNumber === 'number') {
+          winnerMap[rid] = e.dorsalNumber;
+        }
+      }
+
+      const validasInput = validasRacesDocs
+        .map((r: any) => {
+          const rid = r._id.toString();
+          const fcs = fcMap[rid] ?? [];
+          if (!fcs.length) return null;
+          const fv = calcFv(fcs).slice(0, 7);
+          if (!fv.length) return null;
+          const topHorses = fv.map((h, i) => ({
+            pos: i + 1,
+            dorsalNumber: h.dorsalNumber,
+            horseName: h.horseName,
+            fvPct: Math.round(h.factor * 1000) / 10,
+          }));
+          const p1 = topHorses[0]?.fvPct ?? 0;
+          const p2 = topHorses[1]?.fvPct ?? 0;
+          const p3 = topHorses[2]?.fvPct ?? 0;
+          return {
+            raceNumber: r.raceNumber,
+            distance: r.distance ?? 0,
+            fieldSize: fsMap[rid] ?? 8,
+            topHorses,
+            sumTop2Pct: Math.round((p1 + p2) * 10) / 10,
+            sumTop3Pct: Math.round((p1 + p2 + p3) * 10) / 10,
+          };
+        })
+        .filter((x: any): x is NonNullable<typeof x> => x !== null);
+
+      if (validasInput.length === 6) {
+        const meetingDateStr = candMeeting.date
+          ? new Date(candMeeting.date).toISOString().slice(0, 10)
+          : '';
+        const built = buildMeetingValidasPicks(
+          validasInput,
+          isValencia,
+          get5y6FactorBs(meetingDateStr),
+          0,
+          0,
+        );
+        const sortByDorsal = (list: { dorsalNumber?: number; horseName: string }[]) =>
+          [...list]
+            .sort((a, b) => (a.dorsalNumber ?? 999) - (b.dorsalNumber ?? 999))
+            .map(h => ({ dorsalNumber: h.dorsalNumber, horseName: h.horseName }));
+
+        results.push({
+          meetingId: candMeeting._id.toString(),
+          trackName: track.name,
+          meetingNumber: candMeeting.meetingNumber ?? 0,
+          date: meetingDateStr,
+          isUnlocked,
+          combinationsEco: built.combinationsEco,
+          combinationsMed: built.combinationsMed,
+          costBsEco: built.costBsEco,
+          costBsMed: built.costBsMed,
+          validas: built.validas.map(v => ({
+            validaNumber: v.validaNumber,
+            raceNumber: v.raceNumber,
+            distance: v.distance,
+            fieldSize: v.fieldSize,
+            badgeEco: v.badgeEco,
+            badgeMed: v.badgeMed,
+            countEco: v.countEco,
+            countMed: v.countMed,
+            horsesEco: isUnlocked ? sortByDorsal(v.picksEco) : [],
+            horsesMed: isUnlocked ? sortByDorsal(v.picksMed) : [],
+            winnerDorsal: winnerMap[validasRacesDocs[v.validaNumber - 1]?._id?.toString() ?? ''],
+          })),
+        });
+        break; // one active meeting per track at a time
+      }
+    }
+  }
+
+  // Sort by date ascending (soonest first)
+  results.sort((a, b) => a.date.localeCompare(b.date));
+  return results;
+}
+
