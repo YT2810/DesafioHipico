@@ -1,5 +1,6 @@
 import dbConnect from '@/lib/mongodb';
 import { MARK_POINTS, FIJO_BONUS_POINTS } from '@/lib/constants';
+import { getCurrentWeekMondayStartUTC } from '@/services/forecastAccessService';
 import Meeting from '@/models/Meeting';
 import Race from '@/models/Race';
 import Track from '@/models/Track';
@@ -2502,13 +2503,19 @@ export async function getAllActiveVipMeetings(
   const tracks = (await Track.find({}).select('_id name').lean()) as any[];
   const results: PublicVipMeetingItem[] = [];
 
+  // Only look at meetings from this week (Mon 00:00 VE) onward — no stale data
+  const weekStart = getCurrentWeekMondayStartUTC();
+
   for (const track of tracks) {
     const isValencia = /valencia/i.test(track.name ?? '');
 
-    const recentMeetings = (await Meeting.find({ trackId: track._id })
+    // All meetings this week for this track, oldest→newest so we get both Sat and Sun
+    const recentMeetings = (await Meeting.find({
+      trackId: track._id,
+      date: { $gte: weekStart },
+    })
       .select('_id meetingNumber date')
-      .sort({ date: -1 })
-      .limit(5)
+      .sort({ date: 1 })
       .lean()) as any[];
 
     for (const candMeeting of recentMeetings) {
@@ -2612,7 +2619,7 @@ export async function getAllActiveVipMeetings(
             winnerDorsal: winnerMap[validasRacesDocs[v.validaNumber - 1]?._id?.toString() ?? ''],
           })),
         });
-        break; // one active meeting per track at a time
+        // NO break — continue to find all meetings this week for this track
       }
     }
   }
