@@ -12,8 +12,9 @@ const SHOW_EXTENDED_TOPUP_FIELDS = false;
 interface TopUpModalProps { onClose: () => void; inline?: boolean }
 
 export default function TopUpModal({ onClose, inline = false }: TopUpModalProps) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const user = session?.user as any;
+  const isLoggedOut = status === 'unauthenticated';
   const today = new Date().toISOString().slice(0, 10);
 
   const [step, setStep] = useState<'package' | 'destination' | 'form' | 'success'>('package');
@@ -37,6 +38,21 @@ export default function TopUpModal({ onClose, inline = false }: TopUpModalProps)
       .then(d => { if (d.packages?.length) setLivePackages(d.packages); })
       .catch(() => {});
   }, []);
+
+  // Restore the form the user filled before being sent to login
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    try {
+      const raw = sessionStorage.getItem('topupDraft');
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      sessionStorage.removeItem('topupDraft');
+      setForm(p => ({ ...p, ...draft.form }));
+      if (draft.selectedPkgId) setSelectedPkgId(draft.selectedPkgId);
+      setStep('form');
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const selectedPkg = livePackages.find(p => p.id === selectedPkgId) ?? livePackages[0];
 
@@ -72,7 +88,16 @@ export default function TopUpModal({ onClose, inline = false }: TopUpModalProps)
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setError(''); setLoading(true);
+    e.preventDefault();
+    if (isLoggedOut) {
+      try {
+        sessionStorage.setItem('topupDraft', JSON.stringify({ form, selectedPkgId }));
+      } catch {}
+      const back = window.location.pathname + window.location.search;
+      window.location.href = `/auth/signin?callbackUrl=${encodeURIComponent(back)}`;
+      return;
+    }
+    setError(''); setLoading(true);
     try {
       if (form.fullName.trim() && form.identityDocument.trim()) {
         fetch('/api/user/billing', {
@@ -132,6 +157,27 @@ export default function TopUpModal({ onClose, inline = false }: TopUpModalProps)
             <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-sm">✕</button>
           )}
         </div>
+
+        {/* Aviso de sesión — visible en todos los pasos */}
+        {isLoggedOut && (
+          <div className="mx-5 mt-3 rounded-xl border border-yellow-700/50 bg-yellow-950/40 px-3.5 py-3 flex items-center gap-3 shrink-0">
+            <span className="text-lg shrink-0">🔐</span>
+            <p className="flex-1 text-xs text-yellow-200/90 leading-snug">
+              <strong className="text-yellow-300">No has iniciado sesión.</strong> Puedes ver los datos de pago, pero necesitas tu cuenta para enviar el comprobante.
+            </p>
+            <button
+              onClick={() => {
+                try { sessionStorage.setItem('topupDraft', JSON.stringify({ form, selectedPkgId })); } catch {}
+                const back = window.location.pathname + window.location.search;
+                window.location.href = `/auth/signin?callbackUrl=${encodeURIComponent(back)}`;
+              }}
+              className="shrink-0 text-xs font-extrabold px-3 py-2 rounded-lg text-black"
+              style={{ backgroundColor: GOLD }}
+            >
+              Entrar
+            </button>
+          </div>
+        )}
 
         {/* Step progress */}
         {step !== 'success' && (

@@ -128,3 +128,36 @@ El hipismo venezolano no tenía una plataforma digital seria. Los apostadores bu
 - Vista de solo lectura en la tarjeta expandida: pase que ve el usuario + expiración, facturación completa, uso (jornadas/carreras), recargas y pases con motivo, notificaciones recibidas con leída/sin leer.
 **Seguridad**: `/vista` solo rol `admin` (ni staff) — expone datos privados (notificaciones, documento de identidad vía billingComplete, historial). Semanal = semana calendario (reinicia lunes 00:00 VE), mensual = reviewedAt + 30d.
 **Descartado por ahora**: impersonación real (JWT como otro usuario) — toca auth y permite actuar como el usuario. Solo si la vista de lectura resulta insuficiente.
+
+---
+
+## TAREAS PENDIENTES
+
+### Email marketing con análisis real de data (prioridad alta)
+**Contexto**: Hoy `buildCampaignContext()` en `src/app/api/admin/email-marketing/route.ts` llena templates hardcodeados con stats genéricas del lab FV. El proceso manual de la sesión del 20-Nov produjo un email mucho mejor porque usó: (1) el pick regalado la semana anterior y si ganó (DOROTHY'S SUMMER ganó → prueba social), (2) la carrera exacta donde cayó el cuadro VIP + su ganador + su consenso real (LA VALQUIRIA, 2/51 marcas, potrancas debutantes), (3) consenso % real por válida para elegir el mejor regalo (FORREST GUMP 95% en el Clásico GII).
+
+**Implementación pendiente**:
+1. **Persistir el pick regalado**: al enviar campaña guardar en SiteConfig `lastEmailGiftPick = { meetingNumber, raceNumber, validaNumber, horses[], format:'linea|candado', sentAt }`.
+2. **Verificar resultado del pick anterior**: al generar el nuevo email, leer ese SiteConfig y cruzar con `entries.result.finishPosition === 1` para saber si ganó. Si ganó → prueba social en el email; si perdió → no mencionarlo (nunca simular aciertos).
+3. **Consenso % por válida**: aggregate de `forecasts.marks` por caballo / total pronósticos publicados, para las 6 válidas de la jornada nueva. El pick se elige por `(consenso del 1er caballo × penalización si la carrera es debutante/2 años)`, no solo por el primer `corte_limpio` como hoy.
+4. **Clasificador `weekProfile: 'strong' | 'mixed' | 'difficult' | 'no_clear_pick'`**: regla de tono para el AI — semana buena lidera con el resultado; semana mala lidera con explicación honesta ("X válidas con alertas encendidas — para eso sirve el radar"); sin consenso dominante vende el "campo abierto". Nunca fingir certeza.
+5. **Casos límite a cubrir**: pick anterior perdió (ocultar), cuadro 0-2/6 (narrativa "jornada más difícil del año"), todas las válidas con alertas (vender las alertas como el valor), consenso disperso (no dar pick falso de seguridad).
+6. **Template blanco**: `buildEmailHtmlWrapper` usa `#0c0c0e` — el template blanco (header oscuro + card blanca) rinde mejor en clientes que fuerzan fondo claro.
+7. **Alimentar `regenerate_ai`** con el contexto enriquecido — la infraestructura de `callLLM` ya existe, solo falta el prompt con data real.
+
+**Formato del regalo**: línea si el líder tiene consenso dominante (>80% y segundo <50%), candado solo si hay pareja real con fuerza (ej. 84%+30%). El email del 20-Nov usó FORREST GUMP como "Línea 1" (95% consenso, 22/37 primeros).
+
+---
+
+## REGISTRO DE SESIONES
+
+### [Nov 2026] Sesión — Fix "No autenticado" en checkout de Pase + sync contactos Resend
+**Problema**: Usuario reportó error "No autenticado" al enviar comprobante de Pago Móvil. Dos causas reales:
+1. **UX**: `/pase` y `TopUpModal` dejaban al usuario sin sesión completar los 3 pasos del checkout y solo fallaba al enviar (401 del API). Típico en navegador interno de WhatsApp sin cookies.
+2. **Bug auth**: si el lookup a MongoDB fallaba durante el login (cold start), `token.userId` nunca se seteaba — el `catch` lo tragaba sin recuperación y `token.sub` (que NextAuth siempre setea) nunca se usaba como fallback. Además `$or: []` vacío lanzaba error de Mongo. Usuario quedaba "logueado" en cliente pero `session.user.id = undefined` en servidor hasta re-login.
+
+**Cambios**:
+- `src/auth.ts`: helper `populateToken`, guard contra `$or` vacío, bloque de recuperación `if (!token.userId)` que busca por `token.email` o `token.sub` (si es ObjectId), y `session.user.id` con fallback a `token.sub` si tiene formato ObjectId.
+- `src/components/TopUpModal.tsx`: banner "🔐 No has iniciado sesión" visible en todos los pasos con botón Entrar; submit sin sesión guarda el formulario en `sessionStorage('topupDraft')` y redirige a `/auth/signin?callbackUrl=<página actual>`; al volver autenticado restaura el draft y abre directo en el paso del formulario.
+
+**También en esta sesión**: audiencia Resend "LISTA LIMPIA 06 NOVIEMBRE" sincronizada — 333 contactos nuevos agregados (4.934 total, límite 5.000). Considerar upgrade de plan o segunda audiencia en próximas semanas. Email R47 diseñado: asunto "🏇La línea de esta semana: FORREST GUMP en el Clásico Burlesco", template blanco, regalo Línea 1 (95% consenso).

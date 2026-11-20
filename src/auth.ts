@@ -10,6 +10,20 @@ import { hasActiveNationalPass } from '@/services/forecastAccessService';
 import type { NextAuthConfig } from 'next-auth';
 
 const ADMIN_EMAILS = ['yolfry@gmail.com'];
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+function populateToken(token: any, dbUser: any) {
+  token.userId            = dbUser._id.toString();
+  token.roles             = dbUser.roles;
+  token.balance           = dbUser.balance;
+  token.alias             = dbUser.alias;
+  token.phone             = dbUser.phone;
+  token.legalId           = dbUser.legalId;
+  token.fullName          = dbUser.fullName;
+  token.identityDocument  = dbUser.identityDocument;
+  token.phoneNumber       = dbUser.phoneNumber;
+  token.billingComplete   = !!(dbUser.fullName && dbUser.identityDocument);
+}
 
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET,
@@ -137,29 +151,35 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         try {
           await dbConnect();
-          const query = {
-            $or: [
-              ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
-              ...((user as any).telegramId ? [{ telegramId: (user as any).telegramId }] : []),
-            ],
-          };
+          const or: any[] = [
+            ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
+            ...((user as any).telegramId ? [{ telegramId: (user as any).telegramId }] : []),
+          ];
 
-          const dbUser = await User.findOne(query).lean() as any;
-
-          if (dbUser) {
-            token.userId    = dbUser._id.toString();
-            token.roles     = dbUser.roles;
-            token.balance   = dbUser.balance;
-            token.alias     = dbUser.alias;
-            token.phone     = dbUser.phone;
-            token.legalId   = dbUser.legalId;
-            token.fullName  = dbUser.fullName;
-            token.identityDocument = dbUser.identityDocument;
-            token.phoneNumber      = dbUser.phoneNumber;
-            token.billingComplete  = !!(dbUser.fullName && dbUser.identityDocument);
+          if (or.length > 0) {
+            const dbUser = await User.findOne({ $or: or }).lean() as any;
+            if (dbUser) populateToken(token, dbUser);
           }
         } catch {
-          // DB timeout during login — keep token with basic user info, retry on next request
+          // DB timeout during login — recovery block below retries on next request
+        }
+      }
+
+      // Recover userId when the login-time DB lookup failed (cold start timeout)
+      // or when the provider returned no email/telegramId. token.sub holds the
+      // user id returned by authorize(); token.email covers Google users.
+      if (!token.userId) {
+        try {
+          await dbConnect();
+          const or: any[] = [];
+          if (token.email) or.push({ email: String(token.email).toLowerCase() });
+          if (token.sub && OBJECT_ID_RE.test(String(token.sub))) or.push({ _id: token.sub });
+          if (or.length > 0) {
+            const dbUser = await User.findOne({ $or: or }).lean() as any;
+            if (dbUser) populateToken(token, dbUser);
+          }
+        } catch {
+          // still no DB — keep token as-is, request will 401 until it recovers
         }
       }
 
@@ -199,7 +219,7 @@ export const authConfig: NextAuthConfig = {
     },
 
     async session({ session, token }) {
-      session.user.id               = token.userId as string;
+      session.user.id               = (token.userId as string) ?? (OBJECT_ID_RE.test(String(token.sub ?? '')) ? (token.sub as string) : '');
       session.user.roles            = token.roles as string[];
       session.user.balance          = token.balance as { golds: number; diamonds: number };
       session.user.alias            = token.alias as string;
