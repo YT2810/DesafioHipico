@@ -1,16 +1,14 @@
 /**
  * GET /api/auth/magic/verify?token=xxx
- * Validates the magic token, upserts the user, signs them in via NextAuth signIn,
- * then redirects to callbackUrl.
+ * Validates the magic token (existence + expiry) WITHOUT consuming it, then
+ * redirects to /auth/magic-complete which performs the actual signIn.
+ * Consumption happens atomically inside the magic-verified authorize() call —
+ * a plain GET here must never burn the token (link-preview bots issue GETs).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { signIn } from '@/auth';
 import dbConnect from '@/lib/mongodb';
 import MagicToken from '@/models/MagicToken';
-import User from '@/models/User';
-
-const ADMIN_EMAILS = ['yolfry@gmail.com'];
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
@@ -34,38 +32,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${baseUrl}/auth/error?error=Verification`);
     }
 
-    // Mark token as used
-    await MagicToken.updateOne({ _id: record._id }, { $set: { used: true } });
-
-    const email = record.email;
-    const isAdmin = ADMIN_EMAILS.includes(email);
-
-    // Upsert user
-    await User.findOneAndUpdate(
-      { email },
-      {
-        $set:         { email, alias: email.split('@')[0], lastLoginDate: new Date().toISOString().slice(0, 10) },
-        $setOnInsert: {
-          roles: isAdmin ? ['admin', 'customer'] : ['customer'],
-          balance: { golds: 0, diamonds: 0 },
-          meetingConsumptions: [],
-          followedHandicappers: [],
-        },
-      },
-      { upsert: true, new: true }
-    );
-
-    // Ensure admin always has admin role
-    if (isAdmin) {
-      await User.updateOne({ email }, { $addToSet: { roles: 'admin' } });
-    }
-
-    // Sign in via NextAuth credentials (telegram provider reused as 'magic' here)
-    // We use a redirect-based approach: sign in with the magic-verified email
-    // by calling the credentials provider we already have, passing the verified email.
-    // Simplest: redirect to a special page that calls signIn('credentials', {verifiedEmail})
+    // Do NOT consume the token here — link-preview bots (WhatsApp, email scanners)
+    // issue GETs and would burn the single-use token before the real user opens it.
+    // The token is consumed atomically inside the magic-verified authorize() call.
     const callbackUrl = record.callbackUrl ?? '/';
-    const redirectUrl = `${baseUrl}/auth/magic-complete?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`;
+    const redirectUrl = `${baseUrl}/auth/magic-complete?token=${encodeURIComponent(token)}&callbackUrl=${encodeURIComponent(callbackUrl)}`;
     return NextResponse.redirect(redirectUrl);
 
   } catch (err) {

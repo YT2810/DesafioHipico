@@ -42,18 +42,25 @@ export const authConfig: NextAuthConfig = {
       allowDangerousEmailAccountLinking: true,
     }),
 
-    // ── 2. Magic Link — verified token (token already validated by /api/auth/magic/verify) ──
+    // ── 2. Magic Link — token consumed atomically here, NOT in the GET verify ──
+    //    (a GET cannot consume it: link-preview bots would burn the token)
     Credentials({
       id: 'magic-verified',
       name: 'Magic Link',
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        token: { label: 'Token', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
-        const email = (credentials.email as string).toLowerCase().trim();
+        if (!credentials?.token) return null;
         await dbConnect();
-        const user = await User.findOne({ email }).lean() as any;
+        // findOneAndUpdate is atomic: only the first signIn with this token succeeds
+        const record = await MagicToken.findOneAndUpdate(
+          { token: String(credentials.token), used: false, expiresAt: { $gt: new Date() } },
+          { $set: { used: true } },
+          { new: true }
+        ).lean() as any;
+        if (!record) return null;
+        const user = await User.findOne({ email: record.email }).lean() as any;
         if (!user) return null;
         return {
           id: user._id.toString(),

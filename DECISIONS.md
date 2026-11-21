@@ -161,3 +161,18 @@ El hipismo venezolano no tenía una plataforma digital seria. Los apostadores bu
 - `src/components/TopUpModal.tsx`: banner "🔐 No has iniciado sesión" visible en todos los pasos con botón Entrar; submit sin sesión guarda el formulario en `sessionStorage('topupDraft')` y redirige a `/auth/signin?callbackUrl=<página actual>`; al volver autenticado restaura el draft y abre directo en el paso del formulario.
 
 **También en esta sesión**: audiencia Resend "LISTA LIMPIA 06 NOVIEMBRE" sincronizada — 333 contactos nuevos agregados (4.934 total, límite 5.000). Considerar upgrade de plan o segunda audiencia en próximas semanas. Email R47 diseñado: asunto "🏇La línea de esta semana: FORREST GUMP en el Clásico Burlesco", template blanco, regalo Línea 1 (95% consenso).
+
+### [Nov 2026] Sesión — Magic link: consumo atómico + cierre de bypass de auth
+**Problema**: Cliente `johanynfante01@gmail.com` (pase mensual activo hasta 30-Nov, verificado con `hasActiveNationalPass` = TRUE) no podía entrar tras cambiar de Android a iPhone — la sesión quedó en el teléfono viejo. Al enviarle un magic link manual por WhatsApp recibió "Enlace expirado": **la vista previa de WhatsApp hace GET al link y el verify consumía el token de un solo uso en ese GET**.
+
+**Hallazgo crítico de seguridad**: `/auth/magic-complete?email=X` era un bypass total — el provider `magic-verified` creaba sesión solo con el email, sin validar token. Cualquiera podía entrar como cualquier usuario conociendo solo su correo.
+
+**Cambios**:
+- `src/auth.ts` — provider `magic-verified` ahora recibe `token` (no `email`) y lo consume atómicamente en `authorize()` con `findOneAndUpdate({token, used:false, expiresAt>now}, {used:true})`. Solo el primer signIn con ese token tiene éxito; sin token válido no hay sesión.
+- `src/app/api/auth/magic/verify/route.ts` — ya NO consume el token ni hace upsert del usuario en el GET. Solo valida existencia+expiración y redirige a `/auth/magic-complete?token=...`. Los preview bots queman el GET sin afectar el token.
+- `src/app/auth/magic-complete/page.tsx` — llama `signIn('magic-verified', {token, callbackUrl})` en vez de pasar el email.
+- El upsert de usuario sigue ocurriendo en el callback `signIn` de NextAuth (cubierto).
+
+**Soporte al cliente**: magic link manual generado directo en `magictokens` (48h) para entrar desde el iPhone. La app no usa contraseñas — el "password" que reportó el cliente era probablemente el de su Gmail; se le indicó no compartirla.
+
+**Lección de producto**: links de un solo uso enviados por WhatsApp mueren por la vista previa. Nunca consumir credenciales en un GET.

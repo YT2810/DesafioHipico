@@ -13,15 +13,15 @@ function MagicCompleteInner() {
     if (called.current) return;
     called.current = true;
 
-    const email = params.get('email') ?? '';
+    const token = params.get('token') ?? '';
     const callbackUrl = params.get('callbackUrl') ?? '/';
 
-    if (!email) {
+    if (!token) {
       router.replace('/auth/error?error=Verification');
       return;
     }
 
-    signIn('magic-verified', { email, callbackUrl, redirect: true });
+    signIn('magic-verified', { token, callbackUrl, redirect: true });
   }, [params, router]);
 
   return (
